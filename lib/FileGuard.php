@@ -18,22 +18,64 @@ class FileGuard
     /** 允许在线查看/删除的后缀 */
     public const VIEWABLE = ['php', 'phtml', 'phar', 'htaccess', 'json', 'css', 'js', 'html', 'htm', 'txt', 'md', 'ini', 'conf'];
 
-    /** Webshell 特征规则：[名称, 正则, 权重] */
+    /**
+     * Webshell 特征规则：[名称, 正则, 权重]
+     *
+     * 规则设计原则：只命中「真正的后门特征」，不命中合法业务代码。
+     *   · exec / require 等关键词必须在「裸函数调用」上下文中出现，
+     *     排除 ClassName::exec( / ->exec( 等面向对象调用（合法业务大量使用）；
+     *   · include/require 只在参数直接来自 $_GET/$_POST 等用户输入时报分，
+     *     require $handler / require $configFile 等内部路由不报分；
+     *   · base64_decode 只在与 eval/assert/直接执行 联合出现时报分，
+     *     单独的 base64_decode 是加密通信/票据解析的常规操作。
+     */
     public const RULES = [
-        ['eval 变形执行',          '/\b(eval|assert)\s*\(/i',                                      10],
-        ['base64/gz 解码执行',      '/(base64_decode|gzinflate|gzuncompress|str_rot13)\s*\(/i',      8],
-        ['命令执行函数',            '/\b(system|shell_exec|passthru|exec|popen|proc_open)\s*\(/i',   9],
-        ['preg_replace /e 代码执行', '/preg_replace\s*\(\s*["\'][^"\']*\/[a-z]*e[a-z]*["\']/i',       9],
-        ['请求变量直接拼接代码',     '/\$_(GET|POST|REQUEST|COOKIE|SERVER)\s*\[[^\]]*\]\s*\(/i',     12],
-        ['可变函数调用',            '/\$\{?[a-zA-Z_]\w*\}\s*\(\s*\$_(GET|POST|REQUEST|COOKIE)/i',   12],
-        ['动态变量函数定义',         '/(create_function|call_user_func(_array)?)\s*\(/i',             5],
-        ['短标签+请求取值',         '/<\?=\s*\$_(GET|POST|REQUEST|COOKIE)/i',                       11],
-        ['文件写入型后门',          '/(file_put_contents|fwrite)\s*\(.*\$_(GET|POST|REQUEST)/is',   11],
-        ['include 请求参数',        '/(include|require)(_once)?\s*\(?\s*\$(_GET|_POST|_REQUEST|\w+)/i', 8],
-        ['HTTP 头下发 payload',     '/\bgetenv\s*\(\s*["\']HTTP_[A-Z]+["\']\s*\)/i',                 6],
-        ['超长单行混淆',            '/^\s*\$\w+\s*=\s*["\'][A-Za-z0-9+\/=]{300,}["\']\s*;/m',        8],
-        ['异步/回调执行请求值',     '/(array_map|array_filter|usort|register_shutdown_function|register_tick_function)\s*\(\s*["\']?(eval|assert|system|exec|shell_exec|passthru)/i', 12],
-        ['经典一句话连接口令',      '/\$_(GET|POST|REQUEST|COOKIE)\s*\[\s*["\'][^"\']{1,12}["\']\s*\]\s*\(\s*\$[_\w]+/i', 12],
+        // eval / assert 直接执行：必须前面不是 :: 或 ->（排除类方法名碰巧含 eval）
+        ['eval 变形执行',
+            '/(?<!::)(?<!->)\b(eval|assert)\s*\(/i',                                          10],
+
+        // 命令执行函数：system/shell_exec/passthru/popen/proc_open 必须裸调用；
+        // exec 单独处理 —— 排除 ClassName::exec( 和 ->exec(（Database::exec 等合法调用）
+        ['命令执行函数(system等)',
+            '/(?<!::)(?<!->)\b(system|shell_exec|passthru|popen|proc_open)\s*\(/i',            9],
+        ['命令执行函数(exec)',
+            '/(?<!::)(?<!->)(?<!\w)\bexec\s*\(/i',                                              9],
+
+        // base64/gz 解码后直接执行：必须与 eval/assert/system 等执行函数在同一文件出现才报分
+        ['解码后执行(base64+eval)',
+            '/(base64_decode|gzinflate|gzuncompress|str_rot13)\s*\([^)]*\)\s*\.?\s*(eval|assert|system|exec|shell_exec|passthru)\s*\(/is', 12],
+        // 单独 base64_decode 不与执行函数联动时，仅在文件同时含有 $_GET/$_POST 时报弱分
+        ['base64解码(仅含用户输入时)',
+            '/(?=.*\$_(GET|POST|REQUEST))(base64_decode|gzinflate|gzuncompress|str_rot13)\s*\(/i', 4],
+
+        ['preg_replace /e 代码执行',
+            '/preg_replace\s*\(\s*["\'][^"\']*\/[a-z]*e[a-z]*["\']/i',                       9],
+        ['请求变量直接拼接代码',
+            '/\$_(GET|POST|REQUEST|COOKIE|SERVER)\s*\[[^\]]*\]\s*\(/i',                       12],
+        ['可变函数调用',
+            '/\$\{?[a-zA-Z_]\w*\}\s*\(\s*\$_(GET|POST|REQUEST|COOKIE)/i',                     12],
+        ['动态变量函数定义',
+            '/(?<!::)(?<!->)\b(create_function|call_user_func(_array)?)\s*\(/i',                 5],
+        ['短标签+请求取值',
+            '/<\?=\s*\$_(GET|POST|REQUEST|COOKIE)/i',                                         11],
+
+        // 文件写入型后门：file_put_contents/fwrite 的数据源直接来自 $_GET/$_POST
+        ['文件写入型后门',
+            '/(file_put_contents|fwrite)\s*\(.*\$_(GET|POST|REQUEST)/is',                       11],
+
+        // include/require 动态包含：参数必须直接来自用户输入变量（$_GET/$_POST/$_REQUEST/$_COOKIE）
+        // 排除 require $handler / require $configFile 等内部路由变量
+        ['include 请求参数',
+            '/(include|require)(_once)?\s*\(?\s*\$_(GET|POST|REQUEST|COOKIE)/i',                 12],
+
+        ['HTTP 头下发 payload',
+            '/\bgetenv\s*\(\s*["\']HTTP_[A-Z]+["\']\s*\)/i',                                   6],
+        ['超长单行混淆',
+            '/^\s*\$\w+\s*=\s*["\'][A-Za-z0-9+\/=]{300,}["\']\s*;/m',                        8],
+        ['异步/回调执行请求值',
+            '/(array_map|array_filter|usort|register_shutdown_function|register_tick_function)\s*\(\s*["\']?(eval|assert|system|exec|shell_exec|passthru)/i', 12],
+        ['经典一句话连接口令',
+            '/\$_(GET|POST|REQUEST|COOKIE)\s*\[\s*["\'][^"\']{1,12}["\']\s*\]\s*\(\s*\$[_\w]+/i', 12],
     ];
 
     /** 高危判定分数阈值 */
