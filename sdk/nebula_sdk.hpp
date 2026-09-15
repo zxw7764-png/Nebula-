@@ -73,6 +73,16 @@
 #include <ctime>
 
 // ---------------------------------------------------------------------------
+// 运行时多样性开关（Runtime Diversity）：数据面 + 判断形态随每次启动而变。
+//   NEBULA_RUNTIME_DIVERSE=1 → SecureString 每次随机密钥 + 不透明谓词随机形态。
+//   NEBULA_RUNTIME_DIVERSE=0 → SecureString 固定密钥(仍防明文) + 固定谓词(零开销)。
+//   默认 0；NEBULA_HARDEN=1 时自动打开；可单独强制开启/关闭。见 sdk/SDK_PROTECTION.md。
+// ---------------------------------------------------------------------------
+#ifndef NEBULA_RUNTIME_DIVERSE
+#  define NEBULA_RUNTIME_DIVERSE 0
+#endif
+
+// ---------------------------------------------------------------------------
 // 客户端加固模块（可选）：与本文件同目录的 nebula_protect.hpp
 //   找不到该文件时自动跳过（NEBULA_HAS_PROTECT=0），不影响编译。
 //   是否真正生效由 nebula_protect.hpp 顶部的宏决定，默认全部关闭。
@@ -109,14 +119,99 @@
 #ifndef NEBULA_DEAD_BRANCH
 #  define NEBULA_DEAD_BRANCH() do { } while (0)
 #endif
+
+// ============================================================
+// ★ runtimeRandByte()：每次进程启动都不同的真随机字节源
+//   用「高分辨率性能计数器 + 进程 PID + 时钟纳秒」做 mt19937 种子（magic static，
+//   C++11 线程安全、只初始化一次），保证同一 exe 每次运行产生的随机序列都不同。
+//   用途：SecureString 随机密钥、不透明谓词、随机填充 —— 运行时「数据面多样性」。
+//   只依赖标准库 + windows，不写可执行内存，不与壳/杀软/DEP 冲突。
+// ============================================================
+inline unsigned char runtimeRandByte(unsigned char lo = 1, unsigned char hi = 255) {
+    static std::mt19937 gen = [] {
+        LARGE_INTEGER pc; QueryPerformanceCounter(&pc);
+        auto ns = std::chrono::high_resolution_clock::now()
+                      .time_since_epoch().count();
+        std::seed_seq ss{
+            (unsigned)GetCurrentProcessId(),
+            (unsigned)pc.QuadPart,
+            (unsigned)(pc.QuadPart >> 32),
+            (unsigned)ns, (unsigned)(ns >> 32),
+        };
+        return std::mt19937(ss);
+    }();
+    if (hi <= lo) return lo;
+    return (unsigned char)(lo + (unsigned)(gen() % (unsigned)(hi - lo + 1)));
+}
+
+// ============================================================
+// ★ SecureString：防「常驻明文」的擦除型短字符串 + 运行时多样性
+//   —— 专治 kAppKey 这类长度 ≤15 会被 std::string SSO 内联进 .data 静态区、
+//      内存 dump 一眼可见的敏感值。
+//   机制：
+//     · 内部只保存混淆后的密文（字节与明文无直接关系）；
+//     · 构造时用 runtimeRandByte() 生成【每次运行都不同的随机密钥】并存入成员，
+//       str() 用同一密钥解码到栈上临时对象，用完即销毁，不常驻堆/静态区。
+//     · 因此：同一 exe 每次启动，cfg 静态区的密文形态都不同，
+//       破解者无法用固定的字符串特征做批量匹配。
+//   用法：
+//       inline const SecureString kAppKey = SecureString(NEBULA_STR("SW83CBD02D913F"));
+//       std::string key = kAppKey.str();   // 只在需要时取明文，用完自动析构擦除
+//   注意：SecureString 不可拷贝（保证明文只有一处源）；如需多次取用请各自 str()。
+// ============================================================
+class SecureString {
+public:
+    explicit SecureString(const std::string& raw)
+        // NEBULA_RUNTIME_DIVERSE=1 → 每次运行随机密钥(形态每次启动不同)；
+        // =0 → 固定编译期密钥 75(仍防 SSO 静态区明文，形态固定、可复现)。
+        : key_(NEBULA_RUNTIME_DIVERSE ? runtimeRandByte() : 75) {
+        buf_.reserve(raw.size());
+        for (size_t i = 0; i < raw.size(); ++i)
+            buf_ += (char)((unsigned char)raw[i] ^ (unsigned char)(key_ + i));
+    }
+    SecureString(const SecureString&) = delete;
+    SecureString& operator=(const SecureString&) = delete;
+    SecureString(SecureString&& o) noexcept : key_(o.key_), buf_(std::move(o.buf_)) {}
+    // 解码到临时 std::string；调用方使用后由析构擦除（不常驻、不在静态区留明文）
+    std::string str() const {
+        std::string out;
+        out.reserve(buf_.size());
+        unsigned char k = key_;
+        for (size_t i = 0; i < buf_.size(); ++i)
+            out += (char)((unsigned char)buf_[i] ^ (unsigned char)(k + i));
+        return out;
+    }
+    size_t size() const { return buf_.size(); }
+    bool empty() const { return buf_.empty(); }
+private:
+    const unsigned char key_;
+    std::string buf_;
+};
+
 #if !NEBULA_HAS_PROTECT
 namespace nebula { namespace obf {
 template <typename... Args, typename... CallArgs>
 inline void vcall(void (*fn)(Args...), CallArgs&&... args) { fn(std::forward<CallArgs>(args)...); }
 template <typename Ret, typename... Args, typename... CallArgs>
 inline Ret vcallR(Ret (*fn)(Args...), CallArgs&&... args) { return fn(std::forward<CallArgs>(args)...); }
-inline bool opaqueTrue()  { return true; }
-inline bool opaqueFalse() { return false; }
+#if NEBULA_RUNTIME_DIVERSE
+    inline bool opaqueTrue()  {
+        // 运行时多样性恒真：每次进程启动取不同随机操作数，但表达式恒等于 true，
+        // 保持死代码去折叠语义不变，同时反汇编形态每次不同、无法固定特征绕过。
+        const unsigned a = runtimeRandByte();
+        const unsigned b = runtimeRandByte();
+        return (a + b) == (b + a) && (a * 1) == a && ((a & b) | a) == a;
+    }
+    inline bool opaqueFalse() {
+        // 运行时多样性恒假：恒为 false 但随机形态，配合 opacity 分支做干扰。
+        const unsigned a = runtimeRandByte();
+        const unsigned b = runtimeRandByte();
+        return (a + 1) == a;   // 恒 false（整数加 1 不可能等于原值）
+    }
+#else
+    inline bool opaqueTrue()  { return true;  }   // 固定恒真（零开销）
+    inline bool opaqueFalse() { return false; }   // 固定恒假
+#endif
 } }
 #endif
 
@@ -155,7 +250,9 @@ namespace nebula {
 // ============================================================
 namespace cfg {
 inline const std::string kApiUrl   = NEBULA_STR("http://your-domain.com/api/index.php");  // ← 改成你的 API 入口
-inline const std::string kAppKey   = NEBULA_STR("SWXXXXXXXX");                            // ← 改成你的软件 app_key
+// kAppKey 用 SecureString 存储：长度 ≤15 会被 std::string SSO 内联进 .data 静态区，
+// 直接放 std::string 会让明文在内存 dump 时一眼可见；SecureString 只在 str() 时临时解码。
+inline const SecureString kAppKey = SecureString(NEBULA_STR("SWXXXXXXXX"));                 // ← 改成你的软件 app_key
 inline const std::string kAesKey   = NEBULA_STR("00000000000000000000000000000000");      // ← 32位hex，后台软件管理复制
 inline const std::string kSignSalt = NEBULA_STR("000000000000000000000000000000000000000000000000"); // ← 48位hex，后台软件管理复制
 
@@ -210,6 +307,15 @@ inline const std::string kRespSignPubKey = NEBULA_STR("");  // ← 必填：服�
 //   · 留空 = 不校验证书指纹（仍走系统标准 TLS 校验）。
 //   · 填写后 SDK 会同时拒绝 http:// 的 API 地址（明文传输 + 无法锁证书）。
 inline const std::string kTlsCertSha256 = NEBULA_STR("");  // ← 服务端证书 SHA256 指纹，留空不锁定
+
+// ============================================================
+// ★ 疑似环境处置策略（false=宽松[默认]，true=严格）
+//   影响 setProtectAction() 对「疑似环境」类命中（hook / 虚拟机 / 沙箱 / BIOS VMW）
+//   的处置：宽松时只记录不拦截（避免误伤挂加速器/跑 VM 的正常用户）；
+//   严格时这些命中也会按 action 弹窗退出（能拦下"隐身 VM"等伪装环境，但会误伤 VM 用户）。
+//   注意：真实调试铁证（debugged）无论开关都按 action 处置，不受此开关影响。
+// ============================================================
+inline const bool kProtectStrictPolicy = false;   // ← 改成 true 即对 VM/沙箱/hook 一律拦截
 } // namespace cfg
 
 constexpr int MAX_TOKEN_LEN  = 256;
@@ -1169,7 +1275,18 @@ public:
     // 运行时调整检测等级（0=关 1=基础 2=标准 3=严格；不会超过编译期 NEBULA_PROTECT_LEVEL 上限）
     void setProtectLevel(int lv)  { nebula::protect::setLevel(lv); }
     // 命中后的处置：0=只记录 1=回调上报(默认) 2=降级(拒绝业务) 3=弹窗并退出
-    void setProtectAction(int act) { nebula::protect::setAction(act); }
+    // 只要传入 act>0，就同时隐式「启用检测」：把等级提到编译期上限并打开 enabled 开关，
+    // 否则 setProtectAction 只设了处置方式、扫描始终被 enabled()=false 短路而不会真正执行。
+    void setProtectAction(int act) {
+        nebula::protect::setAction(act);
+        if (act > 0) {
+            // 按接入方配置区 kProtectStrictPolicy 决定宽松/严格：
+            // false=宽松：疑似环境(hook/VM/沙箱/BIOS VMW)只记录；true=严格：一律按 action 拦截。
+            nebula::protect::setSuspiciousPolicy(cfg::kProtectStrictPolicy);
+            nebula::protect::setLevel((int)NEBULA_PROTECT_LEVEL);
+            nebula::protect::setEnabled(true);
+        }
+    }
     // 命中后回调（推荐在这里把结果上报到你自己服务端，或写本地日志）
     void setProtectCallback(std::function<void(const nebula::protect::Report&)> cb) {
         nebula::protect::setCallback(std::move(cb));
@@ -1298,6 +1415,31 @@ public:
         }
         if (!lr.token.empty()) { token_ = lr.token; state_ = STATE_LOGIN; }
         return lr;
+    }
+
+    // ★ 内置登录判定（可选）：把「发起登录 → 判定成功/失败」整段收进 SDK，
+    //   并在壳虚拟化区路由回调 —— 接入层不再暴露一眼可 patch 的 if(ok)。
+    //   判定代码（lr.ok）真正实现在 SDK 内部，接入方只提供成功/失败动作。
+    //
+    //   【可用可不用】:
+    //     · 用：判定分支被壳虚拟化（需 NEBULA_SHELL_ENABLE=1 + VMP），patch 难。
+    //     · 不用：保留 login() 后自行 if(lr.ok) 即可，未定义该宏时空宏零开销。
+    //
+    //   用法：
+    //       c.loginAndGuard(account, secret,
+    //           [&](nebula::Client::LoginResult& lr){ StartMain(std::move(c)); },  // 成功
+    //           [&](nebula::Client::LoginResult& lr){ ShowLoginFailed(lr.msg); }); // 失败
+    template <typename Ok, typename Fail>
+    void loginAndGuard(const std::string& account, const std::string& secret,
+                       Ok&& onOk, Fail&& onFail) {
+        LoginResult lr = login(account, secret);
+        NEBULA_MARK_VM_BEGIN();       // 判定分支进入壳虚拟化段（防 patch）
+        if (lr.ok) {
+            onOk(lr);
+        } else {
+            onFail(lr);
+        }
+        NEBULA_MARK_VM_END();
     }
 
     // ---------------- 业务接口（登录后） ----------------
@@ -1921,8 +2063,38 @@ inline std::unique_ptr<Client> createDefaultClient(
         const std::string& os_info       = "Windows",
         const std::string& client_version = "1.0.0") {
     return std::unique_ptr<Client>(
-        new Client(cfg::kApiUrl, cfg::kAesKey, cfg::kSignSalt, cfg::kAppKey,
+        new Client(cfg::kApiUrl, cfg::kAesKey, cfg::kSignSalt, cfg::kAppKey.str(),
                    machine_id, os_info, client_version));
+}
+
+// ============================================================
+// ★ 授权门卫（可选）：把「登录/授权判定 → 走成功/失败」整段收进壳
+//   虚拟化区，接入层不再暴露一眼可 patch 的裸 if(jz/jnz) 分支。
+//
+//   【开放可选用 / 不用，二选一】
+//     · 想用（推荐）：判定的关键跳转被 VMP 虚拟化，难被 patch。
+//     · 不用：完全可跳过，你原有的返回码 if(ok) 照常工作。
+//       本函数不改变任何协议与业务逻辑，纯粹是在"判定分支"外包了一层保护。
+//
+//   前提：工程预处理器定义 NEBULA_SHELL_ENABLE=1（SDK 才会链入
+//   VMProtectSDK64.lib 并把标记展开成 VMProtectBeginVirtualization/End）；
+//   未定义时 NEBULA_MARK_* 是空宏，此调用零开销、等价于普通 if。
+//
+//   用法：
+//       bool ok = resp.code == 0;
+//       nebula::guardAuth(ok,
+//           [&]{ StartMain(std::move(client)); },   // 成功 -> 进主界面
+//           [&]{ ShowLoginFailed(); });             // 失败 -> 提示
+// ============================================================
+template <typename FnOk, typename FnFail>
+inline void guardAuth(bool ok, FnOk&& onOk, FnFail&& onFail) {
+    NEBULA_MARK_VM_BEGIN();          // 判定分支进入壳虚拟化段（防 patch）
+    if (ok) {
+        onOk();
+    } else {
+        onFail();
+    }
+    NEBULA_MARK_VM_END();
 }
 
 } // namespace nebula

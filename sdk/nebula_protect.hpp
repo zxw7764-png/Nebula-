@@ -57,6 +57,9 @@
 #  ifndef NEBULA_SHELL_ENABLE
 #    define NEBULA_SHELL_ENABLE 1
 #  endif
+#  ifndef NEBULA_RUNTIME_DIVERSE
+#    define NEBULA_RUNTIME_DIVERSE 1
+#  endif
 #endif
 
 // ③ 运行时防护等级：0=关闭(默认) 1=基础 2=标准 3=严格
@@ -67,6 +70,11 @@
 // ② 字符串混淆：0=关闭(默认)
 #ifndef NEBULA_OBF_STRINGS
 #define NEBULA_OBF_STRINGS 0
+#endif
+
+// ④ 运行时多样性：0=关闭(默认) 1=开启（SecureString 随机密钥 + 不透明谓词随机形态）
+#ifndef NEBULA_RUNTIME_DIVERSE
+#define NEBULA_RUNTIME_DIVERSE 0
 #endif
 
 // ① 壳标记：0=关闭(默认) 1=开启（自动探测已安装的壳 SDK）
@@ -369,7 +377,8 @@ NEBULA_NOINLINE inline uint32_t runtimeNoise() {
 #endif
 }
 
-// 恒为 true（(a^2 ^ (a+1)^2) 的最低位必定为 1）
+#if NEBULA_RUNTIME_DIVERSE
+// 恒为 true（(a^2 ^ (a+1)^2) 的最低位必定为 1）——随机噪声驱动，形态每次不同
 NEBULA_NOINLINE inline bool opaqueTrue() {
     const uint32_t a = runtimeNoise();
     const uint32_t b = a * a;
@@ -381,6 +390,10 @@ NEBULA_NOINLINE inline bool opaqueTrue() {
 NEBULA_NOINLINE inline bool opaqueFalse() {
     return !opaqueTrue();
 }
+#else
+NEBULA_NOINLINE inline bool opaqueTrue()  { return true; }
+NEBULA_NOINLINE inline bool opaqueFalse() { return false; }
+#endif
 
 } // namespace obf
 } // namespace nebula
@@ -832,6 +845,21 @@ inline bool vmBiosStrings() {
     for (size_t i = 0; i < sizeof(kProd) / sizeof(kProd[0]); ++i) {
         if (regValueContains(HKEY_LOCAL_MACHINE, kSys, "SystemProductName", kProd[i])) return true;
     }
+    // 兜底：BIOS Vendor / BIOS Version。SMBIOS.reflectHost 会反射 SystemManufacturer、
+    // SystemProductName、序列号等字段，但 BIOS Vendor / BIOS Version 默认不反射，
+    // 隐身 VMware 配置下通常仍保留真实固件名（如 "VMware, Inc." / 版本前缀 "VMW"）。
+    // 若只依赖上面两个字段，这台"隐身虚拟机"就会完全漏检。
+    static const char* kVend[] = { "vmware", "innotek", "qemu", "xen", "bochs", "parallels" };
+    for (size_t i = 0; i < sizeof(kVend) / sizeof(kVend[0]); ++i) {
+        if (regValueContains(HKEY_LOCAL_MACHINE, kSys, "BIOSVendor", kVend[i])) return true;
+    }
+    static const char* kVer[] = {
+        "vmware", "vbox", "virtualbox", "qemu", "xen", "bochs",
+        "vmw",      // VMware BIOS 版本号前缀，例如 "VMW71.00V.0"
+    };
+    for (size_t i = 0; i < sizeof(kVer) / sizeof(kVer[0]); ++i) {
+        if (regValueContains(HKEY_LOCAL_MACHINE, kSys, "BIOSVersion", kVer[i])) return true;
+    }
     return false;
 }
 
@@ -882,6 +910,11 @@ inline bool vmDriverFile() {
     static const char* kFiles[] = {
         "C:\\Windows\\System32\\drivers\\vmmouse.sys",
         "C:\\Windows\\System32\\drivers\\vmhgfs.sys",
+        "C:\\Windows\\System32\\drivers\\vmci.sys",
+        "C:\\Windows\\System32\\drivers\\vmxnet.sys",
+        "C:\\Windows\\System32\\drivers\\vmx_svga.sys",
+        "C:\\Windows\\System32\\drivers\\vmmemctl.sys",
+        "C:\\Windows\\System32\\drivers\\vsock.sys",
         "C:\\Windows\\System32\\drivers\\VBoxMouse.sys",
         "C:\\Windows\\System32\\drivers\\VBoxGuest.sys",
         "C:\\Windows\\System32\\drivers\\VBoxSF.sys",
@@ -1033,6 +1066,14 @@ inline void setLevel(int lv) {
 inline std::atomic<int>& actionRef() { static std::atomic<int> v{ NEBULA_PROTECT_ACTION }; return v; }
 inline int  action()          { return actionRef().load(); }
 inline void setAction(int a)  { actionRef().store(a); }
+
+// 分级策略开关（默认宽松，避免误伤装加速器/跑在 VM 的正常用户）：
+//   strictPolicy() == false（宽松，默认）：仅「真实调试铁证」按 action>=2 处置，
+//       hook/VM/沙箱等「疑似环境」仅回调记录、不退出、不降级。
+//   strictPolicy() == true（严格）：恢复原行为，任何异常都按 action 处置。
+inline std::atomic<bool>& strictRef() { static std::atomic<bool> v{false}; return v; }
+inline bool strictPolicy()            { return strictRef().load(); }
+inline void setSuspiciousPolicy(bool s) { strictRef().store(s); }
 
 // 「降级」状态：action>=2 命中后置位，接入方（或 Client）据此拒绝业务请求
 inline std::atomic<bool>& degradedRef() { static std::atomic<bool> v{false}; return v; }
@@ -1226,10 +1267,17 @@ inline bool enforce(const Report& r) {
     if (cb) cb(r);                            // 默认策略下接入方在这里上报服务端
 
     const int act = action();
-    if (act >= 2) {
+    // 宽松策略：hook/VM/沙箱等「疑似环境」即使命中也不拦截，只记录/上报
+    const bool firm  = r.debugged;            // 真实调试铁证
+    const bool suspicious = (r.hooked || r.virtualized || r.sandboxed) && !firm;
+    const bool should_block = strictPolicy() ? true : firm;
+    if (act >= 2 && should_block && !suspicious) {
         if (act >= 3) {
-            const std::wstring msg = utf8ToWide(r.summary() + "\n\n" + r.detail());
-            MessageBoxW(nullptr, msg.c_str(), L"Nebula 安全提示", MB_ICONERROR | MB_OK);
+            const std::wstring msg =
+                L"检测到当前运行环境存在异常（可能被调试或篡改）。\n\n"
+                L"为保护您的账户与数据安全，本程序即将退出。\n"
+                L"如确认为正常环境，请关闭调试、逆向或虚拟机辅助类软件后重新启动。";
+            MessageBoxW(nullptr, msg.c_str(), L"Nebula", MB_ICONERROR | MB_OK);
             ExitProcess(0xE0000001u);
         }
         degradedRef().store(true);

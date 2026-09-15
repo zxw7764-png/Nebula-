@@ -355,6 +355,19 @@ c->enableProtection(0, 5000);                  // 启动自检 + 每 5 秒后台
 > 完整操作手册（各等级查什么、权重与误报风险、加壳步骤与坑、误报收场办法）
 > 见 **[SDK_PROTECTION.md](SDK_PROTECTION.md)**。
 
+### 12.1 授权门卫（可选）：内置登录判定保护
+
+SDK 提供可选的**内置登录判定** `Client::loginAndGuard()`：把「发起登录 → 判定成功/失败」整段收进 SDK，并在壳虚拟化区路由回调，接入层不再暴露一眼可 patch 的裸 `if(jz/jnz)` 分支。**判定代码（`lr.ok`）真正实现在 SDK 内部。可用可不用，不改变任何协议与业务逻辑。**
+
+```cpp
+c.loginAndGuard(account, secret,
+    [&](nebula::Client::LoginResult& lr){ StartMain(std::move(c)); },  // 成功 → 进主界面
+    [&](nebula::Client::LoginResult& lr){ ShowLoginFailed(lr.msg); }); // 失败 → 提示
+```
+
+- **想用**：判定跳转被壳虚拟化（需 `NEBULA_SHELL_ENABLE=1` + VMP 加壳），patch 难度明显提高。
+- **不用**：完全可跳过，保留原有的 `LoginResult lr = c.login(...); if(lr.ok)` 即可——未定义 `NEBULA_SHELL_ENABLE` 时 `NEBULA_MARK_*` 是空宏，此调用零开销、等价于直接把 `lr.ok` 走分支。
+
 ---
 
 *文档与 SDK 同步维护：改 SDK 必须同步更新本文档（项目 / WWW / 空白包三处）。*

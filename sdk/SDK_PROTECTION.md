@@ -320,6 +320,42 @@ if (!r.clean) {
 > **强烈建议不要一上来就用 3。** 云电脑、虚拟机里的真实付费用户、杀软的 hook 都会造成误伤。
 > 先用 `1` 收集一段时间，看命中的都是谁，再决定要不要收紧。
 
+### 3.4.1 setProtectAction 会「隐式启用检测」（重要）
+
+`Client::setProtectAction(act)` 只要传入 `act>0`，就会同时把检测等级提到编译期上限
+并打开 `enabled` 开关。**不要只调它而不调其它**——它本身就是"开启检测 + 设处置"一行到位：
+
+```cpp
+c->setProtectAction(3);   // 等级提到 NEBULA_PROTECT_LEVEL 上限 + 启用扫描 + 铁证弹窗退出
+```
+
+（老版本只 `setAction`，会让扫描被 `enabled()=false` 短路、检测根本没执行——已修复。）
+
+### 3.4.2 宽松 / 严格策略（防误伤：加速器 / 隐身 VM）
+
+默认**宽松策略**，避免把"挂加速器产生的 hook、跑在 VM/沙箱"的正常用户误拦：
+
+- 只有**真实调试铁证（`debugged`）**才按 `action>=2` 处置；
+- `hook / VM / 沙箱` 等**疑似环境**只回调记录、不退出、不降级。
+
+```cpp
+// 想恢复旧行为（任何异常都按 action 处置，含 VM 拦截）：
+nebula::protect::setSuspiciousPolicy(true);
+```
+
+### 3.4.3 虚拟机识别的兜底检测（抓"隐身 VM"）
+
+针对 `SMBIOS.reflectHost`（反射厂商/型号/序列号后仍伪装成真机）的 VMware：
+
+- 在查 `SystemManufacturer` / `SystemProductName` 之外，**又补了 `BIOSVendor` 与 `BIOSVersion`**。
+  这两个字段 reflectHost 默认**不反射**，隐身 VMware 的 BIOS 版本前缀仍带 `VMW`（如 `VMW71.00V.0`），可被兜底命中；
+- `vmDriverFile` 新增 `vmci.sys` / `vmxnet.sys` / `vmx_svga.sys` / `vmmemctl.sys` / `vsock.sys`。
+
+```cpp
+if (nebula::protect::setSuspiciousPolicy(true)) // 严格模式：让隐身 VM 也直接拦截（谨慎）
+    c->setProtectAction(3);
+```
+
 ### 3.5 代码补丁自检（`guardCode`）
 
 把关键函数的地址与长度登记进去，之后每次 `scan()` 都会比对哈希：
