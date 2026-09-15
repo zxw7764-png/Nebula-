@@ -1,0 +1,49 @@
+# ============================================================
+# Nebula 网络验证 - Apache 目录保护
+# ------------------------------------------------------------
+# 本文件是 nginx.conf.example 里 deny 规则的 Apache 等价版本，
+# 供 Apache / 宝塔 / phpStudy / serv00 等直接读取 .htaccess 的环境使用，
+# 不需要改动 vhost 配置即可生效。
+#
+# ⚠ 安装向导会把下面规则里的 /admin 自动改写成你的实际后台目录名，
+#   所以这里保留默认名即可，不必手动改。
+# ============================================================
+
+# 关闭目录列表：避免 config / logs / data 这类目录被直接浏览
+Options -Indexes
+
+# 默认首页
+DirectoryIndex index.php index.html
+
+# 抹掉 PHP 版本指纹（需要 mod_headers；没有该模块时自动跳过）
+<IfModule mod_headers.c>
+    Header unset X-Powered-By
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # ------------------------------------------------------------
+    # 1) 敏感目录整目录拒绝
+    #    config/  数据库账号密码、离线签名私钥
+    #    lib/     全部 PHP 类库源码
+    #    logs/    运行日志与文件缓存
+    #    data/    文件完整性基准（全站路径 + sha256 清单）
+    #    注意：这里【不含 install/】—— 安装向导必须能被浏览器打开
+    # ------------------------------------------------------------
+    RewriteRule ^(?:config|lib|logs|data)/ - [F,L]
+
+    # 2) install/ 只放行安装向导本身
+    #    migrate_*.php 会在 Web 上真实执行 DDL，clear_logs.php 能清空审计日志
+    RewriteRule ^install/(?!install\.php$).*\.php$ - [F,L]
+
+    # 3) 后台 / 代理的 handlers 目录不可直接访问
+    #    这些 PHP 依赖入口注入的 $input/$admin/$agent 变量，单独访问无意义且可能泄露信息
+    RewriteRule ^[^/]+/handlers/ - [F,L]
+
+    # 4) 敏感文件与备份残留
+    RewriteRule \.(?:sql|log|md|lock|json|ini|sh|bak|old|orig|swp|swo)$ - [F,L]
+
+    # 5) 服务器配置副本与版本库不要被下载
+    RewriteRule ^(?:nginx\.htaccess|nginx\.conf\.example|\.gitignore|\.git/.*)$ - [F,L]
+</IfModule>

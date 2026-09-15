@@ -1,0 +1,11 @@
+# 禁止直接访问 handlers 目录下的 PHP 文件
+# （这些文件依赖 index.php 注入的 $input/$admin 变量，单独访问无意义且可能泄露信息）
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^handlers/ - [F,L]
+</IfModule>
+
+# 禁止访问认证类文件
+<FilesMatch "^(AdminAuth)\.php$">
+    Require all denied
+</FilesMatch>

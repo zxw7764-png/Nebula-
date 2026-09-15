@@ -1,0 +1,420 @@
+/*
+Template Name: 英雄联盟
+Description: 海克斯科技 · 深蓝金纹
+Color: #c8aa6e
+Layout: hero, banner, features, shots, flow, pricing, notice, sellers, board, faq
+ */
+
+/* 模板 lol · 英雄联盟 · 官网 */
+
+/* ===================== 配色（LoL 客户端同款） ===================== */
+body.ui-lol {
+    --bg:         #010a13;
+    --bg-soft:    #0a1428;
+    --panel:      #101b2c;
+    --panel-2:    #16233a;
+    --border:     #3a2f1b;
+    --border-2:   #785a28;
+    --text:       #f0e6d2;
+    --text-sub:   #cdbe91;
+    --text-dim:   #a09b8c;
+    --text-strong:#f0e6d2;
+
+    --primary:    #0ac8b9;
+    --primary-2:  #07847a;
+    --primary-rgb:    10, 200, 185;
+    --primary-2-rgb:  7, 132, 122;
+
+    --accent:     #c8aa6e;
+    --accent-2:   #785a28;
+    --success:    #1e9e50;
+    --warning:    #c8aa6e;
+    --danger:     #be1e37;
+
+    --radius:     2px;
+    --shadow:     0 6px 28px rgba(0, 0, 0, .55);
+    --nav-bg:     rgba(1, 10, 19, .92);
+    --mask:       rgba(1, 10, 19, .85);
+
+    --lol-gold:   #c8aa6e;
+    --lol-gold-2: #f0e6d2;
+    --lol-gold-3: #785a28;
+    --lol-teal:   #0ac8b9;
+    --lol-teal-2: #07847a;
+    --lol-red:    #be1e37;
+    --lol-blue:   #0a1428;
+    --lol-blue-2: #0a323c;
+    --lol-panel:  #101b2c;
+}
+
+/* ===================== 背景 ===================== */
+body.ui-lol {
+    background:
+        radial-gradient(ellipse at 50% 40%, rgba(10, 200, 185, .07) 0%, transparent 55%),
+        radial-gradient(ellipse at 50% 25%, rgba(200, 170, 110, .06) 0%, transparent 50%),
+        repeating-linear-gradient(0deg,
+            transparent 0, transparent 59px,
+            rgba(200, 170, 110, .025) 59px, rgba(200, 170, 110, .025) 60px),
+        repeating-linear-gradient(90deg,
+            transparent 0, transparent 59px,
+            rgba(200, 170, 110, .025) 59px, rgba(200, 170, 110, .025) 60px),
+        linear-gradient(180deg, #010a13 0%, #0a1428 55%, #010a13 100%);
+    background-attachment: fixed;
+    color: var(--text);
+}
+
+/* 顶部金色氖线（装饰，不遮内容） */
+body.ui-lol::after {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg,
+        transparent, var(--lol-gold-3), var(--lol-gold), var(--lol-teal), var(--lol-gold), var(--lol-gold-3), transparent);
+    z-index: 100;
+    pointer-events: none;
+}
+
+/* ===================== 字体 ===================== */
+body.ui-lol,
+body.ui-lol .btn,
+body.ui-lol input,
+body.ui-lol textarea,
+body.ui-lol select {
+    font-family: 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
+    letter-spacing: .5px;
+}
+
+body.ui-lol :is(h1, h2, h3, .sec-title) {
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--lol-gold-2);
+    text-shadow: 0 1px 0 #000;
+}
+
+/* ===================== 商品卡片（发卡网核心） ===================== */
+body.ui-lol .goods-card,
+body.ui-lol .product-card,
+body.ui-lol .shop-item,
+body.ui-lol .card {
+    background: linear-gradient(180deg, var(--lol-panel) 0%, var(--lol-blue) 100%);
+    border: 1px solid var(--border);
+    box-shadow: 0 6px 28px rgba(0, 0, 0, .55);
+    position: relative;
+    clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+    transition: .3s;
+    overflow: hidden;
+}
+
+/* 金色对角角标 */
+body.ui-lol .goods-card::before,
+body.ui-lol .product-card::before,
+body.ui-lol .shop-item::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 30px; height: 30px;
+    border-top: 2px solid var(--lol-gold-3);
+    border-left: 2px solid var(--lol-gold-3);
+    transition: .3s;
+    pointer-events: none;
+    z-index: 2;
+}
+
+body.ui-lol .goods-card::after,
+body.ui-lol .product-card::after,
+body.ui-lol .shop-item::after {
+    content: '';
+    position: absolute;
+    bottom: 0; right: 0;
+    width: 30px; height: 30px;
+    border-bottom: 2px solid var(--lol-gold-3);
+    border-right: 2px solid var(--lol-gold-3);
+    transition: .3s;
+    pointer-events: none;
+    z-index: 2;
+}
+
+body.ui-lol .goods-card:hover,
+body.ui-lol .product-card:hover,
+body.ui-lol .shop-item:hover {
+    border-color: var(--lol-gold);
+    box-shadow: 0 10px 34px rgba(0, 0, 0, .6), 0 0 18px rgba(200, 170, 110, .15);
+    transform: translateY(-3px);
+}
+
+body.ui-lol .goods-card:hover::before,
+body.ui-lol .goods-card:hover::after,
+body.ui-lol .product-card:hover::before,
+body.ui-lol .product-card:hover::after,
+body.ui-lol .shop-item:hover::before,
+body.ui-lol .shop-item:hover::after {
+    width: 56px;
+    height: 56px;
+    border-color: var(--lol-gold);
+}
+
+body.ui-lol .goods-card img,
+body.ui-lol .product-card img,
+body.ui-lol .shop-item img {
+    border-bottom: 1px solid var(--border);
+    transition: .3s;
+}
+
+body.ui-lol .goods-card:hover img,
+body.ui-lol .product-card:hover img,
+body.ui-lol .shop-item:hover img {
+    transform: scale(1.04);
+    filter: brightness(1.08) saturate(1.08);
+}
+
+body.ui-lol .goods-title,
+body.ui-lol .product-title,
+body.ui-lol .goods-card h3,
+body.ui-lol .product-card h3 {
+    color: var(--lol-gold-2);
+    letter-spacing: 1px;
+    font-weight: 700;
+}
+
+body.ui-lol .goods-price,
+body.ui-lol .product-price,
+body.ui-lol .price {
+    color: var(--lol-gold);
+    font-weight: 700;
+}
+
+body.ui-lol .goods-price::before,
+body.ui-lol .product-price::before {
+    content: '◆ ';
+    color: var(--lol-teal);
+    font-size: .8em;
+}
+
+body.ui-lol .stock,
+body.ui-lol .goods-stock {
+    color: var(--success);
+}
+
+body.ui-lol .stock.low,
+body.ui-lol .goods-stock.low {
+    color: var(--lol-red);
+}
+
+/* ===================== 分类页签（连体式） ===================== */
+body.ui-lol .category-tabs,
+body.ui-lol .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    border: 1px solid var(--border);
+    background: rgba(1, 10, 19, .6);
+    padding: 0;
+}
+
+body.ui-lol .category-tabs .tab,
+body.ui-lol .tabs .tab {
+    background: transparent;
+    color: var(--text-dim);
+    border: none;
+    border-right: 1px solid var(--border);
+    padding: 12px 24px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: .25s;
+    position: relative;
+}
+
+body.ui-lol .category-tabs .tab:last-child,
+body.ui-lol .tabs .tab:last-child {
+    border-right: none;
+}
+
+body.ui-lol .category-tabs .tab:hover,
+body.ui-lol .tabs .tab:hover {
+    color: var(--lol-gold);
+    background: rgba(200, 170, 110, .06);
+}
+
+body.ui-lol .category-tabs .tab.active,
+body.ui-lol .tabs .tab.active {
+    background: linear-gradient(180deg, var(--lol-blue-2), var(--lol-blue));
+    color: var(--lol-gold-2);
+}
+
+body.ui-lol .category-tabs .tab.active::after,
+body.ui-lol .tabs .tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 26px;
+    height: 2px;
+    background: var(--lol-gold);
+}
+
+/* ===================== 订单 / 支付 ===================== */
+body.ui-lol .order-card,
+body.ui-lol .order-item,
+body.ui-lol .pay-card {
+    background: linear-gradient(180deg, var(--lol-panel) 0%, var(--lol-blue) 100%);
+    border: 1px solid var(--border);
+    box-shadow: 0 6px 28px rgba(0, 0, 0, .55);
+    position: relative;
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+    padding: 20px;
+}
+
+body.ui-lol .order-status {
+    letter-spacing: 1px;
+    padding: 4px 12px;
+    border: 1px solid currentColor;
+    display: inline-block;
+    font-size: 12px;
+}
+
+body.ui-lol .order-status.pending { color: var(--lol-gold); border-color: var(--lol-gold); }
+body.ui-lol .order-status.paid    { color: var(--success);  border-color: var(--success); }
+body.ui-lol .order-status.closed  { color: var(--text-dim); border-color: var(--text-dim); }
+
+/* ===================== 按钮 ===================== */
+body.ui-lol .btn {
+    border: 1px solid var(--lol-gold-3);
+    background: linear-gradient(180deg, #1c2c44, #131f33);
+    color: var(--lol-gold-2);
+    border-radius: 2px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+    transition: .25s;
+}
+
+body.ui-lol .btn:hover {
+    border-color: var(--lol-gold);
+    background: linear-gradient(180deg, #24385a, #18273f);
+    box-shadow: 0 0 12px rgba(200, 170, 110, .25);
+}
+
+body.ui-lol .btn.primary,
+body.ui-lol .btn.buy {
+    background: linear-gradient(180deg, var(--lol-teal), var(--lol-teal-2));
+    color: #02110f;
+    border-color: var(--lol-teal);
+    box-shadow: 0 0 14px rgba(10, 200, 185, .3);
+}
+
+body.ui-lol .btn.primary:hover,
+body.ui-lol .btn.buy:hover {
+    background: linear-gradient(180deg, #2ee0d0, var(--lol-teal));
+    box-shadow: 0 0 22px rgba(10, 200, 185, .5);
+}
+
+/* ===================== 输入框 ===================== */
+body.ui-lol input,
+body.ui-lol textarea,
+body.ui-lol select {
+    background: rgba(1, 10, 19, .7);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 2px;
+    padding: 10px 14px;
+    transition: .25s;
+}
+
+body.ui-lol input:focus,
+body.ui-lol textarea:focus,
+body.ui-lol select:focus {
+    outline: none;
+    border-color: var(--lol-gold);
+    box-shadow: 0 0 10px rgba(200, 170, 110, .3), inset 0 0 10px rgba(200, 170, 110, .06);
+    background: rgba(1, 10, 19, .9);
+}
+
+/* ===================== 支付方式 ===================== */
+body.ui-lol .pay-method,
+body.ui-lol .pay-option {
+    background: rgba(1, 10, 19, .55);
+    border: 1px solid var(--border);
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: .25s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+body.ui-lol .pay-method:hover,
+body.ui-lol .pay-option:hover {
+    border-color: var(--lol-gold);
+    background: rgba(200, 170, 110, .06);
+}
+
+body.ui-lol .pay-method.active,
+body.ui-lol .pay-option.active,
+body.ui-lol .pay-method.selected,
+body.ui-lol .pay-option.selected {
+    border-color: var(--lol-teal);
+    background: rgba(10, 200, 185, .08);
+    box-shadow: 0 0 12px rgba(10, 200, 185, .2);
+}
+
+/* ===================== 弹窗公告 ===================== */
+body.ui-lol .notice-modal,
+body.ui-lol .announcement-modal {
+    background: linear-gradient(180deg, var(--lol-panel) 0%, var(--lol-blue) 100%);
+    border: 1px solid var(--border-2);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .9), 0 0 24px rgba(200, 170, 110, .12);
+    clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+}
+
+body.ui-lol .notice-modal h3,
+body.ui-lol .announcement-modal h3 {
+    color: var(--lol-gold);
+    letter-spacing: 3px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 12px;
+}
+
+/* ===================== 页脚 ===================== */
+body.ui-lol footer {
+    background: rgba(1, 10, 19, .7);
+    border-top: 1px solid var(--border);
+    color: var(--text-dim);
+    letter-spacing: 1px;
+}
+
+/* ===================== 滚动条 ===================== */
+body.ui-lol ::-webkit-scrollbar { width: 10px; height: 10px; }
+body.ui-lol ::-webkit-scrollbar-track { background: var(--lol-blue); }
+body.ui-lol ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, var(--lol-gold-3), #4a3a1c);
+    border: 1px solid var(--border);
+}
+body.ui-lol ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, var(--lol-gold), var(--lol-gold-3));
+}
+
+/* ===================== 响应式 ===================== */
+@media (max-width: 700px) {
+    body.ui-lol :is(.goods-card, .product-card, .shop-item, .card) {
+        clip-path: none;
+    }
+}
+
+/* ===================== 自定义区块：banner（头注释 Layout: 声明插入 hero 之后） ===================== */
+body.ui-lol #banner { padding-top: 8px; }
+body.ui-lol #banner .nb-banner {
+    max-width: 1080px; margin: 0 auto; padding: 22px 26px;
+    border: 1px solid #785a28; border-radius: 4px;
+    background: linear-gradient(135deg, rgba(10, 20, 40, .92), rgba(1, 10, 19, .92));
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+}
+body.ui-lol #banner .nb-banner-ico { font-size: 30px; line-height: 1; }
+body.ui-lol #banner .nb-banner-main { flex: 1; min-width: 240px; }
+body.ui-lol #banner .nb-banner-main b { color: #c8aa6e; letter-spacing: 2px; font-size: 15px; }
+body.ui-lol #banner .nb-banner-main p { margin: 6px 0 0; color: #cdbe91; font-size: 13px; line-height: 1.7; }
+body.ui-lol #banner .nb-banner-live {
+    color: #0ac8b9; font-size: 12px; letter-spacing: 1px;
+    border: 1px solid #0ac8b9; border-radius: 2px; padding: 6px 12px;
+}

@@ -1,0 +1,8 @@
+# 禁止一切外部访问（本目录仅允许被 index.php / api.php require）
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

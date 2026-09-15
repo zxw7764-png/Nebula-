@@ -1,0 +1,112 @@
+/* 模板 farm */
+
+/* ===================== farm 云上农场 · 像素种田 ===================== */
+/* 天空渐变 + 太阳光斑 + 底部草地条；商品卡 = 木牌 + 硬阴影 */
+body.ui-farm {
+    --bg:        #eaf7d8;
+    --bg-soft:   #fdf6e3;
+    --panel:     #fdf6e3;
+    --panel-2:   #f2ecd2;
+    --border:    #c9b98a;
+    --border-2:  #a89467;
+    --text:      #4a3c28;
+    --text-sub:  #7d6c4e;
+    --text-dim:  #a08f6c;
+    --text-strong: #2e2415;
+    --primary:   #5fa83a;
+    --primary-2: #4a8a2a;
+    --accent:    #f4b400;
+    --success:   #4a8a2a;
+    --warning:   #d97706;
+    --danger:    #c0392b;
+    --radius:    6px;
+    --shadow:    6px 6px 0 rgba(107, 79, 47, .28);
+    --nav-bg:    rgba(253, 246, 227, .9);
+    --mask:      rgba(60, 80, 30, .18);
+    --grid-line: transparent;
+}
+/* 天空渐变：上天空下草地，遮罩减淡 */
+body.ui-farm {
+    background:
+        linear-gradient(180deg,
+            rgba(135, 206, 235, .55) 0%,
+            rgba(176, 226, 250, .35) 46%,
+            rgba(255, 244, 214, .25) 58%,
+            rgba(139, 195, 74, .30) 62%,
+            rgba(106, 168, 79, .35) 100%),
+        #87ceeb;
+    background-attachment: fixed;
+}
+body.ui-farm .bg .mask,
+body.ui-farm .bg .grid { display: none; }
+/* 光斑 → 太阳（金色，缓慢呼吸）+ 草绿色斑 */
+body.ui-farm .bg .blob { opacity: 1; filter: none; }
+body.ui-farm .bg .b1 {
+    background: radial-gradient(circle at 50% 50%, #ffe873 0 58%, #f4d03f 62%, transparent 66%);
+    animation: nb-sun 6s ease-in-out infinite;
+}
+body.ui-farm .bg .b2 { background: rgba(160, 205, 90, .5); }
+body.ui-farm .bg .b3 { background: rgba(255, 224, 130, .45); }
+@keyframes nb-sun {
+    0%, 100% { box-shadow: 0 0 60px 18px rgba(255, 232, 115, .55); }
+    50%      { box-shadow: 0 0 90px 30px rgba(255, 232, 115, .8); }
+}
+/* 底部草地条（像素双色） */
+body.ui-farm::after {
+    content: "";
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    height: 72px;
+    pointer-events: none;
+    z-index: 0;
+    background:
+        repeating-linear-gradient(90deg, #6aab4c 0 24px, #5fa83a 24px 48px);
+    border-top: 6px solid #4a8a2a;
+}
+/* 底部草地是 fixed 装饰带：文档底部留出等高空间，滑到最底版权不被挡 */
+body.ui-farm { padding-bottom: 96px; }
+/* 公告条：默认是 primary 渐变+青色霓虹底，农场下改木牌风 */
+body.ui-farm .notice-bar {
+    background: #fdf6e3;
+    border: 3px solid #6b4f2f;
+    border-radius: 6px;
+    box-shadow: 4px 4px 0 rgba(74, 53, 32, .3);
+    color: #4a3c28;
+}
+body.ui-farm .notice-bar::before {
+    background: #5fa83a;
+    box-shadow: none;
+}
+/* 天空补强：静态云朵（bg 的三个光斑是淡色晕团，天上没有像样的云） */
+body.ui-farm::before {
+    content: '';
+    position: fixed; inset: 0;
+    z-index: 0; pointer-events: none;
+    background:
+        radial-gradient(ellipse 70px 26px at 16% 120px, #fff 99%, transparent 100%),
+        radial-gradient(ellipse 50px 32px at calc(16% + 44px) 100px, #fff 99%, transparent 100%),
+        radial-gradient(ellipse 46px 20px at calc(16% - 40px) 138px, #fff 99%, transparent 100%),
+        radial-gradient(ellipse 60px 24px at 58% 88px, #fff 99%, transparent 100%),
+        radial-gradient(ellipse 42px 28px at calc(58% - 40px) 72px, #fff 99%, transparent 100%),
+        radial-gradient(ellipse 52px 22px at 86% 190px, #fff 99%, transparent 100%);
+}
+/* 商品卡：木牌 */
+body.ui-farm .goods-card,
+body.ui-farm .modal-card,
+body.ui-farm .query-card {
+    background: #fdf6e3;
+    border: 4px solid #6b4f2f;
+    box-shadow: 6px 6px 0 rgba(74, 53, 32, .35);
+}
+body.ui-farm .goods-card h3 { color: #4a3520; }
+/* 按钮：像素木框 */
+body.ui-farm .btn {
+    border: 3px solid #4a3520;
+    box-shadow: 4px 4px 0 rgba(74, 53, 32, .45);
+    border-radius: 4px;
+    font-weight: 900;
+}
+body.ui-farm .btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 rgba(74, 53, 32, .45); }
+body.ui-farm .btn.primary { background: linear-gradient(135deg, #6dbb45, #5fa83a); }
+body.ui-farm .btn.ghost { background: #fdf6e3; color: #4a3520; }
+

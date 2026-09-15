@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="2xDdeupPQVDuuMMAHLQlFX">
+<head data-page-node-id="eUMrtwiHPR2tymwRluELuL">
+<meta charset="UTF-8" data-page-node-id="jHo6aKz6ITkxDNTKP1SnQ1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="j36OBNwimhLPAehvMsOtu0">
+<title>404 · 信号丢失</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: #05070f; }
+  body { font-family: "Consolas", "Courier New", monospace; color: #c8e6ff; }
+  canvas#stars { position: fixed; inset: 0; z-index: 0; }
+
+  .wrap {
+    position: relative; z-index: 2; height: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 0 20px;
+  }
+
+  /* 扫描线 */
+  .wrap::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 5;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 3px);
+  }
+
+  .code {
+    font-size: clamp(90px, 22vw, 200px);
+    font-weight: bold; letter-spacing: .08em; line-height: 1;
+    color: #eaf6ff; position: relative;
+    text-shadow: 0 0 8px rgba(80,180,255,.55), 0 0 30px rgba(80,180,255,.25);
+  }
+  .code::before, .code::after {
+    content: "404"; position: absolute; left: 0; top: 0; width: 100%;
+  }
+  .code::before { color: #ff2d6a; animation: glitch1 2.4s infinite steps(1); clip-path: inset(0 0 55% 0); }
+  .code::after  { color: #23e6ff; animation: glitch2 3.1s infinite steps(1); clip-path: inset(60% 0 0 0); }
+  @keyframes glitch1 {
+    0%,88%,100% { transform: none; }
+    90% { transform: translate(-6px, -3px); }
+    93% { transform: translate(4px, 2px); }
+    96% { transform: translate(-3px, 1px); }
+  }
+  @keyframes glitch2 {
+    0%,85%,100% { transform: none; }
+    87% { transform: translate(5px, 3px); }
+    91% { transform: translate(-4px, -2px); }
+    95% { transform: translate(2px, -1px); }
+  }
+
+  .tag {
+    margin-top: 18px; font-size: 14px; letter-spacing: .5em; text-indent: .5em;
+    color: #7fb7e6; text-transform: uppercase;
+  }
+
+  .console {
+    margin-top: 34px; width: min(560px, 92vw);
+    border: 1px solid rgba(80,180,255,.35); border-radius: 8px;
+    background: rgba(8,16,32,.55); backdrop-filter: blur(2px);
+    padding: 16px 18px; font-size: 13px; line-height: 1.9; text-align: left;
+    color: #9fd0f5;
+  }
+  .console .line::before { content: "> "; color: #23e6ff; }
+  .console .warn { color: #ffb454; }
+  .cursor { display: inline-block; width: 8px; height: 14px; background: #23e6ff; vertical-align: -2px; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .btns { margin-top: 34px; display: flex; gap: 16px; }
+  .btn {
+    padding: 11px 26px; font-size: 14px; letter-spacing: .2em; text-indent: .2em;
+    color: #23e6ff; text-decoration: none; border: 1px solid rgba(35,230,255,.5);
+    border-radius: 4px; background: rgba(35,230,255,.06);
+    transition: all .25s; position: relative; overflow: hidden;
+  }
+  .btn:hover {
+    background: rgba(35,230,255,.16); color: #eafcff;
+    box-shadow: 0 0 18px rgba(35,230,255,.35), inset 0 0 12px rgba(35,230,255,.15);
+  }
+  .btn.ghost { color: #7fb7e6; border-color: rgba(127,183,230,.35); }
+  .btn.ghost:hover { background: rgba(127,183,230,.1); box-shadow: 0 0 14px rgba(127,183,230,.25); }
+
+  .coord {
+    position: fixed; bottom: 14px; left: 0; right: 0; z-index: 2;
+    text-align: center; font-size: 11px; letter-spacing: .3em;
+    color: rgba(127,183,230,.45);
+  }
+</style>
+</head>
+<body data-page-node-id="0nAG5Qtgd1odQnG4y12cMB">
+<canvas id="stars" data-page-node-id="d2JHVXdBIW0odpVawrxOZK"></canvas>
+<div class="wrap" data-page-node-id="if9Gav0ToGiFydol2lM4KT">
+  <div class="code" data-page-node-id="Bgwm7jdbZCm9zEkMAy1u4B">404</div>
+  <div class="tag" data-page-node-id="qWVhmoKMwCwCXDhtYss6Xv">SIGNAL LOST · 信号丢失于深空</div>
+  <div class="console" data-page-node-id="FfuFaFxLJK2FWPQYBMBma9">
+    <div class="line" data-page-node-id="fCL6Jyv6JHtmDHnJ5Qti8A">正在扫描跃迁坐标 ... [OK]</div>
+    <div class="line" data-page-node-id="68c5l7mirTDpnrFXjjgsOg">请求路径：<span id="path" data-page-node-id="mvP7Ct4VK0b0AjfRJ2ZjgX">/</span></div>
+    <div class="line warn" data-page-node-id="dDIXUW30qeId8Fgmh3E78y">错误：该坐标不在已知星图内（HTTP 404）</div>
+    <div class="line" data-page-node-id="yJFtFHAkWfpyULY7G46ZWe">建议：返回主控站，或重新规划航线 <span class="cursor" data-page-node-id="tlRpuLnHepLDmFLLAtrMqM"></span></div>
+  </div>
+  <div class="btns" data-page-node-id="wyEafZRMPjleIUPZBVMsuH">
+    <a class="btn" href="/" data-page-node-id="3hkdahvHK7sXAHUbw8IbDX">⌂ 返回主控站</a>
+    <a class="btn ghost" href="javascript:history.back()" data-page-node-id="PoSVEk1uAX3h8XUMuXd5sc">⟲ 沿原航线返航</a>
+  </div>
+</div>
+<div class="coord" id="coord" data-page-node-id="AoqOmS0H9n2ufgnAsVCHCH">NAV · SECTOR 404 · DRIFT 0.00 LY</div>
+
+<script>
+  // 星野
+  var cv = document.getElementById('stars'), cx = cv.getContext('2d'), stars = [], shooting = null;
+  function resize() {
+    cv.width = innerWidth; cv.height = innerHeight;
+    stars = [];
+    for (var i = 0; i < 260; i++) stars.push({
+      x: Math.random() * cv.width, y: Math.random() * cv.height,
+      z: Math.random() * .9 + .1, r: Math.random() * 1.4 + .3
+    });
+  }
+  resize(); addEventListener('resize', resize);
+  function tick() {
+    cx.clearRect(0, 0, cv.width, cv.height);
+    for (var i = 0; i < stars.length; i++) {
+      var s = stars[i];
+      s.x -= s.z * .55;                       // 视差漂移
+      if (s.x < -2) { s.x = cv.width + 2; s.y = Math.random() * cv.height; }
+      cx.globalAlpha = .25 + s.z * .75;
+      cx.fillStyle = s.z > .8 ? '#bfe6ff' : '#7f9fc9';
+      cx.beginPath(); cx.arc(s.x, s.y, s.r, 0, 6.29); cx.fill();
+    }
+    // 偶发流星
+    if (!shooting && Math.random() < .004) shooting = { x: cv.width * Math.random(), y: -10, vx: -6, vy: 9, life: 40 };
+    if (shooting) {
+      cx.globalAlpha = Math.min(1, shooting.life / 20);
+      cx.strokeStyle = '#9fe8ff'; cx.lineWidth = 1.4;
+      cx.beginPath(); cx.moveTo(shooting.x, shooting.y);
+      cx.lineTo(shooting.x - shooting.vx * 6, shooting.y - shooting.vy * 6); cx.stroke();
+      shooting.x += shooting.vx; shooting.y += shooting.vy; shooting.life--;
+      if (shooting.life <= 0 || shooting.y > cv.height) shooting = null;
+    }
+    cx.globalAlpha = 1;
+    requestAnimationFrame(tick);
+  }
+  tick();
+
+  // 控制台里显示真实丢失路径 + 随机漂移读数
+  document.getElementById('path').textContent = location.pathname;
+  var coord = document.getElementById('coord'), d = 0;
+  setInterval(function () {
+    d = (d + (Math.random() - .4) * .02);
+    coord.textContent = 'NAV · SECTOR 404 · DRIFT ' + Math.abs(d).toFixed(2) + ' LY · ' + new Date().toISOString().substr(11, 8) + ' UTC';
+  }, 1000);
+</script>
+</body>
+</html>

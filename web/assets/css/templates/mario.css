@@ -1,0 +1,124 @@
+/* 模板 mario */
+
+/* ===================== mario 马里奥 · 像素闯关 ===================== */
+body.ui-mario {
+    --bg:        #5c94fc;
+    --bg-soft:   #ffffff;
+    --panel:     #ffffff;
+    --panel-2:   #f2f6ff;
+    --border:    #000000;
+    --border-2:  #000000;
+    --text:      #1a1a2a;
+    --text-sub:  #4a4a5a;
+    --text-dim:  #7a7a8a;
+    --text-strong: #000000;
+    --primary:   #e52521;
+    --primary-2: #c21f1c;
+    --primary-rgb:   229, 37, 33;
+    --primary-2-rgb: 194, 31, 28;
+    --accent:    #0b6fc2;
+    --success:   #00a800;
+    --warning:   #d97706;
+    --danger:    #e52521;
+    --radius:    0px;
+    --shadow:    6px 6px 0 rgba(0, 0, 0, .5);
+    --nav-bg:    rgba(0, 0, 0, .3);
+    --mask:      rgba(0, 0, 0, .45);
+    --grid-line: transparent;
+}
+body.ui-mario {
+    background: #5c94fc;
+}
+/* 底部砖地 */
+body.ui-mario::after {
+    content: '';
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 56px;
+    background:
+        linear-gradient(90deg, transparent 49%, rgba(0,0,0,.55) 49%, rgba(0,0,0,.55) 51%, transparent 51%),
+        linear-gradient(0deg, transparent 49%, rgba(0,0,0,.55) 49%, rgba(0,0,0,.55) 51%, transparent 51%);
+    background-size: 28px 28px;
+    background-color: #c84c0c;
+    border-top: 4px solid #000;
+    z-index: 0; /* 砖地只是装饰，压到内容之下，不遮页脚版权 */
+    pointer-events: none;
+}
+/* 底部砖地是 fixed 装饰带：文档底部留出等高空间，滑到最底版权不被挡 */
+body.ui-mario { padding-bottom: 80px; }
+/* 天空补强：静态太阳+云朵+远山（bg 的 3 朵云长周期漂移，任何时刻可能一朵都不在屏内） */
+body.ui-mario::before {
+    content: '';
+    position: fixed; inset: 0;
+    z-index: 0; pointer-events: none;
+    background:
+        radial-gradient(circle 46px at 76px 100px, #fbd000 0 40px, #e8b923 40px 46px, transparent 47px),
+        radial-gradient(ellipse 66px 26px at 20% 170px, #fff 99%, transparent 100%),
+        radial-gradient(ellipse 48px 30px at calc(20% + 44px) 150px, #fff 99%, transparent 100%),
+        radial-gradient(ellipse 58px 24px at 58% 250px, #fff 99%, transparent 100%),
+        radial-gradient(ellipse 42px 26px at calc(58% - 42px) 232px, #fff 99%, transparent 100%),
+        radial-gradient(ellipse 340px 130px at 8% calc(100% + 26px), #43b047 99%, transparent 100%),
+        radial-gradient(ellipse 420px 160px at 90% calc(100% + 36px), #3a9e3e 99%, transparent 100%);
+}
+/* 光斑改造：像素白云（白底黑边） */
+body.ui-mario .bg .blob,
+body.ui-mario .bg .grid { display: none; }
+body.ui-mario .bg .b1,
+body.ui-mario .bg .b2,
+body.ui-mario .bg .b3 {
+    display: block;
+    top: auto;
+    width: 84px; height: 34px;
+    background: #fff;
+    border: 3px solid #000;
+    border-radius: 40px;
+    opacity: 1;
+}
+body.ui-mario .bg .b1 { top: 64px;  right: 8%;  left: auto; animation: mario-cloud 46s linear infinite; }
+body.ui-mario .bg .b2 { top: 148px; right: -20%; left: auto; transform: scale(.7); animation: mario-cloud 60s linear infinite -22s; }
+body.ui-mario .bg .b3 { top: 230px; right: -15%; left: auto; transform: scale(1.15); animation: mario-cloud 52s linear infinite -38s; }
+@keyframes mario-cloud {
+    from { transform: translateX(0); }
+    to   { transform: translateX(calc(-100vw - 300px)); }
+}
+/* 金币色大标题 + 黑描边 */
+body.ui-mario .hero h1,
+body.ui-mario :is(h1, .sec-title) {
+    color: #fbd000;
+    text-shadow:
+        3px 0 0 #000, -3px 0 0 #000,
+        0 3px 0 #000, 0 -3px 0 #000,
+        3px 3px 0 #000, -3px -3px 0 #000,
+        6px 6px 0 rgba(0, 0, 0, .4);
+}
+/* hero 强调行默认是渐变字（color: transparent + background-clip: text），
+   透明文字会被上方黑描边 text-shadow 糊成一团，这里恢复实心金币色 */
+body.ui-mario .hero h1 em {
+    background: none;
+    -webkit-background-clip: initial;
+    background-clip: initial;
+    color: #fbd000;
+    -webkit-text-fill-color: #fbd000;
+}
+body.ui-mario :is(.panel, .feature, .pricing-card, .plan-card, .plan, .modal-card, .fb-form-wrap, .contact-body) {
+    border: 3px solid #000;
+    box-shadow: 6px 6px 0 rgba(0, 0, 0, .5);
+}
+body.ui-mario .btn {
+    border: 3px solid #000;
+    box-shadow: 4px 4px 0 #000;
+    border-radius: 0;
+    font-weight: 900;
+}
+body.ui-mario .btn:hover { background: #fbd000; color: #000; transform: translate(-1px, -1px); box-shadow: 5px 5px 0 #000; }
+body.ui-mario .btn.primary { background: #e52521; color: #fff; text-shadow: 1px 1px 0 rgba(0,0,0,.4); }
+body.ui-mario .btn.primary:hover { background: #fbd000; color: #000; text-shadow: none; }
+body.ui-mario .pill { border: 2px solid #000; background: rgba(255,255,255,.85); color: #000; text-shadow: none; }
+body.ui-mario .nav-drop { background: rgba(0,0,0,.35); }
+body.ui-mario .nav-links a { color: #fff; text-shadow: 1px 1px 0 #000; }
+body.ui-mario .nav-links a:hover { background: #fbd000; color: #000; text-shadow: none; }
+@media (max-width: 900px) {
+    body.ui-mario .nav-drop { background: rgba(255,255,255,.97); }
+    body.ui-mario .nav-links a { color: #000; text-shadow: none; }
+}
+

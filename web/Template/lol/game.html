@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="al1RV9noF7zAucV9hCg26I">
+<head data-page-node-id="nvb8RFsuaJTTZqSsZfMHxr">
+<meta charset="UTF-8" data-page-node-id="iQPA9KU1vYv7RdQb9jhCVf">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="kFel2A33g4m40hVCq2hDcT">
+<title>峡谷补刀 · 英雄联盟模板示例</title>
+<style>
+/* 独立页面，配色与 lol 模板一致：深蓝黑 + 金 + 海克斯青 */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; user-select: none; }
+body {
+    background: linear-gradient(180deg, #010a13 0%, #0a1428 60%, #010a13 100%);
+    color: #f0e6d2;
+    font-family: 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
+    display: flex; flex-direction: column;
+}
+
+/* ===== 顶部标题栏 + HUD ===== */
+#game-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 12px;
+    background: #0a1428;
+    border-bottom: 1px solid #3a2f1b;
+    flex: none;
+}
+#game-header .title {
+    font-weight: 700; font-size: 13px; letter-spacing: 2px; color: #f0e6d2;
+    display: flex; align-items: center; gap: 7px;
+}
+#game-header .title::before {
+    content: ''; width: 9px; height: 9px;
+    background: #0ac8b9;
+    transform: rotate(45deg);
+    box-shadow: 0 0 8px rgba(10, 200, 185, .7);
+}
+#game-header .hud { display: flex; gap: 14px; font-size: 12px; font-weight: 700; }
+#hud-gold { color: #c8aa6e; }
+#hud-time { color: #0ac8b9; }
+#btn-rank, #btn-pause {
+    background: transparent; border: 1px solid #785a28; border-radius: 2px;
+    color: #f0e6d2; width: 24px; height: 20px; font-size: 11px; line-height: 1;
+    cursor: pointer; transition: .2s;
+}
+#btn-rank:hover, #btn-pause:hover { border-color: #c8aa6e; box-shadow: 0 0 6px rgba(200, 170, 110, .4); }
+
+/* ===== 排行榜浮层（🏆 按钮随时可看，打开时游戏自动暂停） ===== */
+#game-rank {
+    position: absolute; inset: 0; z-index: 5;
+    background: rgba(1, 10, 19, .96);
+    display: none; flex-direction: column;
+}
+#game-rank.show { display: flex; }
+#game-rank .rank-head {
+    flex: none; display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px; border-bottom: 1px solid #3a2f1b;
+    color: #c8aa6e; font-size: 12px; font-weight: 700; letter-spacing: 2px;
+}
+#game-rank .rank-head button {
+    width: 20px; height: 20px; padding: 0;
+    background: transparent; border: 1px solid #785a28; border-radius: 2px;
+    color: #f0e6d2; font-size: 12px; line-height: 1; cursor: pointer;
+}
+#game-rank .rank-head button:hover { border-color: #c8aa6e; }
+#game-rank .rank-list { flex: 1; overflow-y: auto; padding: 6px 12px; font-size: 12px; }
+#game-rank .row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 2px; color: #cdbe91;
+    border-bottom: 1px dashed rgba(120, 90, 40, .25);
+}
+#game-rank .row .no { width: 18px; color: #a09b8c; }
+#game-rank .row .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #f0e6d2; }
+#game-rank .row .sc { color: #0ac8b9; }
+#game-rank .row.top1 .no { color: #f0e6d2; }
+#game-rank .row.top2 .no { color: #c8aa6e; }
+#game-rank .row.top3 .no { color: #b0793c; }
+#game-rank .empty { text-align: center; color: #a09b8c; padding: 24px 0; }
+
+/* ===== 游戏主体 ===== */
+#game-board { position: relative; flex: 1; min-height: 0; background: #010a13; }
+#game-canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+
+/* ===== 覆盖层（开始 / 结算） ===== */
+#game-overlay {
+    position: absolute; inset: 0;
+    background: rgba(1, 10, 19, .88);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 8px; text-align: center; padding: 12px;
+    overflow: hidden;
+}
+#game-overlay.hidden { display: none; }
+#game-overlay h4 {
+    font-size: 17px; letter-spacing: 4px; color: #c8aa6e;
+}
+#game-overlay p { font-size: 11px; color: #cdbe91; line-height: 1.8; }
+#game-overlay .board {
+    width: 100%; max-width: 240px;
+    font-size: 11px; line-height: 1.9; text-align: left;
+    color: #cdbe91;
+}
+#game-overlay .board b.top1 { color: #f0e6d2; }
+#game-overlay .board em { font-style: normal; color: #0ac8b9; }
+
+/* 昵称输入框（仅未登录显示，自定义样式） */
+#game-overlay input.name {
+    width: 100%; max-width: 240px;
+    padding: 6px 10px; font-size: 12px;
+    background: rgba(1, 10, 19, .8);
+    border: 1px solid #3a2f1b; border-radius: 2px;
+    color: #f0e6d2; outline: none;
+    transition: .25s;
+}
+#game-overlay input.name:focus {
+    border-color: #c8aa6e;
+    box-shadow: 0 0 8px rgba(200, 170, 110, .35);
+}
+
+#btn-start {
+    padding: 9px 26px; font-size: 12px; font-weight: 700; letter-spacing: 2px;
+    color: #02110f; background: linear-gradient(180deg, #0ac8b9, #07847a);
+    border: 1px solid #0ac8b9; border-radius: 2px; cursor: pointer;
+    clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+    transition: .2s;
+}
+#btn-start:hover { box-shadow: 0 0 14px rgba(10, 200, 185, .55); }
+
+/* ===== 底部提示条 ===== */
+#game-hint {
+    flex: none;
+    padding: 4px 8px;
+    background: rgba(10, 50, 60, .5);
+    border-top: 1px solid #3a2f1b;
+    font-size: 10px; text-align: center; letter-spacing: 1px;
+    color: #a09b8c;
+}
+
+/* ===== 自定义 toast（禁用原生弹窗） ===== */
+#toast {
+    position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%);
+    background: #101b2c; border: 1px solid #c8aa6e; border-radius: 2px;
+    color: #f0e6d2; padding: 7px 16px; font-size: 12px;
+    opacity: 0; pointer-events: none; z-index: 99;
+    transition: opacity .25s, transform .25s;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
+#toast.err { border-color: #be1e37; }
+</style>
+</head>
+<body data-page-node-id="Tjw3GPZoCsKPbexHoINwB1">
+
+<div id="game-header" data-page-node-id="DmzdwJIL3hSFMVZmWuqm0R">
+    <div class="title" data-page-node-id="z1uWqz3PEgavl9NPWiQaEg">峡谷补刀 · LAST HIT</div>
+    <div class="hud" data-page-node-id="aPPIzl6p9xPGlKYBmwDv9N">
+        <span id="hud-gold" data-page-node-id="C4fzr6FSEpZpjiEwXMwjMq">💰 0</span>
+        <span id="hud-time" data-page-node-id="OfGz9dG7aSKHvnIKQsPrBq">⏱ 30s</span>
+        <button id="btn-pause" title="暂停" data-page-node-id="PauseBtnLol20260914">⏸</button>
+        <button id="btn-rank" title="排行榜" data-page-node-id="RnkBtnLol20260914">🏆</button>
+    </div>
+</div>
+
+<div id="game-board" data-page-node-id="FS2P8lIYJ0vZdrrpHbvB4F">
+    <canvas id="game-canvas" data-page-node-id="918F3wf4ajzeBnHDXO4VXA"></canvas>
+    <div id="game-overlay" data-page-node-id="QbEDMZBPPXLYILNRnd7ybi">
+        <h4 data-page-node-id="Sns1sBFoASQhxGQ8wgvEVG">◇ 峡谷补刀 ◇</h4>
+        <p data-page-node-id="YePzJxHNkE9BbGJxvEbwDH">敌方小兵正在推进，点击补刀拿金币<br data-page-node-id="CjjXqxHEYRkFvPL4gZFsHE">漏掉的小兵越多，推进越快！</p>
+        <p id="best-line" data-page-node-id="2MRFIeSFMNMQkfzuLZjqHX">最高纪录 0 金币</p>
+        <div class="board" id="board" data-page-node-id="fcBfhIGT82sAcwa14eC1bM">排行榜加载中…</div>
+        <!-- 昵称输入框：仅未登录显示（CFG.name 为空），已登录隐藏 -->
+        <input class="name" maxlength="16" placeholder="输入昵称上榜（可留空）" data-page-node-id="DaSGhOu5erh2B0tymr5jzY">
+        <button id="btn-start" data-page-node-id="VBxhoSH5j7A3CoK5oTXtKI">开始游戏</button>
+    </div>
+    <!-- 排行榜浮层：标题栏 🏆 随时打开，打开时游戏自动暂停 -->
+    <div id="game-rank">
+        <div class="rank-head">
+            <b>⚔ 峡谷榜 · TOP10</b>
+            <button id="btn-rank-close" title="关闭">×</button>
+        </div>
+        <div class="rank-list" id="rank-list"></div>
+    </div>
+</div>
+
+<div id="game-hint" data-page-node-id="OgjBQNTPn5Mv2IS56W0KfC">点击小兵补刀 · 每刀 +10 金币 · 30 秒限时</div>
+<div id="toast" data-page-node-id="aV1wYVgeQFkpF2E37TpicI"></div>
+
+<script src="game.js"></script>
+</body>
+</html>

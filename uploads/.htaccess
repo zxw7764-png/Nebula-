@@ -1,0 +1,7 @@
+# 上传目录禁止执行任何脚本（纵深防御：即使被传入可执行文件也无法运行）
+<FilesMatch "\.(php|php3|php4|php5|php7|phps|phtml|phar|asp|aspx|jsp|cgi|pl|py|sh)$">
+    Require all denied
+</FilesMatch>
+RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .phps .phar
+RemoveType .php .phtml .php3 .php4 .php5 .php7 .phps .phar
+Options -Indexes

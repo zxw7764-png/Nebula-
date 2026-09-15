@@ -1,0 +1,88 @@
+/* 模板 ink */
+
+/* ===================== ink 仙门 · 宣纸水墨 ===================== */
+/* 宣纸底 + 水墨晕 + 朱红点缀；楷体标题 */
+body.ui-ink {
+    --bg:        #f5f0e6;
+    --bg-soft:   #faf6ee;
+    --panel:     #faf6ee;
+    --panel-2:   #efe8d8;
+    --border:    #b9ab8a;
+    --border-2:  #8a7d5c;
+    --text:      #2d2a24;
+    --text-sub:  #6a655a;
+    --text-dim:  #98917f;
+    --text-strong: #1a1814;
+    --primary:   #1a1a1a;
+    --primary-2: #3d3d3d;
+    --accent:    #b03a2e;
+    --success:   #2d5a4a;
+    --warning:   #a4763c;
+    --danger:    #b03a2e;
+    --radius:    4px;
+    --shadow:    0 14px 36px rgba(26, 26, 26, .22);
+    --nav-bg:    rgba(245, 240, 230, .9);
+    --mask:      rgba(60, 50, 30, .14);
+    --grid-line: transparent;
+}
+/* 宣纸三层底纹 */
+body.ui-ink {
+    background:
+        radial-gradient(ellipse 640px 420px at 12% 8%, rgba(26, 26, 26, .05), transparent 62%),
+        radial-gradient(ellipse 700px 460px at 88% 20%, rgba(176, 58, 46, .06), transparent 60%),
+        radial-gradient(ellipse 560px 400px at 45% 92%, rgba(26, 26, 26, .045), transparent 62%),
+        #f5f0e6;
+    background-attachment: fixed;
+}
+body.ui-ink .bg .mask,
+body.ui-ink .bg .grid { display: none; }
+/* 光斑 → 水墨晕（重模糊） */
+body.ui-ink .bg .blob { opacity: .5; filter: blur(46px); }
+body.ui-ink .bg .b1 { background: rgba(26, 26, 26, .3); }
+body.ui-ink .bg .b2 { background: rgba(176, 58, 46, .35); }
+body.ui-ink .bg .b3 { background: rgba(45, 90, 74, .25); }
+/* 公告条：默认是 primary 渐变+青色霓虹底，水墨下改宣纸条 */
+body.ui-ink .notice-bar {
+    background: #faf6ee;
+    border: 1px solid #b9ab8a;
+    box-shadow: none;
+    color: #3a3a3a;
+}
+body.ui-ink .notice-bar::before {
+    background: #b03a2e;
+    box-shadow: none;
+}
+/* 天空补强：远山雾霭 + 朱砂红日 */
+body.ui-ink::before {
+    content: '';
+    position: fixed; inset: 0;
+    z-index: 0; pointer-events: none;
+    background:
+        radial-gradient(circle 42px at 82% 130px, rgba(200,16,46,.22) 0 62%, transparent 63%),
+        radial-gradient(ellipse 46% 240px at 16% 100%, rgba(70,70,70,.14) 58%, transparent 60%),
+        radial-gradient(ellipse 42% 280px at 52% 100%, rgba(45,45,45,.12) 58%, transparent 60%),
+        radial-gradient(ellipse 48% 220px at 88% 100%, rgba(90,90,90,.11) 58%, transparent 60%),
+        radial-gradient(ellipse 36% 180px at 34% 100%, rgba(110,110,110,.08) 58%, transparent 60%);
+}
+/* 楷体标题 */
+body.ui-ink :is(.sec-title, .brand span, .goods-card h3) {
+    font-family: "KaiTi", "STKaiti", "楷体", "Noto Serif SC", serif;
+    letter-spacing: 3px;
+}
+/* 主标题强调字：朱红 */
+body.ui-ink .sec-title b,
+body.ui-ink .goods-card .price b { color: #b03a2e; }
+body.ui-ink .sec-title em { color: #b03a2e; font-style: normal; }
+/* 卡片：细墨边 */
+body.ui-ink .goods-card,
+body.ui-ink .modal-card,
+body.ui-ink .query-card {
+    background: #faf6ee;
+    border: 1px solid #1a1a1a;
+    box-shadow: 0 12px 30px rgba(26, 26, 26, .18);
+}
+body.ui-ink .btn { font-weight: 700; letter-spacing: 2px; border-radius: 3px; }
+body.ui-ink .btn.primary { background: #1a1a1a; color: #f5f0e6; }
+body.ui-ink .btn.primary:hover { background: #b03a2e; }
+body.ui-ink .btn.ghost { background: transparent; color: #2d2a24; border-color: #8a7d5c; }
+

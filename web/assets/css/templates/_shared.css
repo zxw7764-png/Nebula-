@@ -1,0 +1,353 @@
+/* 界面模板共享样式：浅色模板共享修正 + 右下角小游戏面板（portal-games.js）。
+   模板自身样式在同目录 <id>.css，加载顺序：先 _shared.css 后 <id>.css */
+
+/* ===================== 浅色模板共享修正（farm/mario/ink） ===================== */
+/* 默认深空里有一批硬编码的深色输入框/内嵌面板，以及「主色底 + 深色字」
+   的按钮徽章组合，在浅色底上会糊成一团，这里统一拨正 */
+body:is(.ui-farm, .ui-mario, .ui-ink) :is(
+    .act-form input, .compose-box textarea, .captcha-input, .field input,
+    .fb-form .field select, .fb-form .field textarea) {
+    background: #fff;
+    color: var(--text-strong);
+}
+body:is(.ui-farm, .ui-mario, .ui-ink) :is(
+    .fb-form-wrap, .fb-item, .msg-replies, .contact-body) {
+    background: rgba(0, 0, 0, .04);
+}
+body:is(.ui-farm, .ui-mario, .ui-ink) .foot {
+    background: transparent;
+}
+body:is(.ui-farm, .ui-mario, .ui-ink) .modal-card {
+    background: var(--bg-soft);
+}
+body:is(.ui-farm, .ui-mario, .ui-ink) .toast {
+    background: var(--bg-soft);
+    color: var(--text-strong);
+}
+body:is(.ui-farm, .ui-mario, .ui-ink) :is(.btn.primary, .badge) {
+    color: #fff;
+}
+body:is(.ui-farm, .ui-mario, .ui-ink) .act-result { color: #047857; }
+body:is(.ui-farm, .ui-mario, .ui-ink) .act-result.err { color: #b91c1c; }
+body:is(.ui-farm, .ui-mario, .ui-ink) .fb-status.wait { color: #b45309; }
+body:is(.ui-farm, .ui-mario, .ui-ink) .fb-status.doing { color: #0e7490; }
+body:is(.ui-farm, .ui-mario, .ui-ink) .fb-status.done { color: #047857; }
+body:is(.ui-farm, .ui-mario, .ui-ink) .fb-status.closed { color: #64748b; }
+body:is(.ui-farm, .ui-mario, .ui-ink) :is(.forever-badge, .forever-badge i) { color: #b45309; }
+body:is(.ui-farm, .ui-mario, .ui-ink) .alert.warn { color: #92400e; }
+body:is(.ui-farm, .ui-mario, .ui-ink) .alert.warn b { color: #78350f; }
+body:is(.ui-farm, .ui-mario, .ui-ink) .alert.ok { color: #047857; }
+body:is(.ui-farm, .ui-mario, .ui-ink) .alert.ok b { color: #065f46; }
+body:is(.ui-farm, .ui-mario, .ui-ink) .panel-head {
+    background: var(--panel);
+    border-color: var(--border-2);
+    box-shadow: var(--shadow);
+}
+body:is(.ui-farm, .ui-mario, .ui-ink) .panel-head .muted { color: var(--text-sub); }
+body:is(.ui-farm, .ui-mario, .ui-ink) .tag { color: var(--text-strong); }
+body:is(.ui-farm, .ui-mario, .ui-ink) .tag.ok { color: #047857; }
+body:is(.ui-farm, .ui-mario, .ui-ink) .vip-badge { color: #475569; border-color: rgba(100, 116, 139, .4); }
+body:is(.ui-farm, .ui-mario, .ui-ink) .vip-badge.on { color: var(--primary-2); }
+body:is(.ui-farm, .ui-mario, .ui-ink) .btn.danger-ghost { border-color: rgba(220, 38, 38, .4); color: #dc2626; }
+body:is(.ui-farm, .ui-mario, .ui-ink) .btn.danger-ghost:hover { background: rgba(220, 38, 38, .08); color: #b91c1c; }
+@media (max-width: 900px) {
+    body:is(.ui-farm, .ui-mario, .ui-ink) .nav-drop {
+        background: rgba(255, 255, 255, .97);
+    }
+    body:is(.ui-farm, .ui-mario, .ui-ink) .nav-links a {
+        border-bottom-color: rgba(0, 0, 0, .07);
+    }
+}
+/* 浅色模板光斑整体减淡 */
+body:is(.ui-farm, .ui-mario, .ui-ink) .bg .blob {
+    opacity: .9;
+}
+/* 清除默认主题的青色霓虹残留（site.css 硬编码 rgba(34,211,238,…)）：
+   板块标题条/会员徽章/套餐选中/商家选中在模板下统一改主色系半透明 */
+body:is(.ui-farm, .ui-mario, .ui-ink) .panel-head {
+    /* 个人中心顶栏改不透明面板底：半透明渐变会让模板天空/云朵透出来 */
+    background: var(--panel);
+    border-color: var(--border);
+}
+body:is(.ui-farm, .ui-mario, .ui-ink) .vip-badge.on {
+    background: linear-gradient(135deg, rgba(var(--primary-rgb), .28), rgba(var(--primary-rgb), .14));
+    color: var(--text-strong);
+    border-color: rgba(var(--primary-2-rgb), .45);
+}
+body:is(.ui-farm, .ui-mario, .ui-ink) .plan.on {
+    /* 选中套餐改不透明面板底：半透明渐变会让模板天空/云朵透出来 */
+    border-color: var(--primary);
+    background: var(--panel);
+    box-shadow: 0 20px 48px rgba(var(--primary-rgb), .18);
+}
+body:is(.ui-farm, .ui-mario, .ui-ink) .seller.on {
+    border-color: rgba(var(--primary-2-rgb), .5);
+    background: var(--panel);
+    box-shadow: 0 20px 48px rgba(var(--primary-rgb), .16);
+}
+/* 其余零散青色霓虹：功能卡图标 i3 / 商家角标 / 留言标签 / 反馈处理中，统一改主色系 */
+body:is(.ui-farm, .ui-mario, .ui-ink) .card .i3 {
+    background: rgba(var(--primary-rgb), .14);
+}
+body:is(.ui-farm, .ui-mario, .ui-ink) .seller-badge {
+    background: rgba(var(--primary-rgb), .14);
+    color: var(--primary-2);
+    border-color: rgba(var(--primary-2-rgb), .4);
+}
+body:is(.ui-farm, .ui-mario, .ui-ink) .msg-tag {
+    background: rgba(var(--primary-rgb), .14);
+    color: var(--primary-2);
+}
+body:is(.ui-farm, .ui-mario, .ui-ink) .fb-status.doing {
+    background: rgba(var(--primary-rgb), .14);
+    color: var(--primary-2);
+}
+
+
+/* ===================== 小游戏面板（portal-games.js 注入 DOM） ===================== */
+/* 通用布局：右下角固定面板，可收起；主题差异在下方各模板段落 */
+#nb-game-panel {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    width: 340px;
+    z-index: 9999;
+    user-select: none;
+    font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+#nb-game-panel .gp-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 10px;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 1px;
+}
+#nb-game-panel .gp-head .gp-title { display: flex; align-items: center; gap: 6px; }
+#nb-game-panel .gp-btns { display: flex; gap: 4px; }
+#nb-game-panel .gp-btn {
+    width: 22px; height: 22px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-family: inherit;
+}
+#nb-game-panel .gp-body { position: relative; }
+#nb-game-panel canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    image-rendering: pixelated;
+    cursor: pointer;
+}
+#nb-game-panel .gp-hud {
+    position: absolute;
+    top: 8px; left: 10px; right: 10px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    font-weight: 900;
+    pointer-events: none;
+    letter-spacing: .5px;
+}
+#nb-game-panel .gp-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-align: center;
+    padding: 14px;
+    cursor: pointer;
+    overflow: hidden;
+}
+#nb-game-panel .gp-overlay.hidden { display: none; }
+#nb-game-panel .gp-overlay h4 {
+    font-size: 17px;
+    margin: 0;
+    letter-spacing: 2px;
+}
+#nb-game-panel .gp-overlay p {
+    font-size: 11px;
+    line-height: 1.8;
+    margin: 0;
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+#nb-game-panel .gp-overlay .gp-start {
+    padding: 9px 22px;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+    font-family: inherit;
+}
+#nb-game-panel .gp-overlay .gp-board {
+    width: 100%;
+    max-width: 260px;
+    font-size: 11px;
+    line-height: 1.9;
+    text-align: left;
+}
+#nb-game-panel .gp-overlay .gp-board b.top { color: #f4d03f; }
+#nb-game-panel .gp-overlay .gp-board input.gp-name {
+    width: 100%;
+    padding: 5px 8px;
+    font-size: 12px;
+    margin: 4px 0;
+    box-sizing: border-box;
+    font-family: inherit;
+}
+#nb-game-panel .gp-hint-name {
+    font-size: 11px;
+    line-height: 1.6;
+}
+#nb-game-panel .gp-hint-name b { font-weight: 900; }
+#nb-game-panel .gp-hint {
+    padding: 5px 10px;
+    font-size: 10px;
+    text-align: center;
+    letter-spacing: .5px;
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+#nb-game-panel.collapsed .gp-body,
+#nb-game-panel.collapsed .gp-hint { display: none; }
+
+/* farm：木牌风 */
+body.ui-farm #nb-game-panel {
+    background: #fdf6e3;
+    border: 4px solid #6b4f2f;
+    box-shadow: 6px 6px 0 rgba(74,53,32,.4);
+}
+body.ui-farm #nb-game-panel .gp-head { background: #5fa83a; border-bottom: 3px solid #4a8a2a; color: #fff; text-shadow: 1px 1px 0 rgba(0,0,0,.3); }
+body.ui-farm #nb-game-panel .gp-btn { background: #f4d03f; border: 2px solid #4a3520; color: #4a3520; box-shadow: 2px 2px 0 #4a3520; }
+body.ui-farm #nb-game-panel .gp-hud { color: #4a3520; text-shadow: 1px 1px 0 rgba(255,255,255,.8); }
+body.ui-farm #nb-game-panel .gp-overlay { background: rgba(253,246,227,.94); color: #4a3520; }
+body.ui-farm #nb-game-panel .gp-overlay h4 { color: #4a3520; }
+body.ui-farm #nb-game-panel .gp-overlay p { color: #7a5f3f; }
+body.ui-farm #nb-game-panel .gp-start { background: #5fa83a; color: #fff; border: 3px solid #3d6b20; box-shadow: 3px 3px 0 #3d6b20; }
+body.ui-farm #nb-game-panel .gp-hint { background: rgba(139,111,71,.15); border-top: 2px solid #6b4f2f; color: #7a5f3f; }
+
+/* mario：黑边像素风 */
+body.ui-mario #nb-game-panel {
+    background: #5c94fc;
+    border: 4px solid #000;
+    box-shadow: 6px 6px 0 rgba(0,0,0,.5);
+}
+body.ui-mario #nb-game-panel .gp-head { background: #e52521; border-bottom: 3px solid #000; color: #fff; text-shadow: 1px 1px 0 #000; }
+body.ui-mario #nb-game-panel .gp-btn { background: #fbd000; border: 2px solid #000; color: #000; }
+body.ui-mario #nb-game-panel .gp-btn:hover { background: #ffe65c; }
+body.ui-mario #nb-game-panel .gp-hud { color: #fff; text-shadow: 1px 1px 0 #000; }
+body.ui-mario #nb-game-panel .gp-overlay { background: rgba(0,0,0,.72); color: #fff; }
+body.ui-mario #nb-game-panel .gp-overlay h4 { color: #fbd000; text-shadow: 2px 2px 0 #000; }
+body.ui-mario #nb-game-panel .gp-start { background: #fbd000; color: #000; border: 3px solid #000; box-shadow: 3px 3px 0 #000; }
+body.ui-mario #nb-game-panel .gp-hint { background: rgba(0,0,0,.4); color: #fff; text-shadow: 1px 1px 0 #000; }
+
+/* ink：宣纸砚台风 */
+body.ui-ink #nb-game-panel {
+    background: #faf6ee;
+    border: 1px solid #1a1a1a;
+    box-shadow: 0 14px 36px rgba(26,26,26,.3);
+}
+body.ui-ink #nb-game-panel .gp-head { background: #1a1a1a; color: #f5f0e6; letter-spacing: 3px; font-family: "KaiTi", "楷体", serif; }
+body.ui-ink #nb-game-panel .gp-btn { background: #f5f0e6; border: 1px solid #1a1a1a; color: #1a1a1a; }
+body.ui-ink #nb-game-panel .gp-hud { color: #2d5a4a; text-shadow: none; }
+body.ui-ink #nb-game-panel .gp-overlay { background: rgba(245,240,230,.95); color: #1a1a1a; }
+body.ui-ink #nb-game-panel .gp-overlay h4 { font-family: "KaiTi", "楷体", serif; }
+body.ui-ink #nb-game-panel .gp-overlay p { color: #6a6a6a; }
+body.ui-ink #nb-game-panel .gp-start { background: #1a1a1a; color: #f5f0e6; border: 1px solid #1a1a1a; letter-spacing: 2px; }
+body.ui-ink #nb-game-panel .gp-hint { background: rgba(26,26,26,.06); border-top: 1px solid #b9ab8a; color: #6a6a6a; }
+
+/* space：霓虹面板 */
+body.ui-space #nb-game-panel {
+    background: #14142e;
+    border: 1px solid rgba(0,229,255,.5);
+    box-shadow: 0 0 24px rgba(0,229,255,.25), 0 20px 50px rgba(0,0,0,.6);
+}
+body.ui-space #nb-game-panel .gp-head { background: rgba(0,229,255,.12); border-bottom: 1px solid rgba(0,229,255,.4); color: #00e5ff; font-family: "Courier New", monospace; text-shadow: 0 0 8px rgba(0,229,255,.6); }
+body.ui-space #nb-game-panel .gp-btn { background: transparent; border: 1px solid rgba(0,229,255,.5); color: #00e5ff; }
+body.ui-space #nb-game-panel .gp-btn:hover { background: rgba(0,229,255,.15); }
+body.ui-space #nb-game-panel .gp-hud { color: #7cf7ff; text-shadow: 0 0 6px rgba(0,229,255,.6); }
+body.ui-space #nb-game-panel .gp-overlay { background: rgba(10,10,26,.88); color: #e8e8ff; }
+body.ui-space #nb-game-panel .gp-overlay h4 { color: #00e5ff; text-shadow: 0 0 12px rgba(0,229,255,.7); }
+body.ui-space #nb-game-panel .gp-overlay p { color: #8a8ab0; }
+body.ui-space #nb-game-panel .gp-start { background: #00e5ff; color: #061018; border: 1px solid #00e5ff; box-shadow: 0 0 16px rgba(0,229,255,.5); }
+body.ui-space #nb-game-panel .gp-hint { background: rgba(0,229,255,.06); border-top: 1px solid rgba(0,229,255,.25); color: #8a8ab0; }
+
+/* 小屏：游戏面板宽度自适应 */
+@media (max-width: 700px) {
+    #nb-game-panel { width: calc(100vw - 24px); right: 12px; bottom: 12px; }
+}
+
+/* ===================== 模板自带小游戏（portal-game-frame.js 注入） ===================== */
+/* 文件夹型模板 <id>/game.html：右下角常驻悬浮游戏面板，收起成一条标题栏横条，模板 css 可覆盖 */
+#nb-game-dock {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    width: 340px;
+    height: 268px;
+    z-index: 9999;
+    transition: width .25s ease, height .25s ease;
+}
+#nb-game-dock #nb-game-frame {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 10px;
+    background: var(--bg, #141824);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .08);
+}
+#nb-game-dock.collapsed { height: 34px; }
+#nb-game-dock.collapsed #nb-game-frame { display: none; }
+#nb-game-dock.collapsed #nb-game-dock-toggle { display: none; }
+/* 收起态横条（宿主渲染，显示游戏名，点击整条展开） */
+#nb-game-dock #nb-game-bar {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    height: 100%;
+    padding: 0 14px;
+    background: var(--panel, #101b2c);
+    border-radius: 10px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .08);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    user-select: none;
+}
+#nb-game-dock #nb-game-bar .x { font-size: 11px; opacity: .65; font-weight: 400; }
+#nb-game-dock #nb-game-bar:hover { filter: brightness(1.15); }
+#nb-game-dock.collapsed #nb-game-bar { display: flex; }
+#nb-game-dock #nb-game-dock-toggle {
+    position: absolute;
+    top: -9px;
+    right: -9px;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    font-size: 14px;
+    font-weight: 900;
+    line-height: 1;
+    color: #fff;
+    background: var(--panel, #101b2c);
+    border: 1px solid rgba(255, 255, 255, .35);
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 2;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .4);
+    transition: .15s;
+}
+#nb-game-dock #nb-game-dock-toggle:hover { transform: scale(1.1); }
+@media (max-width: 600px) {
+    #nb-game-dock { width: calc(100vw - 24px); right: 12px; bottom: 12px; }
+}

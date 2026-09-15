@@ -1,0 +1,136 @@
+/* 模板 mario */
+
+/* ===================== mario 马里奥 · 像素闯关 ===================== */
+/* 天空蓝 + 像素云 + 红砖地；金币黄标题黑描边 */
+body.ui-mario {
+    --bg:        #5c94fc;
+    --bg-soft:   #ffffff;
+    --panel:     #ffffff;
+    --panel-2:   #eaf2ff;
+    --border:    #1a1a1a;
+    --border-2:  #000000;
+    --text:      #1a2b4a;
+    --text-sub:  #4a5a7a;
+    --text-dim:  #7a8aa8;
+    --text-strong: #10203a;
+    --primary:   #e52521;
+    --primary-2: #c21f1b;
+    --accent:    #fbd000;
+    --success:   #43b047;
+    --warning:   #fbd000;
+    --danger:    #e52521;
+    --radius:    4px;
+    --shadow:    6px 6px 0 rgba(0, 0, 0, .45);
+    --nav-bg:    rgba(255, 255, 255, .9);
+    --mask:      rgba(30, 60, 120, .2);
+    --grid-line: transparent;
+}
+body.ui-mario {
+    background: linear-gradient(180deg, rgba(92, 148, 252, .92) 0%, rgba(120, 168, 252, .85) 62%, rgba(150, 190, 255, .8) 100%), #5c94fc;
+    background-attachment: fixed;
+}
+body.ui-mario .bg .mask,
+body.ui-mario .bg .grid { display: none; }
+/* 光斑 → 像素白云（黑边圆角，右向左飘） */
+body.ui-mario .bg .blob { opacity: 1; filter: none; border-radius: 999px; }
+body.ui-mario .bg .b1 {
+    width: 110px; height: 40px;
+    background: #fff;
+    border: 3px solid #1a1a1a;
+    box-shadow: -26px 10px 0 -6px #fff, 26px 10px 0 -6px #fff, -26px 10px 0 -3px #1a1a1a, 26px 10px 0 -3px #1a1a1a;
+    animation: nb-cloud 26s linear infinite;
+}
+body.ui-mario .bg .b2 {
+    width: 84px; height: 32px;
+    background: #fff;
+    border: 3px solid #1a1a1a;
+    box-shadow: -20px 8px 0 -6px #fff, 20px 8px 0 -6px #fff, -20px 8px 0 -3px #1a1a1a, 20px 8px 0 -3px #1a1a1a;
+    animation: nb-cloud 34s linear infinite;
+    animation-delay: -12s;
+}
+body.ui-mario .bg .b3 {
+    width: 64px; height: 26px;
+    background: #fff;
+    border: 3px solid #1a1a1a;
+    box-shadow: -16px 6px 0 -5px #fff, 16px 6px 0 -5px #fff, -16px 6px 0 -2px #1a1a1a, 16px 6px 0 -2px #1a1a1a;
+    animation: nb-cloud 44s linear infinite;
+    animation-delay: -26s;
+}
+@keyframes nb-cloud {
+    from { transform: translateX(20vw); }
+    to   { transform: translateX(-110vw); }
+}
+/* 底部红砖地 */
+body.ui-mario::after {
+    content: "";
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    height: 56px;
+    pointer-events: none;
+    z-index: 0;
+    background:
+        repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 2px, transparent 2px 28px),
+        repeating-linear-gradient(90deg, rgba(0,0,0,.22) 0 2px, transparent 2px 56px),
+        #c8551b;
+    border-top: 4px solid #1a1a1a;
+}
+/* 底部砖地是 fixed 装饰带：文档底部留出等高空间，滑到最底版权不被挡 */
+body.ui-mario { padding-bottom: 80px; }
+/* 天空补强：静态太阳+云朵+远山（bg 的 3 朵云长周期漂移，可能一朵都不在屏内） */
+body.ui-mario::before {
+    content: '';
+    position: fixed; inset: 0;
+    z-index: 0; pointer-events: none;
+    background:
+        radial-gradient(circle 46px at 76px 100px, #fbd000 0 40px, #e8b923 40px 46px, transparent 47px),
+        radial-gradient(ellipse 66px 26px at 20% 170px, #fff 99%, transparent 100%),
+        radial-gradient(ellipse 48px 30px at calc(20% + 44px) 150px, #fff 99%, transparent 100%),
+        radial-gradient(ellipse 58px 24px at 58% 250px, #fff 99%, transparent 100%),
+        radial-gradient(ellipse 42px 26px at calc(58% - 42px) 232px, #fff 99%, transparent 100%),
+        radial-gradient(ellipse 340px 130px at 8% calc(100% + 26px), #43b047 99%, transparent 100%),
+        radial-gradient(ellipse 420px 160px at 90% calc(100% + 36px), #3a9e3e 99%, transparent 100%);
+}
+/* 标题：金币黄 + 黑描边（马里奥 LOGO 风） */
+body.ui-mario :is(.sec-title, .brand span, .goods-card h3) {
+    color: #fbd000;
+    text-shadow:
+        -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000,
+        -2px 0 0 #000, 2px 0 0 #000, 0 -2px 0 #000, 0 2px 0 #000,
+        3px 3px 0 rgba(0, 0, 0, .55);
+}
+/* 卡片/按钮：黑边像素风 */
+body.ui-mario .goods-card,
+body.ui-mario .modal-card,
+body.ui-mario .query-card {
+    background: #fff;
+    border: 3px solid #1a1a1a;
+    box-shadow: 6px 6px 0 rgba(0, 0, 0, .4);
+}
+body.ui-mario .btn {
+    border: 3px solid #1a1a1a;
+    border-radius: 3px;
+    font-weight: 900;
+    box-shadow: 3px 3px 0 #1a1a1a;
+}
+body.ui-mario .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #1a1a1a; }
+body.ui-mario .btn.primary { background: linear-gradient(135deg, #ff5a56, #e52521); }
+body.ui-mario .btn.ghost { background: #fff; color: #1a1a1a; }
+body.ui-mario :is(.query-form input, .field input, .captcha-input, .cat-tabs button, .qswitch button, .pick-row button) {
+    border: 2px solid #1a1a1a;
+}
+/* 公告条：默认是 primary 渐变底+红调边框（马里奥下整条发红违和），改白底黑边像素牌 */
+body.ui-mario .notice-bar {
+    background: #fff;
+    border: 2px solid #1a1a1a;
+    border-radius: 4px;
+    box-shadow: 4px 4px 0 rgba(0, 0, 0, .4);
+    color: #1a2b4a;
+}
+body.ui-mario .notice-bar::before {
+    width: 10px; height: 10px; border-radius: 2px;
+    background: #e52521;
+    box-shadow: none;
+}
+/* 分类页签：默认 gap:0（按钮共享外框），马里奥按钮自带 2px 黑边会贴死，补间距 */
+body.ui-mario .cat-tabs { gap: 6px; }
+

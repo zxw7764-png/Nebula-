@@ -1,0 +1,91 @@
+/* 模板 space */
+
+/* ===================== space 太空站 · 赛博霓虹（深色） ===================== */
+body.ui-space {
+    --bg:        #0a0a1a;
+    --bg-soft:   #14142e;
+    --panel:     rgba(0, 229, 255, .06);
+    --panel-2:   rgba(0, 229, 255, .10);
+    --border:    rgba(0, 229, 255, .25);
+    --border-2:  rgba(0, 229, 255, .45);
+    --text:      #e8e8ff;
+    --text-sub:  #8a8ab0;
+    --text-dim:  #5a5a80;
+    --text-strong: #ffffff;
+    --primary:   #00e5ff;
+    --primary-2: #7cf7ff;
+    --primary-rgb:   0, 229, 255;
+    --primary-2-rgb: 124, 247, 255;
+    --accent:    #ff2d95;
+    --success:   #00ff88;
+    --warning:   #ffe600;
+    --danger:    #ff2d95;
+    --radius:    10px;
+    --shadow:    0 24px 60px rgba(0, 229, 255, .12);
+    --nav-bg:    rgba(10, 10, 26, .8);
+    --mask:      rgba(6, 6, 18, .7);
+    --grid-line: rgba(0, 229, 255, .05);
+}
+/* 星空：多层错位星点 */
+body.ui-space {
+    background:
+        radial-gradient(1px 1px at 25px 35px, rgba(255,255,255,.9) 50%, transparent 50%),
+        radial-gradient(1px 1px at 120px 90px, rgba(255,255,255,.55) 50%, transparent 50%),
+        radial-gradient(1.5px 1.5px at 210px 55px, rgba(255,255,255,.8) 50%, transparent 50%),
+        radial-gradient(1px 1px at 300px 140px, rgba(255,255,255,.5) 50%, transparent 50%),
+        radial-gradient(1.5px 1.5px at 60px 180px, rgba(0,229,255,.7) 50%, transparent 50%),
+        radial-gradient(1px 1px at 260px 210px, rgba(255,45,149,.6) 50%, transparent 50%),
+        #0a0a1a;
+    background-size: 340px 240px;
+    background-attachment: fixed;
+}
+body.ui-space .bg .blob { opacity: .5; }
+body.ui-space .bg .b1 { background: radial-gradient(circle, rgba(0,229,255,.35) 0%, transparent 70%); }
+body.ui-space .bg .b2 { background: radial-gradient(circle, rgba(255,45,149,.3) 0%, transparent 70%); }
+body.ui-space .bg .b3 { background: radial-gradient(circle, rgba(160,74,255,.3) 0%, transparent 70%); }
+/* 天空补强：静态星点 + 一颗紫晶行星 */
+body.ui-space::before {
+    content: '';
+    position: fixed; inset: 0;
+    z-index: 0; pointer-events: none;
+    background-image:
+        radial-gradient(circle 1.5px at 12% 18%, rgba(255,255,255,.95) 99%, transparent 100%),
+        radial-gradient(circle 1px at 28% 42%, rgba(255,255,255,.7) 99%, transparent 100%),
+        radial-gradient(circle 1.5px at 44% 12%, rgba(255,255,255,.85) 99%, transparent 100%),
+        radial-gradient(circle 1px at 61% 30%, rgba(255,255,255,.65) 99%, transparent 100%),
+        radial-gradient(circle 2px at 76% 16%, rgba(0,229,255,.9) 99%, transparent 100%),
+        radial-gradient(circle 1px at 88% 38%, rgba(255,255,255,.75) 99%, transparent 100%),
+        radial-gradient(circle 1.5px at 8% 55%, rgba(255,255,255,.8) 99%, transparent 100%),
+        radial-gradient(circle 1px at 36% 66%, rgba(255,255,255,.6) 99%, transparent 100%),
+        radial-gradient(circle 1.5px at 68% 58%, rgba(255,255,255,.85) 99%, transparent 100%),
+        radial-gradient(circle 1px at 92% 62%, rgba(0,229,255,.7) 99%, transparent 100%),
+        radial-gradient(circle 1px at 20% 78%, rgba(255,255,255,.55) 99%, transparent 100%),
+        radial-gradient(circle 1.5px at 52% 84%, rgba(255,255,255,.8) 99%, transparent 100%);
+}
+body.ui-space .bg::after {
+    content: '';
+    position: absolute; top: 120px; right: 10%;
+    width: 92px; height: 92px; border-radius: 50%;
+    background: radial-gradient(circle at 34% 32%, #b18cff, #5b2fd4 62%, #2a1668 100%);
+    box-shadow: 0 0 36px rgba(140, 80, 255, .5), inset -12px -8px 0 rgba(0, 0, 0, .35);
+    opacity: .92;
+}
+/* 等宽字体 + 霓虹发光 */
+body.ui-space :is(h1, .sec-title) {
+    font-family: "Courier New", "Microsoft YaHei", monospace;
+    letter-spacing: 2px;
+    text-shadow: 0 0 22px rgba(0, 229, 255, .55);
+}
+body.ui-space .hero h1 em { color: #00e5ff; }
+body.ui-space .btn.primary {
+    box-shadow: 0 0 22px rgba(0, 229, 255, .45), inset 0 0 12px rgba(0, 229, 255, .12);
+    color: #061018;
+    font-weight: 700;
+}
+body.ui-space .btn.primary:hover { box-shadow: 0 0 34px rgba(0, 229, 255, .7), inset 0 0 14px rgba(0, 229, 255, .2); }
+body.ui-space :is(.panel, .feature, .pricing-card, .plan-card, .modal-card) {
+    box-shadow: 0 0 0 1px rgba(0, 229, 255, .12), 0 20px 50px rgba(0, 0, 0, .5);
+}
+body.ui-space .pill { border: 1px solid rgba(0, 229, 255, .4); color: #7cf7ff; }
+body.ui-space .pill .dot { background: #00ff88; box-shadow: 0 0 8px #00ff88; }
+

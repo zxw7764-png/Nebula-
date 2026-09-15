@@ -1,0 +1,16 @@
+# 官网前端目录
+# 关闭目录索引，避免列目录
+Options -Indexes
+
+# 禁止直接访问 inc/ 下的内部文件（只允许入口文件 require）
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^inc/ - [F,L]
+</IfModule>
+
+# 静态资源缓存 1 小时；HTML 与接口不缓存（由 nginx 侧兜底）
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 hours"
+    ExpiresByType application/javascript "access plus 1 hours"
+</IfModule>

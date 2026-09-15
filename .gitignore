@@ -1,0 +1,44 @@
+# 运行时产物
+logs/*
+!logs/.htaccess
+!logs/cache/.gitkeep
+!logs/nonce/.gitkeep
+install/install.lock
+yanzheng_blank.zip
+
+# 运行时生成的密钥与数据
+config/grace_keys.php
+data/file_baseline.json
+data/backups/*
+!data/backups/.gitkeep
+
+# 用户上传文件
+uploads/shop/*
+uploads/web/*
+!uploads/shop/.gitkeep
+!uploads/web/.gitkeep
+
+# 升级 / 迁移脚本（不随分发包提供）
+install/migrate_*.php
+
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# 临时文件
+*.log
+*.tmp
+*~
+
+# SDK 编译产物
+sdk/build/out/
+*.obj
+*.exe
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.dll

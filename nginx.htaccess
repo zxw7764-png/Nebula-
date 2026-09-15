@@ -1,0 +1,49 @@
+# ============================================================
+# Nebula 网络验证 - Nginx 安全规则片段
+# ------------------------------------------------------------
+# ⚠ Nginx【不会】自动读取 .htaccess 文件，本文件必须被 include 才生效：
+#
+#     server {
+#         ...
+#         include /www/nebula/nginx.htaccess;
+#     }
+#
+# 完整示例见 install/nginx.conf.example。
+# 若你的 vhost 里已经写过等价规则，可以忽略本文件。
+#
+# ⚠ 安装向导会把下面规则里的 /admin 自动改写成你的实际后台目录名。
+# ============================================================
+
+# 1) 敏感目录整目录拒绝（config / lib / logs / data）
+#    这里不含 install/ —— 安装向导必须能被浏览器打开
+location ~ ^/(config|lib|logs|data)/ {
+    deny all;
+    return 404;
+}
+
+# 2) install/ 只放行安装向导本身
+location ~ ^/install/(?!install\.php$).*\.php$ {
+    deny all;
+    return 404;
+}
+
+# 3) 后台 / 代理的 handlers 目录不可直接访问
+location ~ ^/(admin|agent)/handlers/ {
+    deny all;
+    return 404;
+}
+
+# 4) 敏感文件与备份残留（表结构 / 日志 / 文档 / 安装锁 / JSON 数据）
+location ~* \.(sql|log|md|lock|json|ini|sh|bak|old|orig|swp|swo)$ {
+    deny all;
+    return 404;
+}
+
+# 5) 服务器配置副本不要被下载
+location ~* ^/(nginx\.htaccess|nginx\.conf\.example|\.gitignore)$ {
+    deny all;
+    return 404;
+}
+
+# 6) 关闭目录列表
+autoindex off;

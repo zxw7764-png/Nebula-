@@ -1,0 +1,101 @@
+/* 模板 farm */
+
+/* ===================== farm 云上农场 · 像素种田 ===================== */
+body.ui-farm {
+    --bg:        #87ceeb;
+    --bg-soft:   #fdf6e3;
+    --panel:     #fdf6e3;
+    --panel-2:   #f3ecd7;
+    --border:    #8b6f47;
+    --border-2:  #6b4f2f;
+    --text:      #4a3520;
+    --text-sub:  #7a5f3f;
+    --text-dim:  #a08a68;
+    --text-strong: #3d2b1a;
+    --primary:   #5fa83a;
+    --primary-2: #4a8a2a;
+    --primary-rgb:   95, 168, 58;
+    --primary-2-rgb: 74, 138, 42;
+    --accent:    #e67e22;
+    --success:   #4a8a2a;
+    --warning:   #d97706;
+    --danger:    #c0392b;
+    --radius:    0px;
+    --shadow:    6px 6px 0 rgba(74, 53, 32, .3);
+    --nav-bg:    rgba(255, 255, 255, .55);
+    --mask:      rgba(74, 53, 32, .35);
+    --grid-line: transparent;
+}
+/* 天空渐变 + 底部草地（替代深空背景装饰） */
+body.ui-farm {
+    background: linear-gradient(180deg, #87ceeb 0%, #b8e0f0 45%, #d4f0e8 72%, #7ec850 100%);
+    background-attachment: fixed;
+}
+body.ui-farm::after {
+    content: '';
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 72px;
+    background:
+        radial-gradient(ellipse 3px 6px at 15px 20px, #5fa83a 50%, transparent 50%),
+        radial-gradient(ellipse 3px 6px at 45px 44px, #5fa83a 50%, transparent 50%),
+        radial-gradient(ellipse 3px 6px at 75px 15px, #4a8a2a 50%, transparent 50%),
+        repeating-linear-gradient(90deg, transparent 0, transparent 38px, rgba(0,0,0,.06) 38px, rgba(0,0,0,.06) 40px);
+    background-size: 90px 60px, 90px 60px, 90px 60px, 40px 100%;
+    background-color: #7ec850;
+    border-top: 4px solid #4a8a2a;
+    z-index: 0; /* 草地只是装饰，压到内容之下，不遮页脚版权 */
+    pointer-events: none;
+}
+/* 底部草地是 fixed 装饰带：文档底部留出等高空间，滑到最底版权不被挡 */
+body.ui-farm { padding-bottom: 96px; }
+/* 天空补强：静态云朵（bg 里只有 b1 太阳，b2/b3 被隐藏，平时天上空荡荡） */
+body.ui-farm::before {
+    content: '';
+    position: fixed; inset: 0;
+    z-index: 0; pointer-events: none;
+    background:
+        radial-gradient(ellipse 70px 26px at 16% 120px, #fff 99%, transparent 100%),
+        radial-gradient(ellipse 50px 32px at calc(16% + 44px) 100px, #fff 99%, transparent 100%),
+        radial-gradient(ellipse 46px 20px at calc(16% - 40px) 138px, #fff 99%, transparent 100%),
+        radial-gradient(ellipse 60px 24px at 56% 88px, #fff 99%, transparent 100%),
+        radial-gradient(ellipse 42px 28px at calc(56% - 40px) 72px, #fff 99%, transparent 100%),
+        radial-gradient(ellipse 52px 22px at 86% 190px, #fff 99%, transparent 100%),
+        radial-gradient(ellipse 38px 24px at calc(86% + 36px) 172px, #fff 99%, transparent 100%);
+}
+/* 光斑改造：b1 太阳 / b2 b3 白云 */
+body.ui-farm .bg .blob,
+body.ui-farm .bg .grid { display: none; }
+body.ui-farm .bg .b1 {
+    display: block;
+    top: 44px; right: 72px; left: auto;
+    width: 84px; height: 84px;
+    background: #f4d03f;
+    border: 4px solid #e8b923;
+    border-radius: 50%;
+    box-shadow: 0 0 40px #f4d03f, inset -6px -6px 0 rgba(0,0,0,.1);
+    opacity: 1;
+    animation: farm-sun 4s ease-in-out infinite;
+}
+@keyframes farm-sun {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.06); }
+}
+/* 卡片 = 木牌：纸底粗木边硬阴影 */
+body.ui-farm :is(.panel, .feature, .pricing-card, .plan-card, .plan, .modal-card, .fb-form-wrap, .contact-body) {
+    border: 4px solid #6b4f2f;
+    box-shadow: 6px 6px 0 rgba(74, 53, 32, .3);
+}
+body.ui-farm .btn {
+    border: 3px solid #4a3520;
+    box-shadow: 4px 4px 0 #4a3520;
+    border-radius: 0;
+    font-weight: 900;
+    transition: transform .08s, box-shadow .08s;
+}
+body.ui-farm .btn:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 #4a3520; }
+body.ui-farm .btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #4a3520; }
+body.ui-farm .btn.primary { background: #5fa83a; border-color: #3d6b20; box-shadow: 4px 4px 0 #3d6b20; }
+body.ui-farm .hero h1 { letter-spacing: 2px; text-shadow: 2px 2px 0 rgba(255,255,255,.65); }
+body.ui-farm :is(h1, h2, .sec-title) { font-weight: 900; }
+

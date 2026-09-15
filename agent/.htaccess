@@ -1,0 +1,15 @@
+# 代理商后台目录保护
+# ------------------------------------------------------------------
+# 1. handlers/ 下的 PHP 依赖 api.php 注入的 $input/$agent/$token，
+#    单独访问无意义且可能泄露信息，直接拒绝。
+# 2. 目录列表关闭，避免枚举文件。
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^handlers/ - [F,L]
+</IfModule>
+
+<IfModule mod_autoindex.c>
+    IndexIgnore *
+</IfModule>
