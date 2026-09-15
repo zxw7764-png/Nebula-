@@ -71,6 +71,7 @@
 #include <utility>
 #include <memory>
 #include <ctime>
+#include <random>
 
 // ---------------------------------------------------------------------------
 // 运行时多样性开关（Runtime Diversity）：数据面 + 判断形态随每次启动而变。
