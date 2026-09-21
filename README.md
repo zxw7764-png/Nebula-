@@ -13,7 +13,6 @@
 | [sdk/SDK.md](sdk/SDK.md) | C++ SDK 接入文档（初始化 / 登录 / 心跳 / 内置提示 / 完整性自校验） |
 | [sdk/SDK_PROTECTION.md](sdk/SDK_PROTECTION.md) | C++ SDK 客户端加固指南（壳标记 / 代码混淆 / 反调试 / 反虚拟机，**默认关闭，按需开启**） |
 | [docs/TEMPLATE.md](docs/TEMPLATE.md) | 界面模板开发文档（目录规范 / 小游戏 / 交互音效 / 布局与自定义区块） |
-| [docs/TEMPLATE_OLD.md](docs/TEMPLATE_OLD.md) | 模板开发文档旧版（历史归档，仅供对照） |
 
 > 界面模板使用与后台可视化编辑（换肤 / 布局与自定义区块 / 小游戏参数）的操作入口在管理后台
 > 「官网运营 → 界面模板 / 官网内容 / 小游戏与排行榜」，开发规范见 docs/TEMPLATE.md。
@@ -176,8 +175,7 @@ yanzheng/
 ├── docs/
 │   ├── API.md              完整接口文档
 │   ├── API_RAW_EXAMPLES.md 请求/响应原始报文示例
-│   ├── TEMPLATE.md         界面模板开发文档
-│   └── TEMPLATE_OLD.md     模板开发文档旧版（历史归档）
+│   └── TEMPLATE.md         界面模板开发文档
 ├── logs/                   日志目录
 ├── cron.php                定时清理任务
 └── .htaccess               安全规则与路由重写
