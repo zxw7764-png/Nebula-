@@ -72,8 +72,8 @@ try {
     // ----------------------------------------------------------------
     $downloadOk = false;
     $downloadErr = '';
-    // 域名白名单校验：只允许从配置的更新服务器下载
-    $allowedHost = parse_url(Config::get('update_server', ''), PHP_URL_HOST);
+    // 域名白名单校验：只允许从写死的更新服务器下载
+    $allowedHost = parse_url('https://mmbr.serv00.net', PHP_URL_HOST);
     $dlHost = parse_url($downloadUrl, PHP_URL_HOST);
     if (!$dlHost || ($allowedHost && $dlHost !== $allowedHost)) {
         throw new RuntimeException('下载地址域名不在允许列表中，拒绝执行更新');
