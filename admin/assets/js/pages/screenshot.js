@@ -1,10 +1,3 @@
-/* ======================================================================
-   pages/screenshot.js — 官网客户端截图管理
-   截图展示在官网首页「界面预览」区块。
-   注意：这里是「填图片地址」，不做文件上传（避免引入上传目录与权限问题）。
-   图片可放在自己的图床 / OSS / 服务器静态目录，把直链填进来即可。
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { loading, empty, esc, tag } from '../core/util.js';
@@ -13,9 +6,9 @@ import { bindImageUpload } from '../core/uploader.js';
 
 register('screenshot_list', render);
 
-let swSt = ''; // 软件筛选：''=全部归属，'0'=全部软件通用，N=具体软件
+let swSt = '';
 let sel = null;
-let lastList = [];   // 最近一次渲染的数据列表（供批量操作取完整对象）
+let lastList = [];
 
 async function render() {
     const c = document.getElementById('content');
@@ -110,14 +103,14 @@ async function render() {
         });
     });
 
-    // 批量选择
+
     sel = createSelection({ root: c, allIds: d.list.map(x => x.id), onChange: ids => {
         const box = document.getElementById('sBulkBox');
         if (box) { box.hidden = ids.length === 0; box.dataset.count = String(ids.length); }
         c.querySelectorAll('.bulk-hide').forEach(b => { b.hidden = ids.length > 0; });
     }});
 
-    // 批量操作：下拉选择 + 执行
+
     const bulkRun = document.getElementById('sBulkRun');
     if (bulkRun) bulkRun.addEventListener('click', () => {
         const op = document.getElementById('sBulkOp').value;
@@ -125,7 +118,8 @@ async function render() {
     });
 }
 
-/* ------------------------- 批量操作 ------------------------- */
+
+
 async function doBulk(op) {
     const ids = sel ? sel.ids() : [];
     if (!ids.length) return toast('请先选择截图', 'warn');
@@ -228,7 +222,7 @@ function shotEdit(s, softwares) {
         },
     });
 
-    // 地址变化时实时预览
+
     const urlEl = document.getElementById('sUrl');
     const wrap = document.getElementById('sPreviewWrap');
     const img = document.getElementById('sPreview');

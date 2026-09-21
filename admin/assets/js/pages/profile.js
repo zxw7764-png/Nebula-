@@ -1,7 +1,3 @@
-/* ======================================================================
-   pages/profile.js — 个人中心
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { loading, esc, tag } from '../core/util.js';
@@ -131,8 +127,6 @@ async function changePwd() {
     }
 }
 
-/* ------------------------- 二次验证（2FA） ------------------------- */
-
 async function loadTotp() {
     const box = document.getElementById('pTotp');
     if (!box) return;
@@ -141,7 +135,6 @@ async function loadTotp() {
     if (res.code !== 0) { box.innerHTML = ''; return; }
     const s = res.data || {};
 
-    // 漏跑迁移：该功能不可用，但登录不受影响
     if (s.supported === false) {
         box.innerHTML = '<div class="empty">当前数据库缺少二次验证字段，请先执行 <span class="mono">install/migrate_admin_totp.php</span></div>';
         return;

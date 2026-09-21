@@ -1,7 +1,3 @@
-/* ======================================================================
-   pages/device_ban.js — 设备黑名单（搜索 / 批量解除拉黑）
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { pageState } from '../core/state.js';
@@ -78,7 +74,6 @@ async function render() {
         });
     });
 
-    // 批量选择（与卡密管理一致：批量按钮在工具栏，选中时出现）
     sel = createSelection({ root: c, allIds: d.list.map(x => x.id), onChange: ids => {
         document.getElementById('bBulkUnban').hidden = !(ids.length > 0);
     }});

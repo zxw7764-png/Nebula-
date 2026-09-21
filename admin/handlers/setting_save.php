@@ -81,10 +81,12 @@ $tiers = [
         'ip_blacklist',
     ],
 
-    // 基础设施与密钥：缓存后端（含 Redis 口令）
+    // 基础设施与密钥：缓存后端（含 Redis 口令）与系统更新服务地址
     AdminPermission::SETTINGS_INFRA => [
         'cache_driver', 'cache_redis_host', 'cache_redis_port',
         'cache_redis_password', 'cache_redis_database',
+        // 系统更新服务地址（对接 update-system）
+        'update_server',
     ],
 ];
 

@@ -1,19 +1,8 @@
-/* ======================================================================
-   core/chart.js — 轻量图表（纯 SVG/HTML，无第三方依赖）
-   ----------------------------------------------------------------------
-   为什么不引 ECharts/Chart.js：
-     后台是 ES module 直出、没有打包工具，引第三方库要么走 CDN（内网/离线
-     环境会挂）要么额外维护一份 vendor 文件。这里只画折线、面积、环形和
-     排行条，自己拼 SVG 只有几十行，零依赖、离线可用、体积可忽略。
-   ====================================================================== */
-
-/** 数值安全化 */
 function num(v) {
     const n = Number(v);
     return Number.isFinite(n) ? n : 0;
 }
 
-/** 把数字缩成简短形式：12345 -> 1.2万 */
 export function fmtNum(n) {
     n = num(n);
     if (Math.abs(n) >= 100000000) return (n / 100000000).toFixed(2) + '亿';
@@ -21,18 +10,16 @@ export function fmtNum(n) {
     return String(n);
 }
 
-/** SVG 属性转义（标签文字可能来自数据库） */
 function escXml(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[c]));
 }
 
-/** 计算 Y 轴刻度：返回 {min, max, step, ticks[]} */
 function axisScale(values) {
     let max = Math.max(1, ...values.map(num));
     let min = 0;
-    // 给顶部留 10% 余量，曲线不会贴着上边框
+
     max = max * 1.1;
     const rawStep = max / 4;
     const mag = Math.pow(10, Math.floor(Math.log10(rawStep) || 0));
@@ -43,11 +30,6 @@ function axisScale(values) {
     return { min, max, step, ticks };
 }
 
-/**
- * 面积折线图（单序列）
- * @param {Array<{label:string, value:number}>} data
- * @param {object} opts w/h/color/fill/unit/heightLabel
- */
 export function areaChart(data, opts = {}) {
     const w = opts.w || 660;
     const h = opts.h || 200;
@@ -74,7 +56,6 @@ export function areaChart(data, opts = {}) {
     const area = `${line} L${xy[xy.length - 1][0].toFixed(1)},${(padT + innerH).toFixed(1)} `
         + `L${xy[0][0].toFixed(1)},${(padT + innerH).toFixed(1)} Z`;
 
-    // 网格线 + Y 轴刻度
     let grid = '';
     scale.ticks.forEach(t => {
         const y = padT + innerH - (t - scale.min) / (scale.max - scale.min) * innerH;
@@ -84,7 +65,6 @@ export function areaChart(data, opts = {}) {
               + `font-size="11" fill="var(--text-faint)">${fmtNum(t)}</text>`;
     });
 
-    // X 轴刻度：最多显示 8 个，避免挤在一起
     const stepX = Math.max(1, Math.ceil(data.length / 8));
     let xlabels = '';
     data.forEach((d, i) => {
@@ -111,11 +91,6 @@ export function areaChart(data, opts = {}) {
     </svg>`;
 }
 
-/**
- * 多序列折线图
- * @param {Array<object>} data   每行需带 label 与各 series 的 key
- * @param {Array<{key,name,color}>} series
- */
 export function multiLineChart(data, series, opts = {}) {
     const w = opts.w || 660;
     const h = opts.h || 210;
@@ -158,7 +133,6 @@ export function multiLineChart(data, series, opts = {}) {
                + `stroke-linejoin="round" stroke-linecap="round"/>`;
     });
 
-    // 图例
     let legend = '';
     series.forEach((s, i) => {
         const x = padL + i * 108;
@@ -172,10 +146,6 @@ export function multiLineChart(data, series, opts = {}) {
     </svg>`;
 }
 
-/**
- * 排行条（HTML，带双层数据）
- * @param {Array<{name:string, value:number, sub:string}>} items
- */
 export function rankingBars(items, opts = {}) {
     if (!items || !items.length) {
         return `<div class="empty" style="padding:24px 0">暂无数据</div>`;
@@ -200,10 +170,6 @@ export function rankingBars(items, opts = {}) {
     }).join('');
 }
 
-/**
- * 环形图
- * @param {Array<{name:string, value:number, color:string}>} items
- */
 export function donutChart(items, opts = {}) {
     const size = opts.size || 168;
     const stroke = opts.stroke || 22;
@@ -249,5 +215,4 @@ export function donutChart(items, opts = {}) {
     </div>`;
 }
 
-/** 环形图配色（固定顺序，保证同一份数据每次颜色一致） */
 export const PALETTE = ['var(--primary-strong)', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];

@@ -1,14 +1,3 @@
-/* ======================================================================
-   pages/agent_code.js — 代理商激活码
-   ------------------------------------------------------------------
-   代理商凭码在 /agent/ 自助注册。激活码写死了这些规格（注册后代理不可自改）：
-     · 卡密激活后进入的用户组 —— 卡密最终进哪个组由这里决定
-     · 卡密设备上限 / 是否允许代理作废卡密 / 控量模式
-     · 代理生成卡密的固定前缀（留空 = 代理可自填）
-     · 每种卡类型的额度（配额模式）或单价（余额模式）
-     · 可用注册次数与有效期
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { pageState } from '../core/state.js';
@@ -26,14 +15,16 @@ let codeLastList = [];
 let rcSel = null;
 let rcLastList = [];
 
-/** 控量模式标签 */
+
+
 function modeTag(mode) {
     const map = { 1: ['张数额度', 'blue'], 2: ['余额计费', 'purple'], 3: ['不限量', 'gray'] };
     const m = map[mode] || ['未知', 'gray'];
     return tag(m[0], m[1]);
 }
 
-/** 发货规格摘要：只列已开放的卡类型，附该类型激活后进入的用户组 */
+
+
 function specCell(c) {
     const isBal = c.charge_mode === 2;
     const parts = (c.types || []).filter(t => t.enabled).map(t => {
@@ -45,8 +36,10 @@ function specCell(c) {
                         : '<span style="color:#9ca3af;font-size:12px">未开放任何类型</span>';
 }
 
-/* ------------------------- 页签：注册激活码 / 充值卡密 ------------------------- */
-/** 顶部页签（两个功能同属「代理商激活码」） */
+
+
+
+
 function tabBar(st) {
     const tabs = [
         { id: 'code',     name: '注册激活码', desc: '代理商凭码自助注册开户' },
@@ -67,12 +60,14 @@ function bindTabs(c, st) {
     });
 }
 
-/* ------------------------- 入口 ------------------------- */
-/** 重启容器淡入动画 */
+
+
+
+
 function replayFade(c) {
     c.style.animation = 'none';
-    // eslint-disable-next-line no-unused-expressions
-    c.offsetHeight;          // 强制 reflow，重置动画
+
+    c.offsetHeight;
     c.style.animation = '';
 }
 
@@ -87,7 +82,8 @@ async function render() {
     return renderCodes(c, st);
 }
 
-/* ------------------------- 列表（注册激活码） ------------------------- */
+
+
 async function renderCodes(c, st) {
     const res = await api('agent_code_list', st);
     if (res.code !== 0) return;
@@ -214,14 +210,14 @@ async function renderCodes(c, st) {
         });
     });
 
-    // 批量选择
+
     codeSel = createSelection({ root: c, allIds: d.list.map(x => x.id), onChange: ids => {
         const box = document.getElementById('acBulkBox');
         if (box) { box.hidden = ids.length === 0; box.dataset.count = String(ids.length); }
         c.querySelectorAll('.bulk-hide').forEach(b => { b.hidden = ids.length > 0; });
     }});
 
-    // 批量操作：下拉选择 + 执行
+
     const bulkRun = document.getElementById('acBulkRun');
     if (bulkRun) bulkRun.addEventListener('click', () => {
         const op = document.getElementById('acBulkOp').value;
@@ -229,7 +225,8 @@ async function renderCodes(c, st) {
     });
 }
 
-/* ------------------------- 批量操作（注册激活码）------------------------- */
+
+
 async function codeDoBulk(op) {
     const ids = codeSel ? codeSel.ids() : [];
     if (!ids.length) return toast('请先选择激活码', 'warn');
@@ -272,9 +269,11 @@ function doSearch() {
     render();
 }
 
-/* ------------------------- 按卡类型的规格编辑器 ------------------------- */
 
-/** 一行一种卡类型：是否开放 / 额度 / 单价 / 激活后进入的用户组 */
+
+
+
+
 function typeEditor(preset, cardTypes, mode, groups = []) {
     const rows = cardTypes.map(t => {
         const p = preset[String(t.type)] || { enabled: 1, quota: 0, price: '0', group_id: 0 };
@@ -318,7 +317,8 @@ function typeEditor(preset, cardTypes, mode, groups = []) {
     </div>`;
 }
 
-/** 读取编辑器内容 -> preset 对象（含每类型的 group_id） */
+
+
 function readTypeEditor() {
     const preset = {};
     document.querySelectorAll('[data-t][data-k]').forEach(el => {
@@ -329,14 +329,15 @@ function readTypeEditor() {
     return preset;
 }
 
-/* ------------------------- 生成 / 编辑 ------------------------- */
+
+
 async function codeForm(c, d) {
     c = c || {};
     const isNew = !c.id;
     const cardTypes = d.card_types || [];
     const modes = d.modes || {};
 
-    // 用户组下拉（卡密激活后进入的组）—— 显示组的规格，便于按分组分级发放
+
     let groupOptions = '';
     let groupList = [];
     const gRes = await api('group_list', {}, true);
@@ -352,11 +353,11 @@ async function codeForm(c, d) {
     const modeSel = Object.keys(modes).map(k =>
         `<option value="${k}" ${String(c.charge_mode || 1) === k ? 'selected' : ''}>${esc(modes[k])}</option>`).join('');
 
-    // 余额计费相关字段（仅 mode=2 显示）
+
     const initBalVal = isNew ? '0' : (c.init_balance_text || '0');
 
     const preset = c.preset || {};
-    const expireDays = 0; // 编辑时不回填天数（用「不修改」语义），新增默认永久
+    const expireDays = 0;
 
     let swOptions = '';
     if (isNew) {
@@ -366,7 +367,8 @@ async function codeForm(c, d) {
                 if (swRes.code === 0) swCache = swRes.data.options || [];
             }
             swOptions = (swCache || []).map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
-        } catch (e) { /* 忽略 */ }
+        } catch (e) {
+ }
     }
 
     const body = `
@@ -493,7 +495,7 @@ async function codeForm(c, d) {
             if (res.code === 0) {
                 closeModal();
                 render();
-                // 新增就直接把码亮出来，省得再回列表找
+
                 if (isNew && res.data && res.data.codes) {
                     showCodes(res.data.codes);
                 } else {
@@ -503,7 +505,7 @@ async function codeForm(c, d) {
         }},
     ], 'wide');
 
-    // 控量模式切到「余额计费」时才显示「注册后赠予余额」
+
     const modeEl = document.getElementById('acMode');
     const balRow = document.getElementById('acInitBalRow');
     if (modeEl && balRow) {
@@ -513,7 +515,8 @@ async function codeForm(c, d) {
     }
 }
 
-/** 生成后弹出的卡密式展示（可一键复制全部） */
+
+
 function showCodes(codes) {
     openModal('激活码已生成', `
         <div style="background:rgba(52,211,153,.12);color:var(--success);padding:12px 16px;border-radius:9px;margin-bottom:14px">
@@ -527,7 +530,8 @@ function showCodes(codes) {
          { text: '关闭', cls: '', act: closeModal }], 'wide');
 }
 
-/* ------------------------- 详情 / 启停 / 删除 ------------------------- */
+
+
 function codeDetail(c) {
     const isBal = c.charge_mode === 2;
     const typeRows = (c.types || []).map(t => {
@@ -607,14 +611,11 @@ function codeDel(c) {
         }, true);
 }
 
-/* ==================================================================
-   充值卡密（余额充值 / 张数额度）
-   ------------------------------------------------------------------
-   与「注册激活码」分工不同：激活码用于开户，充值卡密用于给已有代理续费 / 加量。
-   代理商在 /agent/ → 充值卡密 输入卡密自助兑换，无需管理员在线操作。
-   ================================================================== */
 
-/* ------------------------- 列表（充值卡密） ------------------------- */
+
+
+
+
 async function renderRecharge(c, st) {
     const res = await api('agent_recharge_list', st);
     if (res.code !== 0) return;
@@ -724,14 +725,14 @@ async function renderRecharge(c, st) {
         });
     });
 
-    // 批量选择
+
     rcSel = createSelection({ root: c, allIds: d.list.map(x => x.id), onChange: ids => {
         const box = document.getElementById('rcBulkBox');
         if (box) { box.hidden = ids.length === 0; box.dataset.count = String(ids.length); }
         c.querySelectorAll('.bulk-hide').forEach(b => { b.hidden = ids.length > 0; });
     }});
 
-    // 批量操作：下拉选择 + 执行
+
     const bulkRun = document.getElementById('rcBulkRun');
     if (bulkRun) bulkRun.addEventListener('click', () => {
         const op = document.getElementById('rcBulkOp').value;
@@ -739,7 +740,8 @@ async function renderRecharge(c, st) {
     });
 }
 
-/* ------------------------- 批量操作（充值卡密）------------------------- */
+
+
 async function rcDoBulk(op) {
     const ids = rcSel ? rcSel.ids() : [];
     if (!ids.length) return toast('请先选择充值卡密', 'warn');
@@ -783,14 +785,15 @@ function rcSearch() {
     render();
 }
 
-/* ------------------------- 生成充值卡密 ------------------------- */
+
+
 function rechargeForm(d) {
     const kinds     = d.kinds || { 1: '余额充值', 2: '张数额度' };
     const cardTypes = d.card_types || [];
 
     const kindOpts = Object.keys(kinds).map(k => `<option value="${k}">${esc(kinds[k])}</option>`).join('');
 
-    // 张数额度：按卡类型逐行填张数（0 = 不充值，-1 = 不限量），一张卡密可同时给多种类型加量
+
     const quotaRows = cardTypes.map(t => `
         <tr>
             <td style="white-space:nowrap"><b>${esc(t.name)}</b></td>
@@ -866,7 +869,7 @@ function rechargeForm(d) {
             if (kind === 1) {
                 payload.amount_yuan = document.getElementById('rcAmount').value || 0;
             } else {
-                // 收集多卡类型张数：0 = 不充值（不上送），-1 = 不限量
+
                 const map = {};
                 document.querySelectorAll('.rcQuotaInput').forEach(el => {
                     const v = parseInt(el.value, 10) || 0;
@@ -888,7 +891,7 @@ function rechargeForm(d) {
         }},
     ], 'wide');
 
-    // 卡密类型切换：余额充值看「金额」，张数额度看「按卡类型的张数矩阵」
+
     const kindEl = document.getElementById('rcKindSel');
     const amtRow = document.getElementById('rcAmountRow');
     const qRow   = document.getElementById('rcQuotaRow');
@@ -908,7 +911,8 @@ function rechargeForm(d) {
     }
 }
 
-/** 生成后弹出卡密列表（可一键复制全部） */
+
+
 function showRechargeCodes(codes) {
     openModal('充值卡密已生成', `
         <div style="background:rgba(52,211,153,.12);color:var(--success);padding:12px 16px;border-radius:9px;margin-bottom:14px">
@@ -922,7 +926,8 @@ function showRechargeCodes(codes) {
          { text: '关闭', cls: '', act: closeModal }], 'wide');
 }
 
-/* ------------------------- 启停 / 删除 ------------------------- */
+
+
 function rcToggle(x) {
     const off = x.status === 1;
     confirmBox(off ? '停用充值卡密' : '启用充值卡密',

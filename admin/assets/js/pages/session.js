@@ -1,7 +1,3 @@
-/* ======================================================================
-   pages/session.js — 在线会话（多选批量踢出）
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { pageState } from '../core/state.js';
@@ -79,7 +75,6 @@ async function render() {
         b.addEventListener('click', () => sessKick([parseInt(b.dataset.id, 10)]));
     });
 
-    // 只有在线会话可被选中（离线会话无法踢出）
     sel = createSelection({
         root: c,
         allIds: d.list.filter(s => s.online).map(s => s.id),
@@ -88,7 +83,7 @@ async function render() {
             document.getElementById('sRefresh').hidden = ids.length > 0;
         },
     });
-    // 离线会话的复选框禁用
+
     c.querySelectorAll('tbody tr').forEach(tr => {
         const cb = tr.querySelector('[data-row-check]');
         if (!cb) return;

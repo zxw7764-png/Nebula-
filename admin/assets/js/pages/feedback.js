@@ -1,8 +1,3 @@
-/* ======================================================================
-   pages/feedback.js — 官网用户反馈管理
-   反馈是私密的（仅本人与客服可见），这里是客服回复与流转的入口。
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { loading, empty, esc, tag } from '../core/util.js';
@@ -136,14 +131,14 @@ async function render() {
         });
     });
 
-    // 批量选择
+
     sel = createSelection({ root: c, allIds: d.list.map(x => x.id), onChange: ids => {
         const box = document.getElementById('fbBulkBox');
         if (box) { box.hidden = ids.length === 0; box.dataset.count = String(ids.length); }
         c.querySelectorAll('.bulk-hide').forEach(b => { b.hidden = ids.length > 0; });
     }});
 
-    // 批量操作：下拉选择 + 执行
+
     const bulkRun = document.getElementById('fbBulkRun');
     if (bulkRun) bulkRun.addEventListener('click', () => {
         const op = document.getElementById('fbBulkOp').value;
@@ -151,7 +146,8 @@ async function render() {
     });
 }
 
-/* ------------------------- 批量操作 ------------------------- */
+
+
 function doBulk(op) {
     const ids = sel ? sel.ids() : [];
     if (!ids.length) return toast('请先选择反馈', 'warn');
@@ -183,7 +179,8 @@ function doBulk(op) {
     }
 }
 
-/* ------------------------- 查看详情 ------------------------- */
+
+
 function fbView(f) {
     if (!f) return;
     const s = STATUS[f.status] || ['?', 'gray'];
@@ -212,7 +209,8 @@ function fbView(f) {
     ], 'wide');
 }
 
-/* ------------------------- 回复 ------------------------- */
+
+
 function fbReply(f) {
     if (!f) return;
     const body = `

@@ -1,7 +1,3 @@
-/* ======================================================================
-   pages/user.js — 用户管理（含多选批量操作、导入导出、时长调整）
-   ====================================================================== */
-
 import { api, apiDownload } from '../core/api.js';
 import { register, go } from '../core/router.js';
 import { pageState, resetPageState, S } from '../core/state.js';
@@ -16,8 +12,8 @@ import {
 const DEFAULTS = { page: 1, size: 20, keyword: '', status: '', sw: 0, sort: 'id', order: 'desc' };
 
 let sel = null;
-let swCache = [];   // 软件下拉缓存（render 时刷新）
-let groupCache = [];   // 用户组缓存（render 时刷新，导出弹窗用）
+let swCache = [];
+let groupCache = [];
 
 register('user_list', render);
 
@@ -125,7 +121,7 @@ async function render() {
     document.getElementById('uImport').addEventListener('click', () => userImport());
     document.getElementById('uExport').addEventListener('click', () => userExport());
 
-    // 行内按钮
+
     c.querySelectorAll('[data-act]').forEach(b => {
         b.addEventListener('click', () => {
             const id = parseInt(b.dataset.id, 10);
@@ -135,7 +131,7 @@ async function render() {
         });
     });
 
-    // 批量选择（选中时显示批量下拉，隐藏常规按钮）
+
     sel = createSelection({
         root: c,
         allIds: d.list.map(u => u.id),
@@ -146,7 +142,7 @@ async function render() {
         },
     });
 
-    // 批量操作：下拉选择 + 执行
+
     const bulkRun = document.getElementById('uBulkRun');
     if (bulkRun) bulkRun.addEventListener('click', () => {
         const op = document.getElementById('uBulkOp').value;
@@ -163,7 +159,8 @@ function doSearch() {
     render();
 }
 
-/* ------------------------- 批量操作 ------------------------- */
+
+
 async function doBulk(op) {
     const ids = sel ? sel.ids() : [];
     if (!ids.length) return toast('请先选择用户', 'warn');
@@ -252,7 +249,8 @@ async function doBulk(op) {
     });
 }
 
-/* ------------------------- 导出 ------------------------- */
+
+
 function userExport() {
     const groupOpts = (groupCache || []).map(g =>
         `<option value="group:${g.id}">${esc(g.name)}</option>`).join('');
@@ -297,7 +295,8 @@ function userExport() {
          }}], 'wide');
 }
 
-/* ------------------------- 导入 ------------------------- */
+
+
 function userImport() {
     openModal('批量导入用户', `
         <div class="field">
@@ -361,7 +360,8 @@ async function doImport() {
         [{ text: '知道了', cls: '', act: () => { closeModal(); render(); } }], 'wide');
 }
 
-/* ------------------------- 详情 ------------------------- */
+
+
 async function userDetail(id) {
     openModal('用户详情', loading(), [], 'wide');
     const res = await api('user_detail', { user_id: id });
@@ -477,7 +477,8 @@ async function userDetail(id) {
     });
 }
 
-/* ------------------------- 新增 / 编辑 ------------------------- */
+
+
 function userCreate() {
     const body = `
     <div class="row2">
@@ -528,7 +529,7 @@ async function userEdit(id) {
     if (res.code !== 0) return;
     const u = res.data.user;
     const softwares = res.data.softwares || [];
-    let banDirty = false;   // 是否改动过封禁时长（决定提交时是否重设到期时间）
+    let banDirty = false;
 
     const body = `
     <div class="row2">
@@ -590,7 +591,7 @@ async function userEdit(id) {
             };
             const statusVal = parseInt(document.getElementById('eStatus').value, 10);
             payload.status = statusVal;
-            // 仅新封禁或管理员改动过时长时才下发 duration/unit，否则服务端保留原到期时间
+
             if (statusVal === 0 && (u.status !== 0 || banDirty)) {
                 payload.duration = parseInt(document.getElementById('eBanDur').value, 10) || 0;
                 payload.unit = document.getElementById('eBanUnit').value;
@@ -615,7 +616,7 @@ async function userEdit(id) {
         }},
     ]);
 
-    // 封禁时长控件联动：状态选「封禁」才显示；改动过即视为重设时长
+
     const stSel = document.getElementById('eStatus');
     const banBox = document.getElementById('eBanBox');
     if (stSel && banBox) {
@@ -627,7 +628,8 @@ async function userEdit(id) {
     }
 }
 
-/* ------------------------- 单项操作 ------------------------- */
+
+
 function userResetPwd(id) {
     confirmBox('重置密码', '将随机生成新密码并强制该用户下线，确定继续？', async () => {
         const res = await api('user_kick', { op: 'reset_password', user_id: id });

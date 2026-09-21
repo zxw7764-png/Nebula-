@@ -1,7 +1,3 @@
-/* ======================================================================
-   pages/version.js — 版本管理
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { loading, empty, esc, tag } from '../core/util.js';
@@ -11,7 +7,7 @@ register('version_list', render);
 
 let swCache = null;
 let sel = null;
-let swFilter = '';   // 软件归属筛选：'' = 全部软件，数字 = 指定软件 id
+let swFilter = '';
 
 async function render() {
     const c = document.getElementById('content');
@@ -23,7 +19,7 @@ async function render() {
         api('software_list', {}, true).then(r => {
             if (r.code === 0 && r.data.options && !swCache) {
                 swCache = r.data.options;
-                if (swFilter === '') render();   // 拿到软件列表后补全筛选下拉
+                if (swFilter === '') render();
             }
         });
     }
@@ -95,13 +91,13 @@ async function render() {
 
     document.getElementById('vNew').addEventListener('click', () => versionEdit(null));
 
-    // 软件归属筛选
+
     document.getElementById('vSwFilter').addEventListener('change', e => {
         swFilter = e.target.value;
         render();
     });
 
-    // 批量选择：发布 / 下架 / 删除（下拉 + 执行）
+
     sel = createSelection({ root: c, allIds: d.list.map(v => v.id), onChange: ids => {
         const box = document.getElementById('vBulkBox');
         if (box) { box.hidden = ids.length === 0; box.dataset.count = String(ids.length); }
@@ -142,7 +138,7 @@ function versionEdit(v) {
     v = v || {};
     let swOptions = '';
     try {
-        // 同步拉软件选项（software_list 为只读接口，缓存到模块级）
+
         if (!swCache) {
             api('software_list', {}, true).then(r => {
                 if (r.code === 0) swCache = r.data.options || [];
@@ -150,7 +146,8 @@ function versionEdit(v) {
         }
         swOptions = (swCache || []).map(x =>
             `<option value="${x.id}" ${v.software_id === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('');
-    } catch (e) { /* 忽略 */ }
+    } catch (e) {
+ }
     const body = `
     <div class="row2">
         <div class="field"><label>所属软件 *</label><select id="vSw">${swOptions || '<option value="1">默认软件</option>'}</select></div>

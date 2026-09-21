@@ -137,6 +137,8 @@ $csrfExempt = [
     'shop_order_list',
     // 导出类：只读，不修改数据
     'user_export', 'card_export',
+    // 系统更新检查：只读接口
+    'system_update_check',
 ];
 if (!in_array($action, $csrfExempt, true)) {
     $csrf = $_SERVER['HTTP_X_CSRF'] ?? ($input['csrf'] ?? '');

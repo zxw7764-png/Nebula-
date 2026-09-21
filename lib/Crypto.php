@@ -24,6 +24,9 @@ class Crypto
     /** 本次请求的响应签名盐覆盖（会话密钥模式） */
     private static ?string $respSalt = null;
 
+    /** 会话密钥绑定的 machine_id（解密后与请求体中的 machine_id 校验） */
+    private static string $sessionMachineId = '';
+
     /**
      * 切换当前请求使用的通信密钥（多软件：init 前按 app_key 命中软件后调用）。
      * 之后 encrypt/decrypt/verifySign/buildResponse 全部使用该软件的密钥。
@@ -262,15 +265,22 @@ class Crypto
             ? preg_replace('/[^a-f0-9]/', '', (string) $input['k'])
             : '';
         $salt = self::$signSalt;
+        self::$sessionMachineId = '';
         if ($kid !== '') {
+            // 校验 software_id：会话密钥必须属于当前软件，
+            // 防止 A 软件的会话密钥用于 B 软件的请求（跨软件密钥复用）
+            $swId = Software::currentId();
             $row = Database::one(
-                'SELECT skey FROM ' . Database::t('sign_keys') . ' WHERE kid = ? AND expire_at > ?',
-                [$kid, time()]
+                'SELECT skey, machine_id FROM ' . Database::t('sign_keys')
+                . ' WHERE kid = ? AND expire_at > ? AND software_id = ?',
+                [$kid, time(), $swId]
             );
             if (!$row) {
                 throw new CryptoException('bad_sign', '会话密钥无效或已过期，请重新初始化');
             }
             $salt = (string) $row['skey'];
+            // 暂存 machine_id，供解密后与请求体内的 machine_id 比对
+            self::$sessionMachineId = (string) $row['machine_id'];
         }
         // 响应一律用「验请求所用的同一把盐」签名，客户端才有对称的验证能力
         self::$respSalt = $salt;
@@ -301,7 +311,7 @@ class Crypto
             throw new CryptoException('bad_json', '数据格式错误');
         }
 
-        return ['data' => $data, 'raw' => $input, 'plain' => false, 'kid' => $kid !== '' ? $kid : null];
+        return ['data' => $data, 'raw' => $input, 'plain' => false, 'kid' => $kid !== '' ? $kid : null, 'session_mid' => self::$sessionMachineId];
     }
 
     /**

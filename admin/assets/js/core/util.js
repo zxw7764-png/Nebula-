@@ -1,8 +1,3 @@
-/* ======================================================================
-   core/util.js — 通用工具函数
-   ====================================================================== */
-
-/** HTML 转义，防 XSS */
 export function esc(s) {
     if (s === null || s === undefined) return '';
     return String(s).replace(/[&<>"']/g, c => ({
@@ -10,28 +5,23 @@ export function esc(s) {
     }[c]));
 }
 
-/** 标签 */
 export function tag(text, color) {
     return `<span class="tag ${color}">${esc(text)}</span>`;
 }
 
-/** 状态标签 */
 export function statusTag(status, map) {
     const m = map[status] || ['未知', 'gray'];
     return tag(m[0], m[1]);
 }
 
-/** 加载中 */
 export function loading() {
     return '<div class="loading"><div class="spinner"></div>加载中...</div>';
 }
 
-/** 空状态 */
 export function empty(icon, text) {
     return `<div class="empty"><div class="icon">${icon}</div>${esc(text)}</div>`;
 }
 
-/** 文件大小格式化 */
 export function fmtSize(bytes) {
     if (!bytes) return '-';
     const u = ['B', 'KB', 'MB', 'GB'];
@@ -40,7 +30,6 @@ export function fmtSize(bytes) {
     return n.toFixed(i ? 2 : 0) + ' ' + u[i];
 }
 
-/** 秒级时间戳 -> YYYY-MM-DD HH:MM:SS */
 export function ts2str(ts) {
     if (!ts || ts <= 0) return '-';
     const d = new Date(ts * 1000);
@@ -49,7 +38,6 @@ export function ts2str(ts) {
          + `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-/** 日期字符串 -> 秒级时间戳，失败返回 0 */
 export function str2ts(v) {
     v = (v || '').trim();
     if (!v) return 0;
@@ -57,7 +45,6 @@ export function str2ts(v) {
     return isNaN(t) ? 0 : t;
 }
 
-/** 防抖 */
 export function debounce(fn, wait = 300) {
     let timer = null;
     return function (...args) {
@@ -66,12 +53,11 @@ export function debounce(fn, wait = 300) {
     };
 }
 
-/** 复制到剪贴板 */
 export function copyText(text) {
     if (navigator.clipboard && window.isSecureContext) {
         return navigator.clipboard.writeText(text);
     }
-    // 降级：execCommand
+
     const ta = document.createElement('textarea');
     ta.value = text;
     ta.style.position = 'fixed';
@@ -82,7 +68,6 @@ export function copyText(text) {
     return Promise.resolve();
 }
 
-/** 触发文件下载 */
 export function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

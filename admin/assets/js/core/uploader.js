@@ -1,12 +1,3 @@
-/* ======================================================================
-   core/uploader.js — 后台图片上传统一助手
-   ----------------------------------------------------------------------
-   全后台图片字段统一交互：输入框可手填 http(s) 链接或站内 /uploads/ 路径，
-   旁边的「上传图片」按钮点选本地图 → 传图片上传接口 → 返回地址回填输入框。
-   默认走 shop_goods_upload（内容级 getimagesize 校验，jpg/png/gif/webp，5MB）。
-   用法：bindImageUpload('按钮id', '输入框id', { action, onDone })
-   ====================================================================== */
-
 import { uploadHeaders } from './api.js';
 import { API_ENTRY } from './state.js';
 import { toast } from './ui.js';

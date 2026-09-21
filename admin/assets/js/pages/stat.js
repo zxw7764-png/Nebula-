@@ -1,7 +1,3 @@
-/* ======================================================================
-   pages/stat.js — API 调用统计
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { loading, empty, esc, tag } from '../core/util.js';

@@ -1,20 +1,11 @@
-/* ======================================================================
-   agent.js — 代理商后台（自包含单文件模块）
-   ------------------------------------------------------------------
-   · 与主管理后台完全独立：独立 token 存储 key、独立接口入口
-   · 页面：概览 / 生成卡密 / 我的卡密 / 我的批次 / 账号设置
-   · 不依赖任何外部模块，避免与后台 assets 相互耦合
-   ====================================================================== */
-
-/* ------------------------- 运行时环境 ------------------------- */
 const RT        = window.__NBAG__ || {};
 const API_ENTRY = RT.entry || 'api.php';
 const TOKEN_KEY = RT.tokenKey || 'nb_agent_token';
-/** 会话密钥存储 key（P0-02：与令牌分离，随登录一次性下发） */
+
 const SKEY_KEY  = TOKEN_KEY + '_sk';
 const CSRF      = RT.csrf || '';
 const HEADERS   = RT.headers || (CSRF ? { 'X-CSRF': CSRF } : {});
-/** 是否开放自助注册（后台可关；关闭时登录页不显示注册入口） */
+
 const REG_OPEN  = !!RT.register;
 
 const S = {
@@ -25,7 +16,6 @@ const S = {
     page: 'dashboard',
 };
 
-/* ------------------------- 基础工具 ------------------------- */
 function $(id) { return document.getElementById(id); }
 
 function esc(s) {
@@ -78,7 +68,6 @@ function downloadBlob(blob, filename) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/* ------------------------- 模态框 ------------------------- */
 function openModal(title, bodyHtml, buttons = [], size = '') {
     const root = $('modalRoot');
     const id = 'm' + Date.now();
@@ -117,7 +106,6 @@ function confirmBox(title, msg, onOk, danger = false) {
         'sm');
 }
 
-/* ------------------------- 分页 ------------------------- */
 function pager(total, page, size) {
     const pages = Math.max(1, Math.ceil(total / size));
     let btns = '';
@@ -138,24 +126,18 @@ function bindPager(container, onGo) {
     });
 }
 
-/* ------------------------- 接口请求 ------------------------- */
 function setToken(t) {
     S.token = t || '';
     if (t) localStorage.setItem(TOKEN_KEY, t);
     else localStorage.removeItem(TOKEN_KEY);
 }
 
-/**
- * 会话密钥（P0-02）。服务端只存摘要，丢失只能重新登录。
- * 与 token 分离存放，请求时分别置于 X-Token / X-Session-Key。
- */
 function setSessionKey(k) {
     S.sessionKey = k || '';
     if (k) localStorage.setItem(SKEY_KEY, k);
     else localStorage.removeItem(SKEY_KEY);
 }
 
-/** 组装认证请求头（token + 会话密钥） */
 function authHeaders() {
     const headers = Object.assign({ 'Content-Type': 'application/json' }, HEADERS);
     if (S.token) headers['X-Token'] = S.token;
@@ -203,7 +185,6 @@ async function api(action, data = {}, silent = false) {
     return res;
 }
 
-/** 下载型接口（导出文件） */
 async function apiDownload(action, data = {}, fallbackName = 'export.txt') {
     const headers = authHeaders();
 
@@ -222,7 +203,6 @@ async function apiDownload(action, data = {}, fallbackName = 'export.txt') {
     return { blob, name };
 }
 
-/* ------------------------- 菜单 ------------------------- */
 const MENUS = [
     { id: 'dashboard', name: '概览',      icon: 'bi-speedometer2' },
     { id: 'stats',     name: '数据分析',  icon: 'bi-graph-up' },
@@ -268,20 +248,13 @@ function go(page) {
     if (render) render(c);
 }
 
-/* ------------------------- 概览头部（按卡类型的发货规格） ------------------------- */
-/**
- * 额度与单价按卡类型分别配置：
- *   配额模式 → 每种卡各显示各自剩余额度
- *   余额模式 → 每种卡各显示各自单价
- *   不限量   → 只提示不扣减
- */
 function quotaBar(a) {
     const isQuota = a.charge_mode === 1;
     const isBal   = a.charge_mode === 2;
     const types   = a.types || [];
 
     const cards = types.map(t => {
-        // 余额计费：主数字显示「按当前余额还能生成多少张」（后端按 余额÷单价 折算）
+
         const canMake = Number(t.can_make || 0);
         const main = isBal
             ? (t.price > 0 ? ('可生成 ' + canMake + ' 张') : '未配置单价')
@@ -320,7 +293,6 @@ function quotaBar(a) {
     </div>`;
 }
 
-/** 顶部 / 侧栏一行摘要 */
 function headerSummary(a) {
     if (a.charge_mode === 1) {
         return '额度 ' + (a.quota_left_total === -1 ? '不限' : a.quota_left_total + ' 张');
@@ -345,7 +317,6 @@ function paintHeader(a) {
     if (av) av.textContent = (name.charAt(0) || 'A').toUpperCase();
 }
 
-/** 拉取资料并刷新头部（各页面渲染前调用） */
 async function refreshProfile() {
     const res = await api('profile', {}, true);
     if (res.code === 0) {
@@ -357,7 +328,6 @@ async function refreshProfile() {
     return S.agent;
 }
 
-/* ------------------------- 页面：概览 ------------------------- */
 async function renderDashboard(c) {
     c.innerHTML = loading();
     const res = await api('dashboard');
@@ -403,7 +373,6 @@ async function renderDashboard(c) {
     $('dRefresh').addEventListener('click', () => renderDashboard(c));
 }
 
-/* ------------------------- 页面：数据分析 ------------------------- */
 async function renderStats(c) {
     c.innerHTML = loading();
     const res = await api('stats');
@@ -412,13 +381,12 @@ async function renderStats(c) {
     const sum = d.summary || {};
     const peak = d.peak || { date: '', count: 0 };
 
-    // ---- 趋势条形图（纯 CSS，双条：生成 / 激活）----
     const trend = d.trend || [];
     const maxVal = Math.max(1, ...trend.map(t => Math.max(t.generated, t.activated)));
     const bars = trend.map(t => {
         const gh = Math.round(t.generated / maxVal * 100);
         const ah = Math.round(t.activated / maxVal * 100);
-        const label = t.date.slice(5); // MM-DD
+        const label = t.date.slice(5);
         return `<div class="sw-tcol" title="${t.date} 生成 ${t.generated} / 激活 ${t.activated}">
             <div class="sw-tbars">
                 <div class="sw-bar gen" style="height:${gh}%"></div>
@@ -428,7 +396,6 @@ async function renderStats(c) {
         </div>`;
     }).join('');
 
-    // ---- 卡类型占比 ----
     const typeRows = (d.types || []).map(t => `
         <tr>
             <td>${esc(t.name)}</td>
@@ -477,7 +444,6 @@ async function renderStats(c) {
     </div>`;
 }
 
-/* ------------------------- 页面：生成卡密 ------------------------- */
 async function renderGenerate(c) {
     c.innerHTML = loading();
     const a = await refreshProfile();
@@ -573,7 +539,6 @@ async function renderGenerate(c) {
         <div class="card-body" id="gResult"></div>
     </div>`;
 
-    /** 同步时长/点数输入框文案（不同类型填的东西不同） */
     function paintDurationField() {
         const t = $('gType').value;
         const lab = $('gDurLabel'), hintEl = $('gDurHint'), inp = $('gDur'), unit = $('gDurUnit');
@@ -583,7 +548,6 @@ async function renderGenerate(c) {
         else { lab.textContent = '次数 *'; hintEl.textContent = '次数卡填次数，如 50'; if (!inp.value) inp.value = 50; unit.style.display = 'none'; inp.disabled = false; }
     }
 
-    /** 实时展示所选类型的额度 / 单价，并在数量超限时先行提示 */
     function paintTypeHint() {
         const el = $('gTypeHint');
         const t  = typeMap[parseInt($('gType').value, 10)] || {};
@@ -619,7 +583,6 @@ async function renderGenerate(c) {
             html = '当前为不限量模式，生成不扣额度';
         }
 
-        // 该类型卡密激活后进入的用户组（类型专属 → 代理兜底 → 不换组）
         const toGroup = t.group_name || a.group_name;
         html += `<div style="margin-top:4px;font-weight:600">`
              + (toGroup
@@ -630,7 +593,6 @@ async function renderGenerate(c) {
         el.innerHTML = html;
     }
 
-    // 默认选中第一个已开放的类型
     $('gType').value = String(usable[0].type);
     paintDurationField();
     paintTypeHint();
@@ -659,7 +621,6 @@ async function renderGenerate(c) {
     });
 }
 
-/** 生成结果缓存（供复制/导出） */
 let lastGen = { batchId: 0, count: 0, codes: [] };
 
 async function doGenerate() {
@@ -671,8 +632,8 @@ async function doGenerate() {
     const payload = {
         count: parseInt($('gCount').value, 10) || 1,
         type: type,
-        duration: raw,                    // 原始输入值（旧字段，保持兼容）
-        duration_sec: type === 1 ? raw * unitSec : 0,  // 时长卡换算成秒提交，服务端优先采用
+        duration: raw,
+        duration_sec: type === 1 ? raw * unitSec : 0,
         prefix: $('gPrefix').value.trim(),
         expire_days: parseInt($('gExpire').value, 10) || 0,
         name: $('gName').value.trim(),
@@ -712,7 +673,6 @@ async function doGenerate() {
     }
 }
 
-/* ------------------------- 页面：我的卡密 ------------------------- */
 const cardState = { page: 1, size: 20, keyword: '', status: '', batch_id: 0 };
 
 async function renderCards(c) {
@@ -791,7 +751,6 @@ async function renderCards(c) {
     $('cSearch').addEventListener('click', () => doCardSearch(c));
     $('cExport').addEventListener('click', () => exportCards('0'));
 
-    // 批量选择逻辑
     const cardSel = {
         set: new Set(),
         sync() {
@@ -845,7 +804,7 @@ async function renderCards(c) {
         if (!ids.length) return toast('请先选择卡密', 'warn');
 
         if (op === 'copy') {
-            // 从 DOM 取选中行的卡密
+
             const codes = [...c.querySelectorAll('tbody tr')]
                 .filter(tr => {
                     const rcb = tr.querySelector('[data-row-check]');
@@ -912,7 +871,6 @@ async function exportCards(status) {
     }
 }
 
-/* ------------------------- 页面：我的批次 ------------------------- */
 async function renderBatches(c) {
     c.innerHTML = loading();
     const res = await api('batch_list');
@@ -962,12 +920,6 @@ async function renderBatches(c) {
     });
 }
 
-/* ------------------------- 页面：充值卡密 ------------------------- */
-/**
- * 兑换主管理员生成的充值卡密：
- *   · 余额充值卡 → 余额增加（余额计费模式下直接决定还能发多少张）
- *   · 张数额度卡 → 指定卡类型的可生成张数增加（配额模式下生效）
- */
 async function renderRecharge(c) {
     c.innerHTML = loading();
     const a = await refreshProfile();
@@ -1049,7 +1001,6 @@ async function doRedeem() {
     }
 }
 
-/* ------------------------- 页面：操作记录 ------------------------- */
 async function renderLogs(c) {
     c.innerHTML = loading();
     const res = await api('dashboard');
@@ -1078,7 +1029,6 @@ async function renderLogs(c) {
     </div>`;
 }
 
-/* ------------------------- 页面：账号设置 ------------------------- */
 async function renderAccount(c) {
     c.innerHTML = loading();
     const a = await refreshProfile();
@@ -1158,7 +1108,6 @@ async function renderAccount(c) {
     });
 }
 
-/* ------------------------- 登录 / 注册 / 退出 ------------------------- */
 function enterApp() {
     $('loginPage').style.display = 'none';
     const rp = $('regPage');
@@ -1188,12 +1137,11 @@ function showRegister() {
     if (c) c.focus();
 }
 
-/* ------------------------- 图形验证码 ------------------------- */
 function agentCaptchaUrl() {
     return `${API_ENTRY}?action=captcha&ts=${Date.now()}`;
 }
 function refreshAgentCaptcha(which) {
-    const map = { lg: 'lgCaptcha', rg: 'rgCaptcha' }; // $ 即 getElementById，直接传 id
+    const map = { lg: 'lgCaptcha', rg: 'rgCaptcha' };
     const img = $(map[which] + 'Img');
     if (img) {
         img.onerror = () => {
@@ -1212,7 +1160,6 @@ function bindAgentCaptcha() {
     });
 }
 
-/** 登录（注册成功后也会复用，直接进后台少一步操作） */
 async function postLogin(username, password, captcha) {
     const r = await fetch(`${API_ENTRY}?action=login`, {
         method: 'POST',
@@ -1254,7 +1201,6 @@ async function doLogin() {
     }
 }
 
-/** 凭激活码注册；成功后带账号回登录页（登录同样需要验证码） */
 async function doRegister() {
     const payload = {
         code:      $('rgCode').value.trim(),
@@ -1303,15 +1249,14 @@ async function doRegister() {
 
 function doLogout() {
     confirmBox('退出登录', '确定要退出代理商后台吗？', async () => {
-        try { await api('logout', {}, true); } catch (e) { /* 忽略 */ }
+        try { await api('logout', {}, true); } catch (e) {
+ }
         setToken('');
         setSessionKey('');
         location.reload();
     });
 }
 
-/* ------------------------- 深色 / 浅色主题 ------------------------- */
-/* 与主后台同源逻辑：localStorage(nb_agent_theme) 显式选择优先，否则跟随系统 */
 function agentStoredTheme() {
     try {
         const t = localStorage.getItem('nb_agent_theme');
@@ -1345,20 +1290,21 @@ function initAgentTheme() {
     if (btn) {
         btn.addEventListener('click', () => {
             const next = agentAppliedTheme() === 'dark' ? 'light' : 'dark';
-            try { localStorage.setItem('nb_agent_theme', next); } catch (e) { /* 忽略 */ }
+            try { localStorage.setItem('nb_agent_theme', next); } catch (e) {
+ }
             agentApplyTheme(next);
             paintAgentThemeBtn();
         });
     }
-    // 用户未显式选择时，系统切换实时跟随
+
     try {
         const mq = window.matchMedia('(prefers-color-scheme: dark)');
         const onChange = e => { if (!agentStoredTheme()) { agentApplyTheme(e.matches ? 'dark' : 'light'); paintAgentThemeBtn(); } };
         mq.addEventListener ? mq.addEventListener('change', onChange) : mq.addListener(onChange);
-    } catch (e) { /* 忽略 */ }
+    } catch (e) {
+ }
 }
 
-/* ------------------------- 启动 ------------------------- */
 (async function boot() {
     const mask = $('bootMask');
     if (mask) mask.classList.add('hide');
@@ -1373,7 +1319,6 @@ function initAgentTheme() {
     const out = $('btnLogout');
     if (out) out.addEventListener('click', doLogout);
 
-    // 注册表单（后台可关闭自助注册）
     if (REG_OPEN) {
         const rf = $('rgForm');
         if (rf) rf.addEventListener('submit', e => { e.preventDefault(); doRegister(); });
@@ -1383,10 +1328,8 @@ function initAgentTheme() {
         if (toLogin) toLogin.addEventListener('click', showLogin);
     }
 
-    // 未开放代理功能时，页面已渲染提示页，无需继续
     if (!RT.enabled) return;
 
-    // 尝试用已存 token 恢复会话
     if (S.token) {
         try {
             const res = await api('profile', {}, true);
@@ -1397,13 +1340,13 @@ function initAgentTheme() {
                 enterApp();
                 return;
             }
-        } catch (e) { /* 忽略 */ }
-        // 会话已失效：token 与 session_key 一并清除，避免半截凭证残留
+        } catch (e) {
+ }
+
         setToken('');
         setSessionKey('');
     }
 
-    // 支持 /agent/#reg 直达注册
     if (REG_OPEN && location.hash === '#reg') {
         showRegister();
         return;

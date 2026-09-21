@@ -60,13 +60,13 @@ class Pay
         return true;
     }
 
-    /**
+        /**
      * 创建支付跳转地址
      * @param array $order {order_no, product, amount(分), channel}
-     */
-    public static function payUrl(array $order, string $notifyUrl, string $returnUrl): string
+     * @param string|null $driver 显式指定驱动（null=用当前启用驱动）
+     */    public static function payUrl(array $order, string $notifyUrl, string $returnUrl, ?string $driver = null): string
     {
-        $drv = self::active();
+        $drv = $driver ?? self::active();
         if ($drv === 'epay') {
             return Shop::epayPayUrl(
                 (string) $order['order_no'],
@@ -86,13 +86,14 @@ class Pay
         return '';
     }
 
-    /**
+        /**
      * 异步通知验签
+     * @param array $params
+     * @param string|null $driver 显式指定驱动（null=用当前启用驱动）
      * @return array{0:bool, 1:string, 2:int} 是否有效 + 订单号 + 实付金额(分)，金额取不到时为 -1（由调用方回退 money 字段）
-     */
-    public static function verifyNotify(array $params): array
+     */    public static function verifyNotify(array $params, ?string $driver = null): array
     {
-        $drv = self::active();
+        $drv = $driver ?? self::active();
         if ($drv === 'epay') {
             return [Shop::epayVerifyNotify($params), (string) ($params['out_trade_no'] ?? ''), -1];
         }

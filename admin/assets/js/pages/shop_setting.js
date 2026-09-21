@@ -1,15 +1,3 @@
-/* ======================================================================
-   pages/shop_setting.js — 发卡网配置（运营分区，复合页 shop_admin 的子页）
-   ----------------------------------------------------------------------
-   页内三个页签（与系统设置页的页签模式一致）：
-     商店开关 = 总开关 / 发卡模式 / 外部发卡站地址
-     支付     = 支付方式 / 易支付三件套 / 人工收款（收款码 + 联系方式）
-     商店外观 = 标题 / 主题色 / 公告 / 横幅 / 页脚（/shop/ 装修）
-   保存走独立 action shop_setting_save（服务端归业务档，仅超管），
-   无论在哪个页签点保存，都提交全部键（服务端整表受理）。
-   数据读取复用 setting_get。页签记忆 localStorage（nb_shopset_tab）。
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register, go } from '../core/router.js';
 import { loading, esc, tag } from '../core/util.js';
@@ -19,22 +7,20 @@ import { bindImageUpload } from '../core/uploader.js';
 
 register('shop_setting', render);
 
-/** 页签定义：key 与面板容器 id（ssP-<key>）对应 */
 const TABS = [
     { key: 'switch', label: '商店开关' },
     { key: 'pay',    label: '支付' },
     { key: 'style',  label: '商店外观' },
 ];
 
-/** 当前商品展示样式（render 时从设置回填，save 提交） */
 let curLayout = 'grid';
 
-/** 记住的页签（跨 render 保留） */
 let curTab = 'switch';
 try {
     const t = localStorage.getItem('nb_shopset_tab');
     if (TABS.some(x => x.key === t)) curTab = t;
-} catch (e) { /* ignore */ }
+} catch (e) {
+ }
 
 function noPermBar() {
     return `<div class="hint" style="color:#f59e0b;background:rgba(245,158,11,.08);
@@ -61,7 +47,7 @@ async function render() {
     const ext = s.shop_mode === 'external';
     const manual = s.shop_pay_mode === 'manual';
     const epayReady = (s.shop_epay_url || '') !== '' && (s.shop_epay_pid || '') !== '' && (s.shop_epay_key || '') !== '';
-    // 支付链路状态：跟随当前选择的支付驱动
+
     const curDrv = manual ? 'manual' : (s.shop_pay_driver || 'epay');
     const payCfgAllS = (() => { try { return JSON.parse(s.shop_pay_cfg || '{}') || {}; } catch (e) { return {}; } })();
     const DRV_META = {
@@ -73,7 +59,6 @@ async function render() {
     const drvMeta = DRV_META[curDrv] || DRV_META.epay;
     curLayout = ['grid', 'compact', 'rows', 'sidebar', 'pick'].includes(s.shop_layout) ? s.shop_layout : 'grid';
 
-    // 顶部状态条：所有页签共享，一眼看清当前形态
     const status = `
         <div class="kv" style="margin-bottom:14px">
             <span class="k">发卡网</span><span class="v">${on ? tag('已开启', 'green') : tag('已关闭', 'gray')}</span>
@@ -84,7 +69,6 @@ async function render() {
                 : tag(drvMeta.label + '未配置齐（自动单将降级人工）', 'yellow')}</span>` : ''}
         </div>`;
 
-    // ==================== 页签一：商店开关 ====================
     const pSwitch = `
         <div class="row2">
             <div class="field"><label>发卡网开关</label>${boolSel('ssEnable', s.shop_enable)}
@@ -108,7 +92,6 @@ async function render() {
         </div>
         <button class="btn" id="ssSaveSwitch" ${editable ? '' : 'disabled'}>保存开关设置</button>`;
 
-    // ==================== 页签二：支付 ====================
     const pPay = `
         <div class="row2">
             <div class="field"><label>支付方式（内置发卡）</label>
@@ -191,7 +174,6 @@ async function render() {
         </div>
         <button class="btn" id="ssSavePay" ${editable ? '' : 'disabled'}>保存支付设置</button>`;
 
-    // ==================== 页签三：商店外观 ====================
     const pStyle = `
         <div class="row2">
             <div class="field"><label>商店标题</label>
@@ -311,10 +293,10 @@ async function render() {
         ).join('')}
     </div>`;
 
-    // 页签切换
     const switchTab = (key) => {
         curTab = key;
-        try { localStorage.setItem('nb_shopset_tab', key); } catch (e) { /* ignore */ }
+        try { localStorage.setItem('nb_shopset_tab', key); } catch (e) {
+ }
         c.querySelectorAll('#ssTabs button').forEach(b =>
             b.classList.toggle('on', b.dataset.tab === key));
         TABS.forEach(t => {
@@ -325,8 +307,6 @@ async function render() {
     c.querySelectorAll('#ssTabs button').forEach(btn =>
         btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
 
-    // 商品展示样式卡片选择（单选高亮，save 时随表提交）
-    // 主题色预设：点击填充输入框并高亮
     const themePick = document.getElementById('ssThemePick');
     if (themePick) {
         themePick.querySelectorAll('button').forEach(b =>
@@ -338,7 +318,6 @@ async function render() {
             }));
     }
 
-    // 图片字段统一上传（横幅 / 背景 / 收款码 / 前台 Logo）：点按钮选图上传后回填输入框
     bindImageUpload('ssBannerUpload', 'ssBanner', {
         onDone: url => {
             const hint = document.getElementById('ssBannerHint');
@@ -364,19 +343,17 @@ async function render() {
             }));
     }
 
-    // 各页签保存按钮：都提交全部 17 个键（隐藏面板里的字段照样能取到值）
     document.getElementById('ssSaveSwitch').addEventListener('click', () => save().catch(e => toast('保存失败：' + e.message, 'err')));
     document.getElementById('ssSavePay').addEventListener('click', () => save().catch(e => toast('保存失败：' + e.message, 'err')));
-    // 支付驱动配置：随下拉切换渲染对应输入项
+
     payCfgAll = (() => { try { return JSON.parse(s.shop_pay_cfg || '{}') || {}; } catch (e) { return {}; } })();
     renderPayCfg(curDrv, s);
     document.getElementById('ssPayDrv').addEventListener('change', e => renderPayCfg(e.target.value, s));
     document.getElementById('ssSaveStyle').addEventListener('click', () => save().catch(e => toast('保存失败：' + e.message, 'err')));
 }
 
-// 各支付驱动的字段定义（epay 特殊：映射到 shop_epay_* 独立配置键）
 const PAY_DRV_FIELDS = {
-    epay: null, // 用固定三件套
+    epay: null,
     codepay: [
         { key: 'gateway', label: '码支付网关地址', ph: 'https://codepay.example.com' },
         { key: 'pid', label: '商户 ID', ph: '码支付商户 ID' },
@@ -420,11 +397,11 @@ function renderPayCfg(drv, s) {
 }
 
 async function save() {
-    // 前端先做格式校验，减少一整轮无效提交
+
     const val = (id) => document.getElementById(id).value.trim();
     for (const [id, name] of [['ssExtUrl', '外部发卡站地址'], ['ssEpayUrl', '易支付网关地址'], ['ssQrcode', '收款码地址']]) {
         const el = document.getElementById(id);
-        if (!el) continue; // 字段随支付方式动态渲染，可能不存在
+        if (!el) continue;
         const u = el.value.trim();
         if (u !== '' && !/^https?:\/\//i.test(u)) {
             return toast(`${name}需为 http(s) 开头的完整地址`, 'warn');
@@ -466,7 +443,7 @@ async function save() {
             shop_detail_style: document.getElementById('ssDetailStyle').value,
             shop_sw_filter:    document.getElementById('ssSwFilter').value,
         }, (() => {
-            // 支付驱动字段：epay 映射到 shop_epay_*，插件驱动写进 shop_pay_cfg JSON
+
             const drv = document.getElementById('ssPayDrv').value;
             if (drv === 'epay') {
                 return {
@@ -481,7 +458,7 @@ async function save() {
             payCfgAll[drv] = fv;
             return { shop_pay_cfg: JSON.stringify(payCfgAll) };
         })(), (() => {
-            // 支付渠道展示配置（勾选 + 自定义名称）
+
             const lines = ['alipay', 'wxpay', 'qqpay'].map(v => {
                 const on = document.getElementById('ssChOn_' + v);
                 const lb = document.getElementById('ssChLb_' + v);
@@ -492,8 +469,6 @@ async function save() {
     });
     if (res.code === 0) {
         toast('发卡网配置已保存');
-        render();   // 重新拉取，刷新顶部状态条
+        render();
     }
 }
-
-// ---- 前台 Logo 上传已移至「系统设置 → 站点」（pages/setting.js） ----

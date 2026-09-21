@@ -1,7 +1,3 @@
-/* ======================================================================
-   pages/dashboard.js — 数据概览
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { loading, empty, esc, tag } from '../core/util.js';

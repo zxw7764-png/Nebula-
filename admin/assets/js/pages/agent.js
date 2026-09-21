@@ -1,11 +1,3 @@
-/* ======================================================================
-   pages/agent.js — 代理商管理
-   ------------------------------------------------------------------
-   代理商有两个来源：后台直接创建、或凭「代理商激活码」自助注册。
-   卡密归属该代理（cards.agent_id）。控量模式：1 张数额度 / 2 余额计费 / 3 不限量。
-   额度与单价按卡类型分别配置（永久卡 / 时长卡 / 点数卡 / 次数卡各一份）。
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { pageState } from '../core/state.js';
@@ -25,7 +17,6 @@ function modeTag(mode) {
     return tag(m[0], m[1]);
 }
 
-/** 「剩余」列：按控量模式展示，配额模式给出各类型合计 */
 function quotaCell(a) {
     if (a.charge_mode === 1) {
         const total = a.quota_left_total === -1 ? '不限' : (a.quota_left_total + ' 张');
@@ -167,14 +158,12 @@ async function render() {
         });
     });
 
-    // 批量选择
     sel = createSelection({ root: c, allIds: d.list.map(x => x.id), onChange: ids => {
         const box = document.getElementById('aBulkBox');
         if (box) { box.hidden = ids.length === 0; box.dataset.count = String(ids.length); }
         c.querySelectorAll('.bulk-hide').forEach(b => { b.hidden = ids.length > 0; });
     }});
 
-    // 批量操作：下拉选择 + 执行
     const bulkRun = document.getElementById('aBulkRun');
     if (bulkRun) bulkRun.addEventListener('click', () => {
         const op = document.getElementById('aBulkOp').value;
@@ -182,7 +171,6 @@ async function render() {
     });
 }
 
-/* ------------------------- 批量操作 ------------------------- */
 async function doBulk(op) {
     const ids = sel ? sel.ids() : [];
     if (!ids.length) return toast('请先选择代理商', 'warn');
@@ -226,9 +214,6 @@ function doSearch() {
     render();
 }
 
-/* ------------------------- 按卡类型的编辑器 ------------------------- */
-
-/** 一行一种卡类型：开放 / 额度 / 单价 / 激活用户组 / 已用 */
 function typeEditor(types, cardTypes, mode, groups = []) {
     const map = {};
     (types || []).forEach(t => { map[String(t.type)] = t; });
@@ -279,7 +264,6 @@ function typeEditor(types, cardTypes, mode, groups = []) {
     </div>`;
 }
 
-/** 读取编辑器 -> {"1":{"enabled":1,"quota_total":100,"price_yuan":"1.00","group_id":3}} */
 function readTypeEditor() {
     const out = {};
     document.querySelectorAll('[data-t][data-k]').forEach(el => {
@@ -290,18 +274,15 @@ function readTypeEditor() {
     return out;
 }
 
-/* ------------------------- 新增 / 编辑 ------------------------- */
 async function agentEdit(a, modes, cardTypes) {
     a = a || {};
     const isNew = !a.id;
 
-    // 卡类型选项（列表接口下发，唯一来源）
     if (!cardTypes) {
         const r = await api('agent_list', { all: 1 }, true);
         cardTypes = (r.code === 0 && r.data.card_types) ? r.data.card_types : [];
     }
 
-    // 用户组下拉（兜底组 + 每个卡类型的激活组共用这份列表）
     let groupOptions = '';
     let groupList = [];
     const gRes = await api('group_list', {}, true);
@@ -315,7 +296,6 @@ async function agentEdit(a, modes, cardTypes) {
     const modeSel = Object.keys(modes).map(k =>
         `<option value="${k}" ${String(a.charge_mode || 1) === k ? 'selected' : ''}>${esc(modes[k])}</option>`).join('');
 
-    // 软件列表（多软件归属；接口无权限/无数据时兜底「默认软件」）
     let softwareOptions = '';
     try {
         const swRes = await api('software_list', {}, true);
@@ -324,7 +304,8 @@ async function agentEdit(a, modes, cardTypes) {
             softwareOptions = swRes.data.options.map(x =>
                 `<option value="${x.id}" ${curSw === Number(x.id) ? 'selected' : ''}>${esc(x.name)}</option>`).join('');
         }
-    } catch (e) { /* 忽略，走兜底 */ }
+    } catch (e) {
+ }
 
     const body = `
     <div class="row2">
@@ -428,7 +409,6 @@ async function agentEdit(a, modes, cardTypes) {
     ], 'wide');
 }
 
-/* ------------------------- 充值（按类型）/ 改密 / 启停 / 删除 ------------------------- */
 function agentGrant(a) {
     const types = a.types || [];
     const rows = types.map(t => `
@@ -515,7 +495,6 @@ function agentDel(a) {
         }, true);
 }
 
-/* ------------------------- 详情 ------------------------- */
 async function agentDetail(id) {
     openModal('代理商详情', loading(), [], 'wide');
     const res = await api('agent_detail', { id });

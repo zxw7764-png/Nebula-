@@ -1,49 +1,25 @@
-/* ======================================================================
-   core/router.js — 菜单 / 路由 / 页面注册
-   ------------------------------------------------------------------
-   v2.31 重构：
-   · 侧边栏从 22 项精简为 10 项，相关页面合并为「复合页面」，
-     进入后用顶部标签页（#subTabs）在子页面之间切换
-   · 子页面仍是独立模块（pages/*.js 原样渲染进 #content），
-     合并只是路由层的组织方式，零业务逻辑改动
-   · 旧的 hash（如 #device_list）仍然可用，会自动映射到
-     对应复合页面并直接落在相应标签上
-   ====================================================================== */
-
 import { S, can } from './state.js';
 import { esc } from './util.js';
 import { empty } from './util.js';
 
-/**
- * 复合页面定义：id → 子页面列表（顺序即标签顺序）。
- * 子页面必须已在 pages/*.js 中注册（register）。
- */
 export const COMPOSITES = {
     softwares: ['software_list', 'version_list', 'client_notice_list'],
     users:    ['user_list', 'group_list', 'device_list', 'device_ban_list', 'session_list'],
     cards:    ['card_list', 'card_batch_list'],
     agents:   ['agent_list', 'agent_code_list'],
-    // 商品与交易：官网定价（价格套餐）→ 发卡商品与挂卡规格 → 发卡网配置 → 订单
-    // 价格套餐与商品管理是同一件商品的两个侧面（同一个 nb_plans），放同一页才看得出对应关系
+
     shop_admin: ['plan_list', 'shop_goods', 'shop_setting', 'shop_order_list'],
-    // 内容运营：官网侧对外展示的一切内容
+
     portal:     ['portal_web', 'notice_list', 'message_list', 'feedback_list', 'seller_list', 'screenshot_list', 'games'],
     logs:     ['log_list', 'audit_list'],
     files:    ['files_integrity', 'files_scan'],
 };
 
-/** 旧单页 id → 所属复合页面（保持旧链接 / 收藏可用） */
 export const LEGACY_MAP = {};
 Object.entries(COMPOSITES).forEach(([cid, tabs]) => {
     tabs.forEach(tid => { LEGACY_MAP[tid] = cid; });
 });
 
-/**
- * 菜单定义（侧边栏）。
- *   type: 'page'      普通页面（id = action 名）
- *   type: 'composite' 复合页面（id ∈ COMPOSITES，内部标签页切换）
- * perm 只约束普通页面；复合页面只要任一子页可见即显示。
- */
 export const MENUS = [
     { group: '总览' },
     { id: 'dashboard',  name: '数据概览',   icon: 'bi-speedometer2', type: 'page' },
@@ -63,11 +39,11 @@ export const MENUS = [
     { id: 'templates',  name: '界面模板',   icon: 'bi-palette', type: 'page', perm: 'settings.site' },
     { id: 'logs',       name: '日志中心',   icon: 'bi-clock-history', type: 'composite' },
     { id: 'files',      name: '文件管理',   icon: 'bi-folder-check', type: 'composite' },
+    { id: 'system_update', name: '系统更新', icon: 'bi-cloud-arrow-down', type: 'page', perm: 'settings.infra' },
     { id: 'setting',    name: '系统设置',   icon: 'bi-gear', type: 'page', perm: 'settings.site' },
     { id: 'profile',    name: '个人中心',   icon: 'bi-person', type: 'page' },
 ];
 
-/** 子页面的显示名（标签文字），取自 TITLES */
 export const TITLES = {
     dashboard: '数据概览',
     stat_overview: 'API 统计',
@@ -78,10 +54,11 @@ export const TITLES = {
     templates: '界面模板',
     logs:      '日志中心',
     files:     '文件管理',
+    system_update: '系统更新',
     softwares: '软件管理',
     setting:   '系统设置',
     profile:   '个人中心',
-    // 子页面（供标签页 / 兼容跳转使用）
+
     software_list: '软件列表',  version_list: '版本管理',  client_notice_list: '客户端公告',
     user_list: '用户管理',      group_list: '用户组',      device_list: '设备管理',
     device_ban_list: '设备黑名单', session_list: '在线会话',
@@ -100,17 +77,12 @@ export const TITLES = {
     files_integrity: '完整性校验', files_scan: '挂马扫描',
 };
 
-/** 页面渲染函数注册表 */
 const registry = {};
 
-/** 注册一个页面 */
 export function register(id, renderFn) {
     registry[id] = renderFn;
 }
 
-/* ------------------------- 权限过滤 ------------------------- */
-
-/** 子页面是否可见 */
 function tabVisible(tid) {
     const PERM_OF_TAB = {
         software_list: 'settings.business', version_list: 'settings.business',
@@ -136,12 +108,10 @@ function tabVisible(tid) {
     return !p || can(p);
 }
 
-/** 复合页面对当前管理员可见的子页列表 */
 function visibleTabs(cid) {
     return (COMPOSITES[cid] || []).filter(tabVisible);
 }
 
-/** 当前管理员可见的菜单 */
 export function visibleMenus() {
     return MENUS.filter(m => {
         if (m.group) return true;
@@ -150,10 +120,8 @@ export function visibleMenus() {
     });
 }
 
-/* ------------------------- 子标签页状态 ------------------------- */
-
 const SUB_KEY = 'nb_comp_tab_v1';
-let pendingTab = null;   // 旧 hash 直达某个子页时暂存
+let pendingTab = null;
 
 function readSubTab(cid) {
     if (pendingTab) {
@@ -164,7 +132,8 @@ function readSubTab(cid) {
     try {
         const raw = JSON.parse(localStorage.getItem(SUB_KEY) || '{}');
         if (visibleTabs(cid).includes(raw[cid])) return raw[cid];
-    } catch (e) { /* 忽略 */ }
+    } catch (e) {
+ }
     return visibleTabs(cid)[0] || null;
 }
 
@@ -173,10 +142,10 @@ function writeSubTab(cid, tid) {
         const raw = JSON.parse(localStorage.getItem(SUB_KEY) || '{}');
         raw[cid] = tid;
         localStorage.setItem(SUB_KEY, JSON.stringify(raw));
-    } catch (e) { /* 忽略 */ }
+    } catch (e) {
+ }
 }
 
-/** 渲染复合页面的顶部标签条（位于顶栏与内容区之间） */
 function renderSubTabs(cid, active) {
     const bar = document.getElementById('subTabs');
     if (!bar) return;
@@ -204,14 +173,8 @@ function hideSubTabs() {
     if (bar) { bar.className = 'subtabs'; bar.innerHTML = ''; }
 }
 
-/* ------------------------- 分组折叠状态 ------------------------- */
-/**
- * 折叠状态存 localStorage（跨刷新保持）；存的是被折叠的「分组标题」列表。
- * 用 v2 键：与旧版（默认全展开）的存储隔离，保证「默认收起」对新老浏览器都生效。
- */
 const COLLAPSE_KEY = 'nb_nav_collapsed_v2';
 
-/** 把线性菜单切成 [{ group, items: [] }]，无标题的项归入空分组 */
 function groupMenus(menus) {
     const groups = [];
     menus.forEach(m => {
@@ -225,16 +188,10 @@ function groupMenus(menus) {
     return groups;
 }
 
-/** 当前可见的全部分组标题 */
 function allGroupTitles() {
     return groupMenus(visibleMenus()).map(g => g.group).filter(Boolean);
 }
 
-/**
- * 读取折叠状态：
- *   · 有存储记录 → 完全尊重用户上次的展开 / 收起
- *   · 首次使用（无记录）→ 返回全部分组，即**侧边栏默认收起**
- */
 function readCollapsed() {
     try {
         const raw = localStorage.getItem(COLLAPSE_KEY);
@@ -242,12 +199,14 @@ function readCollapsed() {
             const arr = JSON.parse(raw);
             if (Array.isArray(arr)) return arr.filter(x => typeof x === 'string');
         }
-    } catch (e) { /* 隐私模式等：退回默认 */ }
+    } catch (e) {
+ }
     return allGroupTitles();
 }
 
 function writeCollapsed(list) {
-    try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(list)); } catch (e) { /* 忽略隐私模式等写入失败 */ }
+    try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(list)); } catch (e) {
+ }
 }
 
 export function renderNav() {
@@ -255,10 +214,9 @@ export function renderNav() {
     if (!nav) return;
 
     const groups = groupMenus(visibleMenus());
-    // 当前页所在分组：始终展开，避免进了页面却看不到高亮项
+
     const activeGroup = (groups.find(g => g.items.some(it => it.id === S.page)) || {}).group;
-    // 手风琴不变量：只展开当前页所在分组，其余一律收起——
-    // 防止「上一次手风琴展开的分组」在刷新/换页后仍然挂着（如停在数据概览时业务管理还展开）
+
     const collapsed = groupMenus(visibleMenus()).map(g => g.group).filter(g => g !== activeGroup);
     writeCollapsed(collapsed);
 
@@ -279,19 +237,17 @@ export function renderNav() {
             </div>`;
     }).join('');
 
-    // 菜单跳转
     nav.querySelectorAll('a[data-page]').forEach(a => {
         a.addEventListener('click', () => go(a.dataset.page));
     });
 
-    // 分组折叠切换（手风琴：展开某组时自动收起其他组；就地改 class，不整表重绘，保留滚动位置）
     nav.querySelectorAll('[data-toggle]').forEach(el => {
         el.addEventListener('click', () => {
             const t = el.dataset.toggle;
             const box = el.closest('.nav-group');
             if (!box) return;
             const opening = box.classList.contains('collapsed');
-            // 展开某组 → 收起其余所有组
+
             if (opening) {
                 nav.querySelectorAll('.nav-group').forEach(g => {
                     if (g !== box) g.classList.add('collapsed');
@@ -300,14 +256,13 @@ export function renderNav() {
             box.classList.toggle('collapsed');
 
             const list = opening
-                ? groupMenus(visibleMenus()).map(g => g.group).filter(g => g !== t)   // 手风琴：只有 t 展开
+                ? groupMenus(visibleMenus()).map(g => g.group).filter(g => g !== t)
                 : readCollapsed().concat(t);
             writeCollapsed(list);
         });
     });
 }
 
-/** 展开全部分组 / 收起全部分组（供外部快捷调用） */
 export function setAllGroups(collapsed) {
     if (collapsed) {
         const titles = groupMenus(visibleMenus()).map(g => g.group);
@@ -318,23 +273,21 @@ export function setAllGroups(collapsed) {
     renderNav();
 }
 
-/** 内容区切换动画：重触发 .content 的入场动画 */
 export function replayContentAnim() {
     const el = document.getElementById('content');
     if (!el) return;
     el.style.animation = 'none';
-    void el.offsetWidth;   // 强制回流，重启动画
+    void el.offsetWidth;
     el.style.animation = '';
 }
 
 export function go(page) {
-    // 兼容旧地址：#device_list 之类直接映射到复合页面并落在对应标签
+
     if (LEGACY_MAP[page]) {
         pendingTab = page;
         page = LEGACY_MAP[page];
     }
 
-    // 角色校验：不可见页面不允许进入
     const menus = visibleMenus();
     if (!menus.some(m => m.id === page)) page = 'dashboard';
 
@@ -343,7 +296,6 @@ export function go(page) {
     if (titleEl) titleEl.textContent = TITLES[page] || page;
     renderNav();
 
-    // 更新 URL hash（便于刷新保持页面、可收藏）
     if (location.hash !== '#' + page) {
         history.replaceState(null, '', '#' + page);
     }
@@ -365,7 +317,6 @@ export function go(page) {
     replayContentAnim();
 }
 
-/** 从 hash 恢复页面 */
 export function currentFromHash() {
     const h = (location.hash || '').replace(/^#/, '');
     if (registry[h] || COMPOSITES[h] || LEGACY_MAP[h]) return h;

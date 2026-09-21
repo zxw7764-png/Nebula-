@@ -1,9 +1,3 @@
-/* ======================================================================
-   pages/shop.js — 发卡订单管理（官网 /shop/ 的订单）
-   统计 + 筛选列表 + 单条操作（确认发卡/手动补发/关闭）
-   + 批量操作（确认发卡 / 批量关闭 / 批量删除）
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { loading, empty, esc, tag } from '../core/util.js';
@@ -113,7 +107,6 @@ async function render() {
         </div>
     </div>`;
 
-    // 批量选择
     sel = createSelection({
         root: c,
         allIds: d.list.map(x => x.id),
@@ -124,7 +117,6 @@ async function render() {
         },
     });
 
-    // 筛选
     document.getElementById('shopSearch').addEventListener('click', () => {
         curStatus = document.getElementById('shopStatus').value;
         curKw = document.getElementById('shopKw').value.trim();
@@ -134,7 +126,6 @@ async function render() {
         if (e.key === 'Enter') document.getElementById('shopSearch').click();
     });
 
-    // 单条操作分发
     c.querySelectorAll('[data-act]').forEach(b => {
         const id = parseInt(b.dataset.id, 10);
         const act = b.dataset.act;
@@ -145,7 +136,6 @@ async function render() {
         });
     });
 
-    // 批量操作：下拉选择 + 执行
     const bulkRun = document.getElementById('shopBulkRun');
     if (bulkRun) bulkRun.addEventListener('click', () => {
         const op = document.getElementById('shopBulkOp').value;
@@ -153,7 +143,6 @@ async function render() {
     });
 }
 
-/** 确认发卡（自动取卡） */
 function orderDeliver(id) {
     confirmBox('确认发卡', '确认已收到该订单的款项？确认后系统将自动取卡发货，此操作不可撤销。', async () => {
         const res = await api('shop_order_op', { op: 'deliver', id });
@@ -161,7 +150,6 @@ function orderDeliver(id) {
     }, true);
 }
 
-/** 手动补发：指定一张官方直发未使用卡密 */
 function orderManual(id) {
     openModal('手动补发卡密', `
         <div class="field">
@@ -180,7 +168,6 @@ function orderManual(id) {
     ]);
 }
 
-/** 关闭订单 */
 function orderClose(id) {
     confirmBox('关闭订单', '确定关闭该订单？关闭后买家支付回调将被拒绝，请确认款项未到账或已退款。', async () => {
         const res = await api('shop_order_op', { op: 'close', id });
@@ -188,7 +175,6 @@ function orderClose(id) {
     }, true);
 }
 
-/* ------------------------- 批量操作 ------------------------- */
 function doBulk(op) {
     const ids = sel ? sel.ids() : [];
     if (!ids.length) return toast('请先选择订单', 'warn');
@@ -203,7 +189,7 @@ function doBulk(op) {
                     toast(res.msg, res.data && res.data.fail && res.data.fail.length ? 'warn' : 'ok');
                     if (sel) sel.clear();
                     render();
-                    // 有失败单时逐条列出原因，便于排查
+
                     if (res.data && res.data.fail && res.data.fail.length) {
                         console.warn('批量发卡失败明细:', res.data.fail);
                     }

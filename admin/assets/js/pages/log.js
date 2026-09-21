@@ -1,7 +1,3 @@
-/* ======================================================================
-   pages/log.js — 操作日志
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { pageState, resetPageState } from '../core/state.js';

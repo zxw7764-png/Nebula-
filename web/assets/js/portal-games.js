@@ -1,15 +1,3 @@
-/* ======================================================================
- * Nebula Menu · 官网/发卡网模板右下角小游戏（portal-games.js）
- * ------------------------------------------------------------------
- * 按 body class 启用对应游戏（与 ui-templates.css 模板一一对应）：
- *   body.ui-farm   → 种田收菜（点击结算金币上榜）
- *   body.ui-mario  → 跳跳跳（跑酷躲管道）
- *   body.ui-ink    → 御剑飞行（躲山峦吃光环）
- *   body.ui-space  → STAR RAIDER（太空射击）
- * 排行榜：成绩提交到 api.php（nb_game_scores 表），开始/结束界面
- * 展示 TOP5，🏆 按钮看 TOP10。开关由入口注入：
- *   window.__NB_GAMES__ = { enabled: 1, api: 'api.php', csrf: '...' }
- * ====================================================================== */
 (function () {
     'use strict';
 
@@ -25,10 +13,9 @@
     if (!CFG.enabled) { return; }
     var API = (CFG.api || 'api.php');
     var CSRF = CFG.csrf || '';
-    // 已登录用户（官网 / 发卡网账号）直接复用用户名上榜，无需填写昵称
+
     var LOGIN_NAME = String(CFG.name || '').trim().substring(0, 16);
 
-    /* ---------------- 游戏元信息 ---------------- */
     var META = {
         farm:  { title: '种田收菜', w: 360, h: 240, hint: '点击空地种 · 成熟点击收 · 点击杂草害虫清 · ⭐ 结算上榜', defName: '匿名农夫', unit: '金币' },
         mario: { title: '跳跳跳',   w: 320, h: 180, hint: '空格 / ↑ / 点击画面 跳跃',                 defName: '匿名水管工', unit: '分' },
@@ -46,7 +33,6 @@
         });
     }
 
-    /* ---------------- 注入面板 DOM ---------------- */
     var m = META[tpl];
     var panel = document.createElement('div');
     panel.id = 'nb-game-panel';
@@ -72,7 +58,6 @@
         '<div class="gp-hint">' + esc(m.hint) + '</div>';
     document.body.appendChild(panel);
 
-    // 收起状态记忆（sessionStorage：刷新后仍收起；重新打开网页恢复展开）
     var COLLAPSE_KEY = 'nb_game_collapsed';
     var btnToggle = panel.querySelector('[data-act="toggle"]');
     try {
@@ -80,7 +65,8 @@
             panel.classList.add('collapsed');
             if (btnToggle) { btnToggle.textContent = '+'; }
         }
-    } catch (e) { /* 隐私模式等：忽略 */ }
+    } catch (e) {
+ }
 
     var canvas   = panel.querySelector('canvas');
     var ctx      = canvas.getContext('2d');
@@ -97,7 +83,6 @@
         if (hudR) hudR.textContent = r;
     }
 
-    /* ---------------- 排行榜 ---------------- */
     function boardApi(cb) {
         fetch(API + '?action=game_top&game=' + tpl, { credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
@@ -119,7 +104,7 @@
     }
 
     function getPlayerName() {
-        // 登录用户固定用账号用户名，忽略输入框与本地记忆
+
         if (LOGIN_NAME) { return LOGIN_NAME; }
         var v = '';
         var inp = overlay.querySelector('input.gp-name');
@@ -141,8 +126,7 @@
           .catch(function () { done(false); });
     }
 
-    /* ---------------- overlay 视图 ---------------- */
-    var view = 'start';   // start | over | board
+    var view = 'start';
     var lastScore = 0;
 
     function refreshOverlay() {
@@ -182,7 +166,6 @@
         overlay.classList.add('hidden');
     }
 
-    /* 游戏结束（或农场结算）→ 更新最高分 + 上榜 + 展示 */
     function onOver(score) {
         score = Math.max(0, Math.floor(score));
         if (score > best) {
@@ -201,8 +184,7 @@
         });
     }
 
-    /* ---------------- 面板按钮 ---------------- */
-    var game = null;   // 当前游戏实例 { start, togglePause }
+    var game = null;
 
     overlay.addEventListener('click', function (e) {
         if (e.target.closest('input.gp-name')) { return; }
@@ -226,7 +208,8 @@
             try {
                 if (folded) { sessionStorage.setItem('nb_game_collapsed', '1'); }
                 else { sessionStorage.removeItem('nb_game_collapsed'); }
-            } catch (e) { /* 隐私模式等：忽略 */ }
+            } catch (e) {
+ }
         } else if (act === 'pause') {
             if (!game) { return; }
             var paused = game.togglePause();
@@ -239,9 +222,6 @@
         }
     });
 
-    /* ================================================================
-       游戏实现（提取自参考模板，改为工厂函数）
-       ================================================================ */
     function fixedLoop(update, draw) {
         var STEP = 1000 / 60;
         var acc = 0, last = 0;
@@ -262,7 +242,6 @@
         return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
     }
 
-    /* ---------------- farm 种田收菜 ---------------- */
     function makeFarm() {
         var W = m.w, H = m.h;
         var COLS = 3, ROWS = 3, PADDING = 16, HEADER_H = 30;
@@ -555,12 +534,11 @@
             settle: function () {
                 if (!running || paused) { return; }
                 running = false;
-                onOver(coins);   // 结算上榜
+                onOver(coins);
             }
         };
     }
 
-    /* ---------------- mario 跳跳跳 ---------------- */
     function makeMario() {
         var W = m.w, H = m.h;
         var GROUND_H = 30, GROUND_Y = H - GROUND_H;
@@ -652,7 +630,7 @@
                 ctx.fillRect(p.x - 2, p.y, p.w + 4, 6);
                 ctx.strokeRect(p.x - 2, p.y, p.w + 4, 6);
             });
-            /* 像素小人 */
+
             ctx.save();
             ctx.translate(player.x, player.y);
             var w = player.w, h = player.h;
@@ -691,7 +669,6 @@
         };
     }
 
-    /* ---------------- ink 御剑飞行 ---------------- */
     function makeInk() {
         var W = m.w, H = m.h;
         var GROUND_H = 40, GROUND_Y = H - GROUND_H;
@@ -868,7 +845,7 @@
                 ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
             });
             ctx.globalAlpha = 1;
-            /* 飞剑 */
+
             ctx.save();
             ctx.translate(player.x, player.y);
             ctx.globalAlpha = 0.15;
@@ -916,7 +893,6 @@
         };
     }
 
-    /* ---------------- space STAR RAIDER ---------------- */
     function makeSpace() {
         var W = m.w, H = m.h;
         var running = false, paused = false;
@@ -1119,7 +1095,6 @@
         };
     }
 
-    /* ---------------- 启动 ---------------- */
     var factories = { farm: makeFarm, mario: makeMario, ink: makeInk, space: makeSpace };
     game = factories[tpl]();
     showOverlay('start');

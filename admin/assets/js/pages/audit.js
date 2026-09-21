@@ -1,7 +1,3 @@
-/* ======================================================================
-   pages/audit.js — 管理端审计日志（谁改了什么、改前改后）
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { pageState, resetPageState } from '../core/state.js';

@@ -1,7 +1,3 @@
-/* ======================================================================
-   pages/batch.js — 卡密批次
-   ====================================================================== */
-
 import { api, apiDownload } from '../core/api.js';
 import { register, go } from '../core/router.js';
 import { pageState } from '../core/state.js';
@@ -83,7 +79,7 @@ async function render() {
 
     bindPager(c, p => { st.page = p; render(); });
     document.getElementById('bGen').addEventListener('click', () => {
-        // 复用卡密页的生成弹窗
+
         go('card_list');
         setTimeout(() => {
             const btn = document.getElementById('kGen');
@@ -102,14 +98,12 @@ async function render() {
         });
     });
 
-    // 批量选择
     sel = createSelection({ root: c, allIds: d.list.map(x => x.id), onChange: ids => {
         const box = document.getElementById('bBulkBox');
         if (box) { box.hidden = ids.length === 0; box.dataset.count = String(ids.length); }
         c.querySelectorAll('.bulk-hide').forEach(b => { b.hidden = ids.length > 0; });
     }});
 
-    // 批量操作：下拉选择 + 执行
     const bulkRun = document.getElementById('bBulkRun');
     if (bulkRun) bulkRun.addEventListener('click', () => {
         const op = document.getElementById('bBulkOp').value;
@@ -117,7 +111,6 @@ async function render() {
     });
 }
 
-/* ------------------------- 批量操作 ------------------------- */
 async function doBulk(op) {
     const ids = sel ? sel.ids() : [];
     if (!ids.length) return toast('请先选择批次', 'warn');
@@ -128,7 +121,8 @@ async function doBulk(op) {
                 const { blob } = await apiDownload('card_export',
                     { batch_id: id, format: 'txt', status: '' }, `batch_${id}.txt`);
                 downloadBlob(blob, `batch_${id}_${Date.now()}.txt`);
-            } catch (e) { /* 单个失败继续 */ }
+            } catch (e) {
+ }
         }
         toast(`已导出 ${ids.length} 个批次`);
         return;
@@ -153,7 +147,6 @@ async function doBulk(op) {
     }
 }
 
-/* ------------------------- 批量删除批次 ------------------------- */
 function deleteBatches(ids) {
     openModal('批量删除批次', `
         <p style="color:var(--danger);margin-bottom:14px">

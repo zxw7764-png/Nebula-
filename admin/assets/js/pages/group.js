@@ -1,7 +1,3 @@
-/* ======================================================================
-   pages/group.js — 用户组管理
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { loading, empty, esc } from '../core/util.js';
@@ -65,7 +61,6 @@ async function render() {
 
     document.getElementById('gNew').addEventListener('click', () => groupEdit(null));
 
-    // 批量选择：默认组（id≤1）不可删除，不参与选择
     sel = createSelection({
         root: c,
         allIds: list.filter(g => g.id > 1).map(g => g.id),

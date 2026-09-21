@@ -1,12 +1,3 @@
-/* ======================================================================
-   pages/shop_goods.js — 发卡商品（商品与交易 子页）
-   ----------------------------------------------------------------------
-   只管发卡侧配置：上架状态 / 发卡售价 / 挂卡规格 / 商品陈列（分类、图标、简介）。
-   商品名称、价格文案等官网展示信息在「商品与交易 → 价格套餐」维护，
-   两边共享同一份套餐数据（nb_plans），按字段分工各改各的。
-   保存走独立 action shop_goods_save（服务端归业务档，仅超管）。
-   ====================================================================== */
-
 import { api, uploadHeaders } from '../core/api.js';
 import { API_ENTRY, extraHeaders } from '../core/state.js';
 import { register } from '../core/router.js';
@@ -15,25 +6,25 @@ import { openModal, closeModal, confirmBox, toast, checkAllBox, rowCheckBox, cre
 
 register('shop_goods', render);
 
-let curCat = '';   // 分类筛选：''=全部 '__none__'=未分类
-let sel = null;    // 行选择器（批量删除）
-let catCfg = [];   // 通用分类完整行（「名称|图标」；分类候选与就地新建的数据源）
-let typeCfg = [];  // 「卡类型」子页配置：[{id,name,on,hint}]（挂卡类型下拉来源）
-let swList = [];   // 软件下拉候选：[{id,name,status}]（显示归属软件下拉来源）
-let swCatsMap = {}; // 各软件专属分类完整行：{ "<软件ID>": ["名称|图标"...] }（shop_cats_sw_<id>）
-let curCatFlt = ''; // 分类列表归属筛选：''=全部，'general'=通用，'N'=软件N 专属
-let curCatKw = ''; // 分类列表名称搜索关键字
-let curGKw = ''; // 发卡商品列表搜索关键字（命中套餐名/发卡商品名/分类）
-let curTab = 'goods'; // 子页签：goods=发卡商品 cats=分类管理 types=卡类型
+let curCat = '';
+let sel = null;
+let catCfg = [];
+let typeCfg = [];
+let swList = [];
+let swCatsMap = {};
+let curCatFlt = '';
+let curCatKw = '';
+let curGKw = '';
+let curTab = 'goods';
 
 const TYPE_TEXT = { 1: '时长卡', 2: '点数卡', 3: '次数卡', 4: '永久卡' };
 const typeName = id => (typeCfg.find(t => t.id === Number(id)) || {}).name || TYPE_TEXT[id] || '-';
-/* 显示归属软件名（列表展示用，未知 id 显示占位） */
+
 const swName = id => {
     const s = swList.find(x => x.id === Number(id));
     return s ? s.name : ('软件#' + id);
 };
-/* 卡面带单位展示：时长卡秒数 → 年/月/周/天/小时/分钟，点数/次数原值，0/永久卡 → 永久 */
+
 const durText = p => {
     const v = parseInt(p.card_duration, 10) || 0;
     if (Number(p.card_type) === 4 || v <= 0) return '永久';
@@ -43,8 +34,7 @@ const durText = p => {
     for (const [f, n] of U) if (v % f === 0) return (v / f) + ' ' + n;
     return v + ' 秒';
 };
-/* 售价展示：与下单金额同口径 —— 有效售价 = 规格售价(>0) 否则回落到默认售价。
-   多规格显示区间（如 ¥10 ~ ¥100），单规格显示该规格售价；全 0 显示免费 */
+
 const priceCell = p => {
     const base = parseFloat(p.shop_price) || 0;
     let cards = (Array.isArray(p.cards) ? p.cards : []).map(c => {
@@ -60,7 +50,7 @@ const priceCell = p => {
     }
     return '&yen;' + (Number.isInteger(min) ? min : min.toFixed(2));
 };
-/* 挂卡规格展示：多规格逐条列出（类型 · 时长 · 设备 · 组），单规格同旧单行格式 */
+
 const specText = p => {
     const cards = Array.isArray(p.cards) ? p.cards : [];
     if (cards.length <= 1) {
@@ -71,7 +61,6 @@ const specText = p => {
     ).join(' ／ ');
 };
 
-/* 页面入口：发卡商品 / 分类 / 卡类型 三个子页签 */
 async function render() {
     const c = document.getElementById('content');
     c.innerHTML = `
@@ -89,7 +78,6 @@ async function render() {
     await renderGoods();
 }
 
-/* 卡类型子页：固定 4 类的显示名/启用配置 + 官网永久会员提示文案 */
 async function renderTypes() {
     const c = document.getElementById('gWrap');
     c.innerHTML = loading();
@@ -167,11 +155,9 @@ async function renderCats() {
     if (cfg.code !== 0) return;
     const st = cfg.data.settings || {};
 
-    // 软件列表：分类归属范围下拉候选（通用 + 各软件专属）
     const swRes = await api('software_list');
     if (swRes.code === 0) swList = swRes.data.options || [];
 
-    // 全部分类平铺：通用（shop_cats）+ 各软件专属（shop_cats_sw_<id>），归属行内标注、弹窗内选择
     const allCats = [];
     ['', ...swList.map(s => String(s.id))].forEach(swId => {
         const raw = String(swId === '' ? (st.shop_cats || '') : (st['shop_cats_sw_' + swId] || ''));
@@ -181,9 +167,8 @@ async function renderCats() {
         });
     });
 
-    // 归属筛选指向已删除软件时回落全部
     if (curCatFlt !== '' && curCatFlt !== 'general' && !swList.some(s => String(s.id) === curCatFlt)) curCatFlt = '';
-    // 归属筛选 + 名称搜索（全选只作用于搜索结果）
+
     const kw = curCatKw.trim().toLowerCase();
     const shown = (curCatFlt === '' ? allCats
         : allCats.filter(cc => String(cc.swId) === String(curCatFlt === 'general' ? '' : curCatFlt)))
@@ -264,14 +249,12 @@ async function renderCats() {
         });
     });
 
-    // 批量选择
     const catSel = createSelection({ root: c, allIds: shown.map((_, i) => 'cat_' + i), onChange: ids => {
         const box = document.getElementById('catBulkBox');
         if (box) { box.hidden = ids.length === 0; box.dataset.count = String(ids.length); }
         c.querySelectorAll('.bulk-hide').forEach(b => { b.hidden = ids.length > 0; });
     }});
 
-    // 批量操作：下拉选择 + 执行
     const catBulkRun = document.getElementById('catBulkRun');
     if (catBulkRun) catBulkRun.addEventListener('click', async () => {
         const op = document.getElementById('catBulkOp').value;
@@ -279,9 +262,9 @@ async function renderCats() {
         if (!ids.length) return toast('请先选择分类', 'warn');
 
         if (op === 'delete') {
-            // 取出选中的分类对象
+
             const toDelete = ids.map(id => shown[parseInt(id.replace('cat_', ''), 10)]).filter(Boolean);
-            // 检查是否有分类正在被商品使用
+
             const res = await api('shop_goods_list');
             const usedNames = (res.code === 0 ? (res.data.list || []) : [])
                 .map(p => p.shop_category).filter(Boolean);
@@ -292,7 +275,7 @@ async function renderCats() {
             }
             confirmBox('批量删除分类', `确定删除选中的 ${toDelete.length} 个分类？删除后前台分类页签将不再显示这些分类。`, async () => {
                 const next = allCats.filter(o => !toDelete.includes(o));
-                // 需要落库所有涉及的归属范围
+
                 const swIds = [...new Set(toDelete.map(c => c.swId))];
                 await catsSave(next, swIds);
                 if (catSel) catSel.clear();
@@ -337,13 +320,12 @@ function catEdit(cats, cat) {
             if (dup) return toast('该范围内已存在同名分类', 'warn');
             const next = cats.map(o => (isEdit && o === cat) ? { name, icon, swId: newSwId } : o);
             if (!isEdit) next.push({ name, icon, swId: newSwId });
-            // 编辑时更换归属 → 新旧两个范围键都要落库；其余只写目标键
+
             const keys = isEdit && String(cat.swId) !== String(newSwId) ? [cat.swId, newSwId] : [newSwId];
             await catsSave(next, keys);
         }},
     ]);
 
-    // 分类图标上传（与商品图片同一接口，内容级校验）
     const upBtn = document.getElementById('cIconUp');
     const fileInput = document.getElementById('cIconFile');
     upBtn.addEventListener('click', () => fileInput.click());
@@ -375,7 +357,6 @@ function catEdit(cats, cat) {
     });
 }
 
-/* 保存分类：按范围分组序列化「名称|图标」行；swIds 为需落库的键（''/空=通用 shop_cats，'N'=shop_cats_sw_N） */
 async function catsSave(cats, swIds) {
     const settings = {};
     (Array.isArray(swIds) ? swIds : [swIds]).forEach(swId => {
@@ -395,19 +376,18 @@ async function renderGoods() {
     if (res.code !== 0) return;
     const list = res.data.list || [];
 
-    // 拉商店外观的分类配置 + 卡类型配置，作为下拉候选
     const cfg = await api('setting_get');
     if (cfg.code === 0) {
         const s = cfg.data.settings || cfg.data || {};
         catCfg = String(s.shop_cats || '')
             .split('\n').map(l => l.trim()).filter(Boolean);
-        // 各软件专属分类完整行（商品弹窗按「显示归属软件」联动分类候选；就地新建时保留其他分类的图标）
+
         swCatsMap = {};
         Object.keys(s).forEach(k => {
             const m = k.match(/^shop_cats_sw_(\d+)$/);
             if (m) swCatsMap[m[1]] = String(s[k] || '').split('\n').map(l => l.trim()).filter(Boolean);
         });
-        // 卡类型：解析「ID|显示名|启用」，未配置的类型默认启用 + 默认名
+
         const saved = {};
         String(s.shop_card_types || '').split('\n').forEach(l => {
             const p = l.split('|').map(x => x.trim());
@@ -421,13 +401,11 @@ async function renderGoods() {
         }));
     }
 
-    // 软件列表：商品弹窗「显示归属软件」下拉候选（拉不到不阻塞页面）
     const swRes = await api('software_list');
     if (swRes.code === 0) {
         swList = swRes.data.options || [];
     }
 
-    // 分类筛选 + 关键字搜索（''=全部，'__none__'=未分类；关键字命中套餐名/发卡商品名/分类）
     const kw = curGKw.trim().toLowerCase();
     const hitKw = p => !kw || [p.name, p.shop_name, p.shop_category]
         .some(v => String(v || '').toLowerCase().includes(kw));
@@ -505,7 +483,6 @@ async function renderGoods() {
         c.querySelectorAll('.bulk-hide').forEach(b => { b.hidden = ids.length > 0; });
     }});
 
-    // 批量操作：下拉选择 + 执行
     const bulkRun = document.getElementById('gBulkRun');
     if (bulkRun) bulkRun.addEventListener('click', () => {
         const op = document.getElementById('gBulkOp').value;
@@ -540,12 +517,11 @@ function goodsEdit(p, allList) {
               card_max_devices: 1, card_group_id: 0, shop_category: '', shop_icon: '', shop_intro: '', shop_detail: '', shop_name: '',
               highlight: 0, badge: '' };
     }
-    // 新增时才显示商品名（编辑改名在「价格套餐」页）
+
     const nameField = isNew
         ? '<div class="field"><label>商品名 *</label><input id="gName" maxlength="60" placeholder="例如：GTA5 增强版月卡"></div>'
         : `<div class="field"><label>发卡商品名</label><input id="gShopName" maxlength="120" value="${esc(p.shop_name || '')}" placeholder="发卡商店展示的商品名，留空则显示官网套餐名「${esc(p.name)}」；与价格套餐完全独立"></div>`;
-    // 分类下拉候选：通用分类 + 当前归属软件的专属分类 + 已用分类（保证当前值在列）。
-    // 「显示归属软件」切换时联动重建（bindCategoryOptions）
+
     const catCands = swId => [...new Set([
         ...catCfg.map(l => l.split('|')[0].trim()),
         ...((swId && swCatsMap[swId]) || []).map(l => l.split('|')[0].trim()),
@@ -568,7 +544,7 @@ function goodsEdit(p, allList) {
             </div>
             <div class="hint">候选 = 通用分类 + 归属软件的专属分类；切换「显示归属软件」会自动刷新分类候选</div>
         </div>`;
-    // 显示归属软件下拉（分软件显示商品的归属设置，需后台开启「按软件过滤商品」）
+
     const swField = `
         <div class="field"><label>显示归属软件</label>
             <select id="gShopSw">
@@ -640,7 +616,7 @@ function goodsEdit(p, allList) {
             const cardSource = parseInt(document.getElementById('gSource').value, 10);
             const cards = collectCards();
             if (!cards.length) return toast('请至少配置一个挂卡类型', 'warn');
-            // 保存前逐条自检，明确指出第几条不合法（避免静默丢规格）
+
             for (let i = 0; i < cards.length; i++) {
                 const c = cards[i];
                 const no = i + 1;
@@ -679,33 +655,31 @@ function goodsEdit(p, allList) {
         }},
     ], 'wide');
 
-    /* ---------- 多规格挂卡类型 ---------- */
     const gCardsBox = document.getElementById('gCardsBox');
     const typeOptionsHTML = (sel) => typeCfg.filter(t => t.on || t.id === sel)
         .map(t => `<option value="${t.id}" ${t.id === sel ? 'selected' : ''}>${esc(t.name)}（${esc(TYPE_TEXT[t.id])}）</option>`).join('');
-    /* 时长单位：秒值 → [单位代号, 显示名]；换算统一按秒入库（与卡密中心规格一致）。
-       月/年按 30 天 / 365 天折算，避免月份长度不一导致歧义 */
+
     const DUR_UNITS = [
         ['60', '分钟'], ['3600', '小时'], ['86400', '天'],
         ['604800', '星期'], ['2592000', '月'], ['31536000', '年'],
     ];
-    /* 秒值 → 最合适的「数值 + 单位」（优先大单位且能整除） */
+
     const secToQtyUnit = (sec) => {
         sec = parseInt(sec, 10) || 0;
         for (let i = DUR_UNITS.length - 1; i >= 0; i--) {
             const f = parseInt(DUR_UNITS[i][0], 10);
             if (sec > 0 && sec % f === 0) return { qty: sec / f, unit: DUR_UNITS[i][0] };
         }
-        return { qty: sec, unit: '60' }; // 兜底：非整分钟按分钟（向下不整除也按分钟展示）
+        return { qty: sec, unit: '60' };
     };
     const durUnitOptions = (sel) => DUR_UNITS
         .map(u => `<option value="${u[0]}" ${u[0] === String(sel) ? 'selected' : ''}>${u[1]}</option>`).join('');
-    /* 非时长卡的“单位”（固定，不可选，仅作后缀提示）：点数卡=点数，次数卡=次 */
+
     const FIX_UNIT = { 2: '点数', 3: '次' };
     const cardRowHTML = (c) => {
         const ct = c.card_type || 1;
         const qu = secToQtyUnit(c.card_duration);
-        // 时长卡：数值+可选单位；点数/次数卡：数值+固定后缀；永久卡：都不显示
+
         const unitCell = ct === 1
             ? `<select class="gc-dur-unit">${durUnitOptions(qu.unit)}</select>`
             : `<span class="gc-dur-fix">${FIX_UNIT[ct] || ''}</span>`;
@@ -725,8 +699,7 @@ function goodsEdit(p, allList) {
             <div class="hint gc-hint"></div>
         </div>`;
     };
-    /* 售价字段随规格数联动：规格是售价主入口，商品级售价只在规格填 0 时兜底。
-       单规格时两者等价（取规格价优先），多规格时商品级退化为兜底价。 */
+
     const syncPriceField = () => {
         const lab = document.getElementById('gPriceLabel');
         const hint = document.getElementById('gPriceHint');
@@ -754,9 +727,9 @@ function goodsEdit(p, allList) {
             const cfg = typeCfg.find(x => x.id === t);
             hint.textContent = cfg && cfg.hint ? cfg.hint : '';
             row.dataset.ct = t;
-            // 永久卡无时长，隐藏数值+单位
+
             durWrap.style.display = t === 4 ? 'none' : '';
-            // 单位控件随类型切换：时长卡=下拉，点数/次数=固定后缀
+
             const oldInp = row.querySelector('.gc-dur');
             const curVal = oldInp ? oldInp.value : 0;
             const oldUnit = row.querySelector('.gc-dur-unit');
@@ -786,7 +759,6 @@ function goodsEdit(p, allList) {
     document.getElementById('gAddCard').addEventListener('click', () =>
         addCardRow({ card_type: 1, card_duration: 0, price: '', card_max_devices: 1, card_group_id: 0 }));
 
-    /* 从多行规格收集 cards：时长卡「数值 × 单位 → 秒」；点数/次数卡取数值；永久卡固定 0 */
     const collectCards = () => {
         const arr = [];
         gCardsBox.querySelectorAll('.card-spec-row').forEach(row => {
@@ -816,7 +788,6 @@ function goodsEdit(p, allList) {
     document.getElementById('gSource').addEventListener('change', syncSource);
     syncSource();
 
-    /* 显示归属软件 → 分类候选联动：切换归属后重建分类下拉（保留当前值，失效则清空） */
     const bindCategoryOptions = () => {
         const swSel = document.getElementById('gShopSw');
         const catSel = document.getElementById('gShopCategory');
@@ -828,7 +799,6 @@ function goodsEdit(p, allList) {
     };
     document.getElementById('gShopSw').addEventListener('change', bindCategoryOptions);
 
-    // 分类下拉旁「＋ 新建分类」：在当前弹窗内展开输入行（不另开弹窗，避免替换掉商品弹窗）
     const catNewBtn = document.getElementById('gCatNew');
     if (catNewBtn) {
         const row = document.getElementById('gCatNewRow');
@@ -845,7 +815,7 @@ function goodsEdit(p, allList) {
             const name = nameInp.value.trim();
             if (!name) return toast('请填写分类名称', 'warn');
             if (name.includes('|')) return toast('分类名称不能包含 |', 'warn');
-            // 就地新建按商品当前归属软件落键：通用商品存 shop_cats，归属软件存 shop_cats_sw_<id>
+
             const curSwId = parseInt(document.getElementById('gShopSw').value, 10) || 0;
             const baseList = curSwId ? (swCatsMap[curSwId] || (swCatsMap[curSwId] = [])) : catCfg;
             const existAll = curSwId ? [...catCfg, ...baseList] : catCfg;
@@ -872,7 +842,6 @@ function goodsEdit(p, allList) {
         nameInp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doCreate(); } });
     }
 
-    // 商品图片上传（multipart，走 X-CSRF 头与 api() 同源凭据）
     const upBtn = document.getElementById('gIconUp');
     const fileInput = document.getElementById('gIconFile');
     if (upBtn && fileInput) {
@@ -906,10 +875,8 @@ function goodsEdit(p, allList) {
     }
 }
 
-/* 导入外部卡密（card_source=1 的商品补货，一行一条） */
 function goodsImport(p) {
-    // 多规格：按挂卡类型分别入池，发货时按订单所选类型取卡
-    // 下拉选项优先使用商品已配置的多规格（p.cards），展示完整规格信息（类型 + 卡面 + 售价）
+
     const cards = Array.isArray(p.cards) ? p.cards : [];
     let typeOpts;
     if (cards.length) {
@@ -925,7 +892,7 @@ function goodsImport(p) {
             .filter(t => t.on)
             .map(t => `<option value="${t.id}">${esc(t.name)}（${esc(TYPE_TEXT[t.id])}）</option>`).join('');
     }
-    // 各规格当前库存（外部卡密池按 card_type 统计未售条数）
+
     const stockHint = cards.length
         ? '当前各规格库存：' + cards.map(c => typeName(c.card_type) + '·' + durText(c) + ' = ' + (p.stockByType && p.stockByType[c.card_type] != null ? p.stockByType[c.card_type] : '?') + ' 条').join('，')
         : '';
@@ -967,7 +934,6 @@ function goodsImport(p) {
     setTimeout(() => { const t = document.getElementById('iText'); if (t) t.focus(); }, 50);
 }
 
-/* 批量上架/下架：status 1=上架 0=下架（未配置售价的商品会被服务端跳过） */
 function goodsBulkToggle(status) {
     const ids = sel ? sel.ids() : [];
     if (!ids.length) return toast('请先选择商品', 'warn');
@@ -979,7 +945,6 @@ function goodsBulkToggle(status) {
         }, status === 0);
 }
 
-/* 批量删除发卡商品：有发卡订单记录的会被服务端跳过（对账链路不能断） */
 function goodsBulkDelete() {
     const ids = sel ? sel.ids() : [];
     if (!ids.length) return toast('请先选择商品', 'warn');

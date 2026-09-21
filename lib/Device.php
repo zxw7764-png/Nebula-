@@ -161,11 +161,10 @@ class Device
      * 达到上限时返回 null，调用方据此返回 4001。
      *
      * 并发正确性来源：
-     *   SELECT ... FOR UPDATE 会把该用户已存在的设备行加排他锁，
-     *   并发请求在这里排队；等前者提交后，后者重新读到的 count 已包含
-     *   前者插入的行，于是正确拒绝。
-     *   （若该用户还没有任何设备行，则锁不到行；此时靠 uk_user_machine
-     *    唯一键 + 事务隔离保证不会重复绑定同一台机器。）
+     *   锁 users 父行（SELECT ... FOR UPDATE），而不是 devices 子表行。
+     *   旧实现锁 devices 行，当用户零设备时锁不到任何行，并发请求同时
+     *   通过 count < max 检查后双双插入，设备上限形同虚设。
+     *   users 行一定存在（注册时创建），锁它永远不会空转。
      */
     private static function insertWithLimit(array $data, int $userId, int $maxDevices): ?int
     {
@@ -175,9 +174,9 @@ class Device
 
         Database::begin();
         try {
-            // 锁住该用户的设备行，把「查计数 + 插入」变成临界区
-            Database::all(
-                'SELECT id FROM ' . Database::t('devices') . ' WHERE user_id = ? FOR UPDATE',
+            // 锁父行 users，把「查计数 + 插入」变成临界区
+            Database::one(
+                'SELECT id FROM ' . Database::t('users') . ' WHERE id = ? FOR UPDATE',
                 [$userId]
             );
             $count = (int) Database::value(
@@ -202,6 +201,7 @@ class Device
     /**
      * 事务内「检查设备数上限 + 重新激活已解绑设备」
      * 与 insertWithLimit 同构，只是把插入换成状态迁移。
+     * 同样锁 users 父行，避免零设备状态下的并发突破。
      */
     private static function reactivateWithLimit(int $deviceId, int $userId, array $data, int $maxDevices): bool
     {
@@ -212,8 +212,8 @@ class Device
 
         Database::begin();
         try {
-            Database::all(
-                'SELECT id FROM ' . Database::t('devices') . ' WHERE user_id = ? FOR UPDATE',
+            Database::one(
+                'SELECT id FROM ' . Database::t('users') . ' WHERE id = ? FOR UPDATE',
                 [$userId]
             );
             $count = (int) Database::value(

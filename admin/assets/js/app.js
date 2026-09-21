@@ -1,28 +1,22 @@
-/* ======================================================================
-   app.js — 应用入口
-   ====================================================================== */
-
 import { S, setToken, setSessionKey, useCookieSession, API_ENTRY } from './core/state.js';
 import { api, login } from './core/api.js';
 import { toast, confirmBox } from './core/ui.js';
 import { go, currentFromHash, renderNav } from './core/router.js';
 import { initTheme, toggleTheme, appliedTheme } from './core/theme.js';
+import { esc } from './core/util.js';
 
-// 注册所有页面模块（动态导入，带版本号防缓存）。
-// 模块是异步加载的：刷新恢复会话可能比模块加载更快，若不等加载完成就 go()，
-// registry 还是空的，内容区会渲染成「页面开发中」（侧边栏却已高亮）—— 见 enterApp。
 const PAGES = [
     "dashboard", "stat", "software", "user", "agent", "agent_code",
     "card", "batch", "device", "device_ban", "session", "notice", "version", "client_notice",
     "group", "message", "feedback", "plan", "shop", "shop_setting", "shop_goods",
     "seller", "screenshot", "log", "files", "audit", "setting", "profile", "portal_web", "templates", "games",
+    "system_update",
 ];
 const pagesReady = Promise.all(
-    PAGES.map(p => import(`./pages/${p}.js?v=${window.NB_V || ''}`).catch(() => { /* 单模块失败不阻塞整个后台 */ }))
+    PAGES.map(p => import(`./pages/${p}.js?v=${window.NB_V || ''}`).catch(() => {
+ }))
 );
 
-/* ------------------------- 登录 / 登出 ------------------------- */
-/** 登录验证码：加载失败自动重试一次 */
 function refreshLoginCaptcha() {
     const img = document.getElementById('lgCaptchaImg');
     if (!img) return;
@@ -35,13 +29,6 @@ function refreshLoginCaptcha() {
     if (inp) inp.value = '';
 }
 
-/**
- * 服务端要求补动态码（code 2006/2007）时确保输入框可见。
- * 登录页只在「本站有账号开启 2FA」时才渲染该字段（见 home.php 的 $totpInUse），
- * 所以正常情况下它已经在页面上；万一没有（例如刚开启 2FA 而页面还是旧的），
- * 整页刷新一次就能拿到新渲染的字段。
- * @returns {boolean} true=字段可用，false=已触发刷新，本次登录流程应中止
- */
 function showTotpField() {
     const wrap = document.getElementById('lgTotpWrap');
     if (!wrap) {
@@ -66,19 +53,19 @@ async function doLogin() {
     if (btn) { btn.disabled = true; btn.textContent = '登录中...'; }
     try {
         const res = await login(u, p, c, t);
-        // 2006 = 账号已开启二次验证，需要补动态码；2007 = 动态码不对
+
         if (res.code === 2006 || res.code === 2007) {
-            // 页面上没有该字段（本站 2FA 状态刚变化）→ 已触发刷新，中止本次流程
+
             if (!showTotpField()) return;
             toast(res.msg || '请输入动态验证码', 'warn');
-            refreshLoginCaptcha(); // 图形验证码已被本次请求消费，必须换新图
+            refreshLoginCaptcha();
             const tin = document.getElementById('lgTotp');
             if (tin) { tin.focus(); }
             return;
         }
         if (res.code !== 0) {
             toast(res.msg || '登录失败', 'err');
-            refreshLoginCaptcha(); // 验证码一次性消费，失败必换新图
+            refreshLoginCaptcha();
             return;
         }
         toast('登录成功');
@@ -93,7 +80,8 @@ async function doLogin() {
 
 function doLogout() {
     confirmBox('退出登录', '确定要退出管理后台吗？', async () => {
-        try { await api('logout', {}, true); } catch (e) { /* 忽略 */ }
+        try { await api('logout', {}, true); } catch (e) {
+ }
         setToken('');
         setSessionKey('');
         location.reload();
@@ -101,7 +89,7 @@ function doLogout() {
 }
 
 async function enterApp() {
-    // 等所有页面模块注册完成再进应用，避免 go() 时 registry 为空
+
     await pagesReady;
 
     document.getElementById('loginPage').style.display = 'none';
@@ -114,17 +102,202 @@ async function enterApp() {
         ((a.nickname || a.username || 'A').charAt(0) || 'A').toUpperCase();
 
     renderNav();
-    // 每次进入后台都默认落到「数据概览」，不沿用上次停留的页面
+
+    try {
+        const res = await api('system_update_check', { force: 1 }, true);
+        if (res.code === 1001) {
+            showSystemCheckError('系统更新组件缺失，后台无法启动');
+            return;
+        }
+        if (res.code === 0 && res.data && res.data.latest && res.data.latest.force_update) {
+            const cur = res.data.current_version || '';
+            const latest = res.data.latest.latest_version || '';
+            if (cur && latest && compareVersion(cur, latest) < 0) {
+                showForceUpdateModal(cur, latest, res.data.latest);
+                return;
+            }
+        }
+    } catch (e) {
+    }
+
     go('dashboard');
 }
 
-/* ------------------------- 启动 ------------------------- */
+function showSystemCheckError(msg) {
+    if (document.getElementById('sysCheckErrorModal')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'sysCheckErrorModal';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center';
+    overlay.innerHTML = `
+    <div style="max-width:420px;width:92%;border:1px solid rgba(239,68,68,.4);border-radius:14px;background:var(--card-bg,#1a1a2e);overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,.6)">
+        <div style="padding:28px 24px 16px;text-align:center">
+            <div style="width:56px;height:56px;margin:0 auto 14px;border-radius:50%;background:rgba(239,68,68,.18);display:flex;align-items:center;justify-content:center">
+                <i class="bi bi-shield-exclamation" style="font-size:28px;color:#f87171"></i>
+            </div>
+            <h3 style="font-size:18px;margin-bottom:8px;color:var(--text,#e2e8f0)">后台启动失败</h3>
+            <p style="font-size:13px;color:var(--text-sub,#94a3b8);line-height:1.7;margin-bottom:0">
+                ${esc(msg)}<br><br>
+                系统更新组件缺失或损坏，后台无法启动。请联系管理员修复。
+            </p>
+        </div>
+        <div style="padding:0 24px 20px">
+            <button class="btn block ghost" id="sysCheckReload" style="display:block;width:100%;text-align:center;padding:12px;border:none;border-radius:8px;font-size:14px;cursor:pointer">重新加载</button>
+        </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    const reloadBtn = overlay.querySelector('#sysCheckReload');
+    if (reloadBtn) reloadBtn.addEventListener('click', () => location.reload());
+}
+
+function compareVersion(a, b) {
+    const pa = (a || '0').replace(/^v/i, '').split('.').map(Number);
+    const pb = (b || '0').replace(/^v/i, '').split('.').map(Number);
+    for (let i = 0; i < 3; i++) {
+        const va = pa[i] || 0, vb = pb[i] || 0;
+        if (va < vb) return -1;
+        if (va > vb) return 1;
+    }
+    return 0;
+}
+
+function showForceUpdateModal(cur, latest, info) {
+    if (document.getElementById('forceUpdateModal')) return;
+
+    const downloadUrl = info.download_url || '';
+    const sha256 = info.sha256 || '';
+    const notes = info.release_notes || [];
+    const overlay = document.createElement('div');
+    overlay.id = 'forceUpdateModal';
+
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center';
+    overlay.innerHTML = `
+    <div style="max-width:460px;width:92%;border:1px solid rgba(239,68,68,.4);border-radius:14px;background:var(--card-bg,#1a1a2e);overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,.6)">
+        <div style="padding:28px 24px 16px;text-align:center">
+            <div style="width:56px;height:56px;margin:0 auto 14px;border-radius:50%;background:rgba(239,68,68,.18);display:flex;align-items:center;justify-content:center">
+                <i class="bi bi-exclamation-triangle-fill" style="font-size:28px;color:#f87171"></i>
+            </div>
+            <h3 style="font-size:18px;margin-bottom:8px;color:var(--text,#e2e8f0)">系统需要强制更新</h3>
+            <p style="font-size:13px;color:var(--text-sub,#94a3b8);line-height:1.7;margin-bottom:0">
+                当前版本 <b style="color:#f87171">v${esc(cur)}</b> 已停止支持，后台功能已被锁定。<br>
+                请更新到 <b style="color:#4ade80">v${esc(latest)}</b> 后刷新页面恢复使用。
+            </p>
+        </div>
+        ${notes.length ? `<div style="margin:0 24px 14px;max-height:160px;overflow-y:auto;background:var(--bg-alt,#0f0f1a);border-radius:8px;padding:12px 14px">
+            <div style="font-size:12px;color:var(--text-sub,#64748b);margin-bottom:6px">v${esc(latest)} 更新内容</div>
+            <ul style="list-style:none;padding:0;margin:0">
+                ${notes.map(n => `<li style="padding:2px 0 2px 14px;position:relative;font-size:13px;color:var(--text-sub,#94a3b8);line-height:1.5">
+                    <span style="position:absolute;left:2px;top:10px;width:4px;height:4px;border-radius:50%;background:var(--text-faint,#475569)"></span>${esc(n)}</li>`).join('')}
+            </ul>
+        </div>` : ''}
+        <div style="padding:0 24px 20px" id="forceActionArea">
+            ${downloadUrl ? `<button class="btn block success" id="forceUpdateBtn" style="display:block;width:100%;text-align:center;padding:12px;margin-bottom:10px;border:none;border-radius:8px;font-size:14px;cursor:pointer">一键更新到 v${esc(latest)}</button>` : '<div style="padding:10px;background:var(--bg-alt,#0f0f1a);border-radius:8px;font-size:13px;color:var(--text-sub,#94a3b8);margin-bottom:10px;text-align:center">请联系管理员获取更新包</div>'}
+            <button class="btn ghost block" id="forceRecheckBtn" style="display:block;width:100%;text-align:center">重新检查版本</button>
+        </div>
+        <div style="padding:10px 24px 16px;border-top:1px solid var(--border,rgba(255,255,255,.08));font-size:12px;color:var(--text-faint,#475569);text-align:center">
+            一键更新会自动下载、校验并安装更新包，完成后自动刷新
+        </div>
+    </div>`;
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('click', e => {
+
+        const tag = e.target.tagName;
+        if (tag !== 'BUTTON' && tag !== 'A' && tag !== 'I') {
+            e.stopPropagation();
+            e.preventDefault();
+        }
+    });
+
+    const blockKey = e => {
+
+        if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) return;
+        e.preventDefault();
+        e.stopPropagation();
+    };
+    document.addEventListener('keydown', blockKey, { capture: true });
+
+    const blockHash = e => { e.preventDefault(); e.stopPropagation(); };
+    window.addEventListener('hashchange', blockHash, { capture: true });
+
+    const recheckBtn = overlay.querySelector('#forceRecheckBtn');
+    if (recheckBtn) {
+        recheckBtn.addEventListener('click', () => location.reload());
+    }
+
+    const updateBtn = overlay.querySelector('#forceUpdateBtn');
+    if (updateBtn) {
+        updateBtn.addEventListener('click', () => {
+            doForceUpdate(info, overlay, updateBtn);
+        });
+    }
+}
+
+async function doForceUpdate(info, overlay, btn) {
+    const actionArea = overlay.querySelector('#forceActionArea');
+    if (!actionArea) return;
+
+    btn.disabled = true;
+    btn.textContent = '正在下载并安装更新...';
+    btn.style.opacity = '0.7';
+
+    try {
+        const res = await api('system_update_do', {
+            download_url: info.download_url,
+            sha256: info.sha256,
+            version: info.latest_version,
+            build: info.latest_build || 0,
+        }, true);
+
+        if (res.code === 0) {
+            const d = res.data || {};
+            actionArea.innerHTML = `
+                <div style="text-align:center;padding:20px 0">
+                    <div style="width:52px;height:52px;margin:0 auto 12px;border-radius:50%;background:rgba(34,197,94,.15);display:flex;align-items:center;justify-content:center">
+                        <i class="bi bi-check-lg" style="font-size:26px;color:#4ade80"></i>
+                    </div>
+                    <h4 style="font-size:16px;margin-bottom:6px;color:var(--text,#e2e8f0)">更新完成</h4>
+                    <p style="font-size:13px;color:var(--text-sub,#94a3b8);line-height:1.6;margin-bottom:16px">
+                        已更新 ${d.updated_files || 0} 个文件<br>
+                        备份目录：${esc(d.backup_path || '-')}
+                    </p>
+                    <button class="btn block success" id="forceReloadBtn" style="display:block;width:100%;text-align:center;padding:12px;border:none;border-radius:8px;font-size:14px;cursor:pointer">刷新后台</button>
+                </div>`;
+            const reloadBtn = actionArea.querySelector('#forceReloadBtn');
+            if (reloadBtn) {
+                reloadBtn.addEventListener('click', () => location.reload());
+            }
+        } else {
+            btn.disabled = false;
+            btn.textContent = `一键更新到 v${info.latest_version}`;
+            btn.style.opacity = '1';
+
+            const errTip = overlay.querySelector('#forceErrTip');
+            if (errTip) errTip.remove();
+            const tip = document.createElement('div');
+            tip.id = 'forceErrTip';
+            tip.style.cssText = 'padding:8px 12px;border-radius:6px;background:rgba(239,68,68,.12);color:#f87171;font-size:12px;margin-bottom:10px;text-align:center';
+            tip.textContent = res.msg || '更新失败';
+            actionArea.insertBefore(tip, btn);
+        }
+    } catch (e) {
+        btn.disabled = false;
+        btn.textContent = `一键更新到 v${info.latest_version}`;
+        btn.style.opacity = '1';
+        const errTip = overlay.querySelector('#forceErrTip');
+        if (errTip) errTip.remove();
+        const tip = document.createElement('div');
+        tip.id = 'forceErrTip';
+        tip.style.cssText = 'padding:8px 12px;border-radius:6px;background:rgba(239,68,68,.12);color:#f87171;font-size:12px;margin-bottom:10px;text-align:center';
+        tip.textContent = '网络错误：' + (e.message || '请求失败');
+        actionArea.insertBefore(tip, btn);
+    }
+}
+
 (async function boot() {
-    // 隐藏启动遮罩
+
     const mask = document.getElementById('bootMask');
     if (mask) mask.classList.add('hide');
 
-    // 登录提交：走 form submit（让浏览器密码管理器识别），同时阻止默认跳转
     const lgForm = document.getElementById('lgForm');
     if (lgForm) {
         lgForm.addEventListener('submit', e => {
@@ -132,7 +305,7 @@ async function enterApp() {
             doLogin();
         });
     } else {
-        // 兼容无 form 的旧结构
+
         ['lgUser', 'lgPass'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
@@ -141,7 +314,6 @@ async function enterApp() {
         if (lgBtn) lgBtn.addEventListener('click', doLogin);
     }
 
-    // 登录页验证码：加载首图 + 点击刷新
     const lgCapImg = document.getElementById('lgCaptchaImg');
     if (lgCapImg) {
         const lp = document.getElementById('loginPage');
@@ -149,12 +321,9 @@ async function enterApp() {
         lgCapImg.addEventListener('click', refreshLoginCaptcha);
     }
 
-    // 退出按钮
     const outBtn = document.getElementById('btnLogout');
     if (outBtn) outBtn.addEventListener('click', doLogout);
 
-    // 主题：应用 + 绑定切换按钮
-    // （CSS 加载前的防闪烁部分由 home.php <head> 的内联脚本完成，这里负责运行时行为）
     initTheme();
     const themeBtn = document.getElementById('btnTheme');
     if (themeBtn) {
@@ -167,20 +336,10 @@ async function enterApp() {
         themeBtn.addEventListener('click', () => { toggleTheme(); paintThemeBtn(); });
     }
 
-    // hash 变化（前进/后退）
     window.addEventListener('hashchange', () => {
         if (S.admin) go(currentFromHash());
     });
 
-    // 尝试恢复会话
-    // ------------------------------------------------------------------
-    // ⚠️ Cookie 模式下 S.token 恒为空字符串（令牌在 HttpOnly Cookie 里，
-    //    JS 读不到也不该读），所以这里【不能】用 S.token 判断是否已登录 ——
-    //    否则每次刷新都会误判成「未登录」，直接弹回登录页。
-    //    正确的判据是「Cookie 模式」或「localStorage 里有 token」。
-    //    真正的会话有效性由服务端 profile 接口裁决：
-    //      有效 → 返回 0 并填 S.admin；失效 → 返回 1003 被 api() 拦截跳登录。
-    // ------------------------------------------------------------------
     const maybeLoggedIn = useCookieSession() || !!S.token;
     if (maybeLoggedIn) {
         try {
@@ -190,14 +349,13 @@ async function enterApp() {
                 enterApp();
                 return;
             }
-        } catch (e) { /* 忽略：会话失效时 api() 已处理跳转 */ }
-        // 会话确实失效：token 与 session_key 一并清除，避免半截凭证残留
-        // （Cookie 模式下还要让服务端清 Cookie，见下方 logout）
+        } catch (e) {
+ }
+
         setToken('');
         setSessionKey('');
     }
 
-    // 无有效会话：显示登录页（否则页面会一直空白）
     const lp = document.getElementById('loginPage');
     if (lp) lp.style.display = 'flex';
     refreshLoginCaptcha();

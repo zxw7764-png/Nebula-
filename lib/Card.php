@@ -71,6 +71,26 @@ class Card
                 return ['ok' => false, 'code' => 3004, 'msg' => '激活码已过期', 'data' => null];
             }
 
+            // ------------------------------------------------------------------
+            // 锁住用户行，防止两张卡并发激活导致 lost update（少到账）。
+            // $user 是调用前查询的快照，vip_expire / points 可能已过期；
+            // 这里在事务内重新锁行并读取最新值，保证叠加基于真实当前值。
+            // ------------------------------------------------------------------
+            $user = Database::one(
+                'SELECT * FROM ' . Database::t('users') . ' WHERE id = ? FOR UPDATE',
+                [(int) $user['id']]
+            );
+            if (!$user) {
+                Database::rollback();
+                return ['ok' => false, 'code' => 9999, 'msg' => '账号不存在', 'data' => null];
+            }
+            // 软件隔离校验需要用锁定后的最新行
+            if ((int) ($user['software_id'] ?? 0) > 0 && $cardSw > 0
+                && (int) $user['software_id'] !== $cardSw) {
+                Database::rollback();
+                return ['ok' => false, 'code' => 3008, 'msg' => '激活码不属于当前软件', 'data' => null];
+            }
+
             $now  = time();
             $type = (int) $card['type'];
             $dur  = (int) $card['duration'];
@@ -285,12 +305,12 @@ class Card
                     $rows   = [];
                     $params = [];
                     foreach ($chunk as $code) {
-                        $rows[] = '(?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
-                        array_push(
-                            $params,
-                            $code, $batchId, $softwareId, $type, $duration, $maxDevices, $groupId,
-                            self::STATUS_UNUSED, $expireAt, $adminId, $agentId, $remark ?: null, $now, $softwareId
-                        );
+                    $rows[] = '(?,?,?,?,?,?,?,?,?,?,?,?,?)';
+                    array_push(
+                        $params,
+                        $code, $batchId, $softwareId, $type, $duration, $maxDevices, $groupId,
+                        self::STATUS_UNUSED, $expireAt, $adminId, $agentId, $remark ?: null, $now
+                    );
                     }
                     $sql = 'INSERT INTO ' . Database::t('cards') . '
                             (code, batch_id, software_id, type, duration, max_devices, group_id, status, expire_at, create_admin, agent_id, remark, created_at)

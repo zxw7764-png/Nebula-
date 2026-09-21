@@ -1,8 +1,3 @@
-/* ======================================================================
-   pages/message.js — 官网留言板管理
-   留言需先审核通过才会在官网展示，这里是唯一的审核入口。
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { loading, empty, esc, tag } from '../core/util.js';
@@ -118,14 +113,12 @@ async function render() {
         });
     });
 
-    // 批量选择
     sel = createSelection({ root: c, allIds: d.list.map(x => x.id), onChange: ids => {
         const box = document.getElementById('mBulkBox');
         if (box) { box.hidden = ids.length === 0; box.dataset.count = String(ids.length); }
         c.querySelectorAll('.bulk-hide').forEach(b => { b.hidden = ids.length > 0; });
     }});
 
-    // 批量操作：下拉选择 + 执行
     const bulkRun = document.getElementById('mBulkRun');
     if (bulkRun) bulkRun.addEventListener('click', () => {
         const op = document.getElementById('mBulkOp').value;
@@ -133,7 +126,6 @@ async function render() {
     });
 }
 
-/* ------------------------- 批量 ------------------------- */
 function doBulk(act) {
     const ids = sel ? sel.ids() : [];
     if (!ids.length) return toast('请先选择留言', 'warn');
@@ -153,7 +145,6 @@ function doBulk(act) {
     }, act === 'delete');
 }
 
-/* ------------------------- 单条 ------------------------- */
 async function opOne(op, id) {
     const res = await api('message_op', { op, id });
     if (res.code === 0) { toast(res.msg || '操作完成'); render(); }

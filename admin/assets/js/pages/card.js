@@ -1,7 +1,3 @@
-/* ======================================================================
-   pages/card.js — 卡密管理（多选批量、编辑、详情）
-   ====================================================================== */
-
 import { api, apiDownload } from '../core/api.js';
 import { register } from '../core/router.js';
 import { pageState, resetPageState } from '../core/state.js';
@@ -14,10 +10,12 @@ import {
 const DEFAULTS = { page: 1, size: 20, keyword: '', status: '', type: 0, batch_id: 0, agent_id: '' };
 
 let sel = null;
-/** 代理商下拉选项（来源筛选用，首次进入时载入一次） */
+
+
 let agentOptions = null;
 
-/** 载入代理商下拉（失败也不影响主流程） */
+
+
 async function loadAgentOptions() {
     if (agentOptions !== null) { return agentOptions; }
     agentOptions = [];
@@ -26,7 +24,8 @@ async function loadAgentOptions() {
         if (r.code === 0 && r.data && Array.isArray(r.data.options)) {
             agentOptions = r.data.options;
         }
-    } catch (e) { /* 忽略：下拉为空 */ }
+    } catch (e) {
+ }
     return agentOptions;
 }
 
@@ -155,11 +154,11 @@ async function render() {
     sel = createSelection({ root: c, allIds: d.list.map(x => x.id), onChange: ids => {
         const box = document.getElementById('kBulkBox');
         if (box) { box.hidden = ids.length === 0; box.dataset.count = String(ids.length); }
-        // 选中行时隐藏工具栏常规按钮（外部卡密/导出/生成卡密），给批量组腾位；取消选择后原位恢复
+
         c.querySelectorAll('.bulk-hide').forEach(b => { b.hidden = ids.length > 0; });
     }});
 
-    // 批量操作：下拉选择 + 执行
+
     const bulkRun = document.getElementById('kBulkRun');
     if (bulkRun) bulkRun.addEventListener('click', () => {
         const op = document.getElementById('kBulkOp').value;
@@ -177,7 +176,8 @@ function doSearch() {
     render();
 }
 
-/* ------------------------- 批量 ------------------------- */
+
+
 async function doBulk(op) {
     const ids = sel ? sel.ids() : [];
     if (!ids.length) return toast('请先选择卡密', 'warn');
@@ -185,7 +185,7 @@ async function doBulk(op) {
     if (op === 'copy') {
         const st = pageState('card_list', DEFAULTS);
         const res = await api('card_list', Object.assign({}, st, { page: 1, size: 1000, ids_only: 1 }), true);
-        // 直接用当前页已加载的数据更可靠：从 DOM 里取
+
         const codes = [...document.querySelectorAll('tbody tr')]
             .filter(tr => {
                 const cb = tr.querySelector('[data-row-check]');
@@ -229,14 +229,15 @@ async function doBulk(op) {
     if (op === 'delete') {
         const st = pageState('card_list', DEFAULTS);
         if (st.agent_id === 'ext') {
-            extCardDelete(ids); // 外部导入卡密 → 外部卡密池删除
+            extCardDelete(ids);
         } else {
             deleteCards(ids);
         }
     }
 }
 
-/* ------------------------- 批量删除卡密 ------------------------- */
+
+
 function deleteCards(ids) {
     openModal('批量删除卡密', `
         <p style="color:var(--danger);margin-bottom:14px">
@@ -267,7 +268,8 @@ function deleteCards(ids) {
     setTimeout(() => { const i = document.getElementById('kcPass'); if (i) i.focus(); }, 50);
 }
 
-/* ------------------------- 删除外部卡密（外部卡密池） ------------------------- */
+
+
 function extCardDelete(ids) {
     openModal('删除外部卡密', `
         <p style="color:var(--danger);margin-bottom:14px">
@@ -296,7 +298,8 @@ function extCardDelete(ids) {
     setTimeout(() => { const i = document.getElementById('ecPass'); if (i) i.focus(); }, 50);
 }
 
-/* ------------------------- 外部卡密池（发卡商品导入的卡密） ------------------------- */
+
+
 async function extCardsView() {
     const res = await api('shop_cards_list', {}, true);
     if (res.code !== 0) return;
@@ -348,9 +351,10 @@ async function extCardsView() {
     load();
 }
 
-/* ------------------------- 生成 ------------------------- */
+
+
 async function cardGenerate() {
-    // 拉取用户组供「激活后进入的用户组」选择
+
     let groupOptions = '';
     const gRes = await api('group_list', {}, true);
     if (gRes.code === 0 && Array.isArray(gRes.data.list)) {
@@ -359,7 +363,7 @@ async function cardGenerate() {
             .join('');
     }
 
-    // 拉取上架发卡商品供「关联发卡商品」选择
+
     let goodsList = [];
     const gkRes = await api('shop_goods_options', {}, true);
     if (gkRes.code === 0 && Array.isArray(gkRes.data.list)) goodsList = gkRes.data.list;
@@ -371,7 +375,8 @@ async function cardGenerate() {
             if (swRes.code === 0) swCache = swRes.data.options || [];
         }
         swOptions = (swCache || []).map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
-    } catch (e) { /* 忽略 */ }
+    } catch (e) {
+ }
 
     const body = `
     <div class="field">
@@ -451,8 +456,7 @@ async function cardGenerate() {
         { text: '生成', cls: 'success', act: doGenerate },
     ]);
 
-    // 软件联动：切换软件时按 shop_software_id 过滤关联商品下拉
-    // shop_software_id=0 表示「全部软件通用」，任何软件下都应显示
+
     const updateGoodsOptions = () => {
         const swId = parseInt(document.getElementById('gSw').value, 10) || 0;
         const gSel = document.getElementById('gGoods');
@@ -460,7 +464,7 @@ async function cardGenerate() {
         const filtered = goodsList.filter(g => !swId || (g.shop_software_id || 0) === 0 || (g.shop_software_id || 0) === swId);
         gSel.innerHTML = '<option value="0">不关联（手动填写规格）</option>'
             + filtered.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('');
-        // 当前选中项不在过滤结果里则重置
+
         if (cur && !filtered.some(g => String(g.id) === cur)) gSel.value = '0';
         gSel.dispatchEvent(new Event('change'));
     };
@@ -492,7 +496,7 @@ async function cardGenerate() {
         const specSummary = document.getElementById('gSpecSummary');
         const specSummaryText = document.getElementById('gSpecSummaryText');
         if (!g) {
-            // 取消关联：恢复手动填写
+
             typeSel.disabled = false; devInp.disabled = false; grpSel.disabled = false;
             specField.style.display = 'none';
             specDetail.style.display = '';
@@ -501,10 +505,10 @@ async function cardGenerate() {
             gHint.textContent = '选择上架商品后自动带出挂卡规格';
             return;
         }
-        // 关联商品后隐藏卡类型/时长/设备/用户组（由规格管理）
+
         specDetail.style.display = 'none';
         specSummary.style.display = '';
-        // 多规格：展示规格选择下拉
+
         const cards = Array.isArray(g.cards) ? g.cards : [];
         if (cards.length > 1) {
             specField.style.display = '';
@@ -517,7 +521,7 @@ async function cardGenerate() {
             gHint.textContent = `「${g.name}」有 ${cards.length} 个规格，选择要生成的规格`;
         } else {
             specField.style.display = 'none';
-            // 单规格：填充字段（仍需供 doGenerate 读取）
+
             fillSpec(g.card_type, g.card_duration, g.card_max_devices, g.card_group_id, typeSel, durInp, devInp, grpSel);
             const dur = durSpecText({ card_type: g.card_type, card_duration: g.card_duration });
             specSummaryText.innerHTML = `<b>${esc(TYPE_TEXT[g.card_type] || '卡')}</b> · ${esc(dur)} · ${g.card_max_devices || 1} 设备`;
@@ -527,7 +531,7 @@ async function cardGenerate() {
         if (!nameInp.value.trim()) nameInp.value = g.name;
     });
 
-    // 规格选择：按选中的规格填充隐藏字段并展示摘要
+
     document.getElementById('gSpec').addEventListener('change', e => {
         const gid = parseInt(document.getElementById('gGoods').value, 10) || 0;
         const g = goodsList.find(x => x.id === gid);
@@ -549,7 +553,8 @@ async function cardGenerate() {
     });
 }
 
-/** 秒 -> {数值, 单位秒}：优先整除大单位，供时长回显时自动选单位 */
+
+
 function splitDur(sec) {
     sec = Math.max(60, sec || 0);
     const U = [[31536000, '年'], [2592000, '月'], [604800, '星期'], [86400, '天'], [3600, '小时'], [60, '分钟']];
@@ -557,7 +562,8 @@ function splitDur(sec) {
     return { v: Math.max(1, Math.round(sec / 60)), sec: 60 };
 }
 
-/** 卡规格 -> 时长文案（时长卡折算天/小时/分钟，点数卡带"点"，次数卡带"次"，永久卡=永久） */
+
+
 function durSpecText(c) {
     const t = Number(c.card_type);
     const v = parseInt(c.card_duration, 10) || 0;
@@ -570,7 +576,8 @@ function durSpecText(c) {
     return sp.v + ' ' + unitName;
 }
 
-/** 按规格填充卡类型/时长/设备/用户组并锁定 */
+
+
 function fillSpec(cardType, cardDuration, maxDevices, groupId, typeSel, durInp, devInp, grpSel) {
     typeSel.value = String(cardType);
     typeSel.dispatchEvent(new Event('change'));
@@ -627,7 +634,8 @@ async function doGenerate() {
         ], 'wide');
 }
 
-/* ------------------------- 导出 ------------------------- */
+
+
 function cardExport() {
     const body = `
     <div class="row2">
@@ -666,7 +674,8 @@ function cardExport() {
     ]);
 }
 
-/* ------------------------- 详情 / 编辑 / 作废 ------------------------- */
+
+
 async function cardDetail(id) {
     openModal('卡密详情', loading(), [], 'wide');
     const res = await api('card_detail', { card_id: id });
@@ -712,7 +721,7 @@ async function cardEdit(id) {
     if (res.code !== 0) return;
     const k = res.data.card;
 
-    // 拉取用户组供选择
+
     let groupOptions = '';
     const gRes = await api('group_list', {}, true);
     if (gRes.code === 0 && Array.isArray(gRes.data.list)) {

@@ -1,10 +1,3 @@
-/* ======================================================================
-   pages/software.js — 软件管理（多软件网络验证）
-   ------------------------------------------------------------------
-   · 每个软件独立的 app_key / AES_KEY / SIGN_SALT 与版本策略
-   · 支持一键重置密钥（被破解后换钥，旧客户端立即失联）
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { loading, empty, esc, tag } from '../core/util.js';
@@ -12,7 +5,6 @@ import { openModal, closeModal, confirmBox, toast, createSelection, checkAllBox,
 
 register('software_list', render);
 
-/* 复制到剪贴板（clipboard API 不可用时走 execCommand 兜底，兼容 http 本地环境） */
 async function copyText(v) {
     try {
         if (navigator.clipboard && window.isSecureContext) {
@@ -39,7 +31,7 @@ async function render() {
     if (res.code !== 0) return;
     const list = res.data.list || [];
     const copyBtn = v => `<button class="btn ghost xs" data-copy="${esc(v)}">复制</button>`;
-    // 密钥格：文本自身截断，复制按钮放截断区外永远可见
+
     const keyCell = v => `<div style="display:flex;align-items:center;gap:4px;min-width:0"><span title="${esc(v)}" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px">${esc(v)}</span>${copyBtn(v)}</div>`;
 
     const rows = list.map(s => `
@@ -96,7 +88,6 @@ async function render() {
 
     document.getElementById('swNew').addEventListener('click', () => swEdit(null));
 
-    // 批量选择（选中后标题栏出现「批量操作下拉 + 执行」，与卡密页一致）
     const sel = createSelection({ root: c, allIds: list.map(s => s.id), onChange: ids => {
         const box = document.getElementById('swBulkBox');
         if (box) { box.hidden = ids.length === 0; box.dataset.count = String(ids.length); }
@@ -121,7 +112,6 @@ async function render() {
         });
     });
 
-    // 密钥复制按钮
     c.querySelectorAll('[data-copy]').forEach(b => {
         b.addEventListener('click', () => copyText(b.dataset.copy));
     });
@@ -268,8 +258,6 @@ function swEdit(s) {
     ]);
 }
 
-/* 官网内容编辑已迁至「内容运营 → 官网内容」（pages/portal_web.js） */
-
 function swReset(s) {
     const body = `
     <p style="font-size:13px;line-height:1.8">
@@ -329,4 +317,3 @@ function swDel(s) {
         }},
     ], true);
 }
-

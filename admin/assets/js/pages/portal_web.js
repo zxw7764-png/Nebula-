@@ -1,12 +1,3 @@
-/* ======================================================================
-   pages/portal_web.js — 官网内容（总站官网 + 分软件独立覆盖）
-   ------------------------------------------------------------------
-   · 页签一「总站官网内容」：官网默认文案 + 主题色
-     （原「系统设置 → 站点」的官网文案整体迁入，存储走 setting_get/save）
-   · 页签二「分软件官网内容」：按软件独立覆盖，留空回落总站
-     （software_web_get / software_web_save，Setting key: web_sw_<id>）
-   ====================================================================== */
-
 import { api, uploadHeaders } from '../core/api.js';
 import { API_ENTRY } from '../core/state.js';
 import { register } from '../core/router.js';
@@ -16,7 +7,6 @@ import { bindImageUpload } from '../core/uploader.js';
 
 register('portal_web', render);
 
-/* 官网首页区块内置默认文案（与 web/inc/portal.php 保持一致，仅用于 placeholder 提示） */
 const DFT_FLOW = "注册账号|使用用户名和密码注册，注册成功自动登录并进入个人中心。\n"
     + "兑换激活码|在个人中心输入购买到的激活码，点击激活，会员时长立即到账。\n"
     + "呼出菜单|运行 Nebula Menu，登录后按 Ins 键即可呼出菜单，开始调节各项功能。";
@@ -28,7 +18,6 @@ const DFT_FAQ = "菜单怎么呼出和隐藏？|默认按 Ins 键呼出或隐藏
 const DFT_NAV = "菜单功能|features\n效果展示|shots\n使用流程|flow\n价格套餐|pricing\n购买商家|sellers\n留言板|board\n常见问题|faq\n我要反馈|feedback";
 const DFT_FOOT = "菜单功能|features\n价格套餐|pricing\n留言板|board\n常见问题|faq";
 
-/* 主题色预设（与发卡网配置同款） */
 const THEME_PRESETS = [
     ['#a78bfa', '藤紫'], ['#ff8fb1', '樱花粉'], ['#5b9dff', '天空蓝'],
     ['#35d0ba', '薄荷青'], ['#f472b6', '莓果粉'], ['#60a5fa', '水蓝'],
@@ -36,12 +25,6 @@ const THEME_PRESETS = [
     ['#93c5fd', '雾白蓝'],
 ];
 
-/* 界面模板已统一收口到「界面模板」（含分软件设置），此处不再重复提供下拉 */
-
-/**
- * 表单布局定义（row2 双列 + 整行 textarea + hint）
- * sec  = 分组标题（自动开启一张 .pw-group 子面板）；rows 有值 = textarea；full = 整行
- */
 const FORM_LAYOUT = [
     { sec: '站点名与副标语' },
     { row: [
@@ -80,10 +63,6 @@ const ALL_KEYS = [
         b.row ? b.row.map(f => f.k) : (b.full ? [b.full.k] : []))),
 ];
 
-/**
- * 官网图片上传：点按钮 → 选本地图 → 传 web_upload → 把返回地址填入输入框
- * （走 multipart/form-data，与系统设置 Logo 上传同款链路）
- */
 function uploadWebImage(btnId, inputId) {
     const btn = document.getElementById(btnId);
     const inp = document.getElementById(inputId);
@@ -121,7 +100,7 @@ function uploadWebImage(btnId, inputId) {
     });
 }
 
-/** 生成表单 HTML（prefix 区分总站/分软件的控件 id；每个分组渲染为一张浅色子面板） */function formHtml(prefix, values, hint) {
+function formHtml(prefix, values, hint) {
     const field = f => {
         const ctl = f.rows
             ? `<textarea id="${prefix}_${f.k}" rows="${f.rows}" placeholder="${esc(f.ph)}">${esc(values[f.k] || '')}</textarea>`
@@ -152,7 +131,7 @@ async function render() {
     try {
         [sRes, swRes] = await Promise.all([api('setting_get'), api('software_list')]);
     } catch (e) {
-        return; // api() 已 toast 具体错误
+        return;
     }
     if (sRes.code !== 0) return;
     const s = sRes.data.settings || {};
@@ -277,7 +256,6 @@ async function render() {
         </div>
     </div>`;
 
-    /* ---- 页签切换 ---- */
     c.querySelectorAll('.pw-tabs button').forEach(btn => {
         btn.addEventListener('click', () => {
             c.querySelectorAll('.pw-tabs button').forEach(x => x.classList.toggle('on', x === btn));
@@ -287,7 +265,6 @@ async function render() {
         });
     });
 
-    /* ---- 总站保存 ---- */
     document.getElementById('pwSave').addEventListener('click', async () => {
         const settings = {};
         ALL_KEYS.forEach(k => {
@@ -302,7 +279,6 @@ async function render() {
         if (res.code === 0) toast('总站官网内容已保存');
     });
 
-    /* ---- 主题色预设点选 ---- */
     const pick = document.getElementById('pwThemePick');
     if (pick) {
         pick.querySelectorAll('button').forEach(b =>
@@ -313,15 +289,12 @@ async function render() {
             }));
     }
 
-    /* ---- 背景图上传（总站 / 分软件共用一条链路） ---- */
     uploadWebImage('pwBgUpload', 'pw_web_bg_url');
     uploadWebImage('pwsBgUpload', 'pws_web_bg_url');
 
-    /* ---- 分站 Logo / Favicon 上传 ---- */
     bindImageUpload('pwsLogoUpload', 'pws_web_logo');
     bindImageUpload('pwsFaviconUpload', 'pws_web_favicon');
 
-    /* ---- 分站主题色预设点选（控件在静态区，切换软件后仍保留手填值） ---- */
     const pickSw = document.getElementById('pwsThemePick');
     if (pickSw) {
         pickSw.querySelectorAll('button').forEach(b =>
@@ -332,7 +305,6 @@ async function render() {
             }));
     }
 
-    /* ---- 分软件：加载 / 切换 / 保存 ---- */
     if (!softwares.length) return;
     const sel = document.getElementById('pwSwSel');
     const formBox = document.getElementById('pwSwForm');
@@ -357,7 +329,7 @@ async function render() {
             const ov = res.data.overrides || {};
             formBox.innerHTML = formHtml('pws', ov, '留空的字段使用总站内容');
             paintState(ov);
-            // Logo / Favicon 与功能开关不在通用表单布局里，单独回填
+
             const logoEl = document.getElementById('pws_web_logo');
             const favEl  = document.getElementById('pws_web_favicon');
             if (logoEl) logoEl.value = ov.web_logo || '';
@@ -387,7 +359,7 @@ async function render() {
             const el = document.getElementById('pws_' + k);
             if (el) payload[k] = el.value.trim();
         });
-        // Logo / Favicon 与功能开关、商店入口一起保存
+
         const logoEl = document.getElementById('pws_web_logo');
         const favEl  = document.getElementById('pws_web_favicon');
         if (logoEl) payload.web_logo    = logoEl.value.trim();

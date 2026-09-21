@@ -27,6 +27,9 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+.catpaw/
+.freebuff/
+.workbuddy/
 
 # 临时文件
 *.log

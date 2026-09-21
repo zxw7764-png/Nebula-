@@ -1,7 +1,3 @@
-/* ======================================================================
-   pages/notice.js — 官网公告（按软件区分：0=全部软件通用）
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { pageState } from '../core/state.js';
@@ -10,7 +6,7 @@ import { openModal, closeModal, confirmBox, toast, createSelection, checkAllBox,
 
 const DEFAULTS = { page: 1, size: 50, sw: '' };
 let sel = null;
-let lastList = [];   // 最近一次渲染的数据列表（供批量操作取完整对象）
+let lastList = [];
 
 register('notice_list', render);
 
@@ -96,14 +92,12 @@ async function render() {
         });
     });
 
-    // 批量选择
     sel = createSelection({ root: c, allIds: d.list.map(x => x.id), onChange: ids => {
         const box = document.getElementById('nBulkBox');
         if (box) { box.hidden = ids.length === 0; box.dataset.count = String(ids.length); }
         c.querySelectorAll('.bulk-hide').forEach(b => { b.hidden = ids.length > 0; });
     }});
 
-    // 批量操作：下拉选择 + 执行
     const bulkRun = document.getElementById('nBulkRun');
     if (bulkRun) bulkRun.addEventListener('click', () => {
         const op = document.getElementById('nBulkOp').value;
@@ -111,7 +105,6 @@ async function render() {
     });
 }
 
-/* ------------------------- 批量操作 ------------------------- */
 async function doBulk(op) {
     const ids = sel ? sel.ids() : [];
     if (!ids.length) return toast('请先选择公告', 'warn');
@@ -227,7 +220,7 @@ function noticeEdit(n, softwares) {
     openModal(n.id ? '编辑公告' : '发布公告', body, [
         { text: '取消', cls: 'ghost', act: closeModal },
         { text: '保存', cls: 'success', act: async () => {
-            // 时间：数字 + 单位（相对当前的偏移）。留空 = 新增时用默认（立即/永久）、编辑时保持原值
+
             const now = Math.floor(Date.now() / 1000);
             const startV = document.getElementById('nStart').value.trim();
             const endV   = document.getElementById('nEnd').value.trim();

@@ -1,17 +1,3 @@
-/* ======================================================================
-   pages/templates.js — 界面模板管理（独立菜单：界面模板）
-   ------------------------------------------------------------------
-   · 模板清单由 template_list 接口返回（UiTemplate 接口扫描模板文件夹
-     自动识别：单文件 <id>.css / 文件夹 <id>/<id>.css，下划线开头为共享样式）
-   · 官网 / 发卡网两端各自选择：默认深空（跟随主题色）或某个模板
-   · 保存走 template_save（side + template），写 web_ui_template /
-     shop_ui_template，前台即时生效
-   · 分软件模板：官网走 software_web_get/save（覆盖字段 web_ui_template），
-     发卡走 shop_sw_get/save（覆盖字段 shop_ui_template）
-   · 模板开发目录 web/Template/<id>/（web.css/shop.css/game.html…）
-     由 UiTemplate::syncDev 在打开本页 / 保存模板时自动同步到各端
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { loading, esc } from '../core/util.js';
@@ -19,13 +5,12 @@ import { toast, confirmBox } from '../core/ui.js';
 
 register('templates', render);
 
-let data = null;                 // template_list 返回 { templates: {web, shop}, current: {web, shop} }
-let softwares = [];              // software_list 返回的 options: [{id, name, status}]
+let data = null;
+let softwares = [];
 const pick = { web: '', shop: '', swWeb: '', swShop: '' };
-const swOverrides = { web: {}, shop: {} };  // 分软件当前覆盖（保存时整体回传，防止清掉其它覆盖字段）
-const swPainters = {};           // 分软件区块重绘函数（key: 'web'|'shop'）→ { cards, state }
+const swOverrides = { web: {}, shop: {} };
+const swPainters = {};
 
-/* 分软件区块定义：官网 / 发卡网 */
 const SW_SIDES = [
     {
         kind: 'web',  title: '分软件官网模板',  tplSide: 'web',
@@ -48,7 +33,7 @@ async function render() {
     let tRes, sRes;
     try {
         [tRes, sRes] = await Promise.all([api('template_list'), api('software_list')]);
-    } catch (e) { return; }      // api() 已 toast 具体错误
+    } catch (e) { return; }
     if (tRes.code !== 0) return;
     data = tRes.data;
     softwares = sRes.code === 0 ? (sRes.data.options || []) : [];
@@ -84,22 +69,21 @@ async function render() {
     document.getElementById('tplReload').addEventListener('click', render);
     bindTplSec();
 
-    // 选卡（各区块互不影响）
     c.querySelectorAll('[data-tpl-pick]').forEach(el => {
         el.addEventListener('click', () => {
             const side = el.dataset.side;
             pick[side] = el.dataset.tplPick;
             const p = swPainters[side.slice(2)];
             if ((side === 'swweb' || side === 'swshop') && p) {
-                p.cards();          // 分软件区块：重绘选中态 + 「当前」标签
-                p.state(true);      // 提示「待保存：xxx」
+                p.cards();
+                p.state(true);
             } else {
                 c.querySelectorAll(`[data-side="${side}"][data-tpl-pick]`).forEach(x =>
                     x.classList.toggle('on', x === el));
             }
         });
     });
-    // 保存（官网 / 发卡网全局模板）
+
     c.querySelectorAll('[data-tpl-save]').forEach(btn => {
         btn.addEventListener('click', async () => {
             const side = btn.dataset.tplSave;
@@ -131,8 +115,6 @@ function section(side, title, hint) {
         <button class="btn" data-tpl-save="${side}">保存${esc(title)}</button>
     </div>`;
 }
-
-/* ===================== 分软件模板（官网 / 发卡网通用） ===================== */
 
 function tplSub(t) {
     return t.sub + (t.dir ? ' · 文件夹' : '') + (t.has_game ? ' · 自带小游戏' : '') + (t.has_interact ? ' · 交互音效' : '');
@@ -178,10 +160,9 @@ function swSection(sw) {
 
 function bindSwSection(sw) {
     const sel = document.getElementById('tplSwSel_' + sw.kind);
-    if (!sel) return;                       // 无软件或区块未渲染
+    if (!sel) return;
     const stateInp = document.getElementById('tplSwState_' + sw.kind);
 
-    /** 重绘本区块卡片的选中态与「当前」标签 */
     const paintCards = () => {
         const cur = pick['sw' + sw.kind] || '';
         document.querySelectorAll(`[data-side="sw${sw.kind}"][data-tpl-pick]`).forEach(x => {
@@ -197,7 +178,6 @@ function bindSwSection(sw) {
         });
     };
 
-    // pending=true：用户刚点了卡片还没保存 → 提示「待保存」，保存后回落已保存态
     const paintState = (pending) => {
         const cur = pick['sw' + sw.kind] || '';
         if (pending) {
@@ -241,7 +221,7 @@ function bindSwSection(sw) {
         b.disabled = true;
         (async () => {
             try {
-                // 保存接口是整体覆盖：必须带上已有覆盖字段，否则会清掉该软件其它设置
+
                 const payload = Object.assign({}, swOverrides[sw.kind], {
                     id: parseInt(sel.value, 10),
                     [sw.field]: pick['sw' + sw.kind],
@@ -266,10 +246,8 @@ function templateName(tplSide, id) {
     return t ? t.name : id;
 }
 
-/* ===================== 布局与自定义区块（官网模板） ===================== */
-
-let secTpl = '';                 // 当前编辑的模板 id
-let secSide = 'web';             // 当前编辑端：web 官网 / shop 发卡网
+let secTpl = '';
+let secSide = 'web';
 
 function secTplList() {
     return ((data.templates && data.templates[secSide]) || []).filter(t => (t.src || '') === 'dev');
@@ -282,7 +260,7 @@ function secTplOptions() {
 }
 
 function tplSecSection() {
-    // 任一端有文件夹型模板就出编辑器（选项按端切换填充）
+
     const devOf = side => ((data.templates && data.templates[side]) || []).filter(t => (t.src || '') === 'dev');
     if (!devOf('web').length && !devOf('shop').length) return '';
     return `
@@ -319,7 +297,7 @@ function bindTplSec() {
     const sel = document.getElementById('tplSecTpl');
     const fill = () => {
         sel.innerHTML = secTplOptions();
-        if (secTplList().some(t => t.id === (pick[secSide] || ''))) { sel.value = pick[secSide]; }   // 默认选中当前生效模板
+        if (secTplList().some(t => t.id === (pick[secSide] || ''))) { sel.value = pick[secSide]; }
         document.getElementById('tplSecBox').innerHTML = '';
     };
     sideSel.value = secSide;
@@ -341,7 +319,7 @@ async function loadTplSections() {
     let res;
     try {
         res = await api('tpl_sections_get', { template: secTpl, side: secSide });
-    } catch (e) { box.innerHTML = ''; return; }          // api() 已 toast 具体错误
+    } catch (e) { box.innerHTML = ''; return; }
     if (res.code !== 0) { box.innerHTML = ''; return; }
     const d = res.data;
     const bi = d.builtins || [];
@@ -387,10 +365,8 @@ async function loadTplSections() {
         </div>
     </div>`;
 
-    // 关闭编辑：收起编辑区（不影响已保存的内容，重新点「加载」可再次编辑）
     document.getElementById('tplSecClose').addEventListener('click', () => { box.innerHTML = ''; });
 
-    // 恢复默认布局：清除该模板 css 的 Layout 声明（区块顺序回到内置默认，隐藏的区块全部恢复显示）
     document.getElementById('tplSecLayoutReset').addEventListener('click', async () => {
         const btn = document.getElementById('tplSecLayoutReset');
         btn.disabled = true;
@@ -400,7 +376,6 @@ async function loadTplSections() {
         } finally { btn.disabled = false; }
     });
 
-    // 保存布局顺序（分隔符兼容全角逗号 / 顿号 / 分号 / 空白，中文输入法直接输入也能解析）
     document.getElementById('tplSecLayoutSave').addEventListener('click', async () => {
         const btn = document.getElementById('tplSecLayoutSave');
         btn.disabled = true;
@@ -410,14 +385,13 @@ async function loadTplSections() {
             const r = await api('tpl_sections_save', { template: secTpl, side: secSide, mode: 'layout', layout: ids });
             if (r.code === 0) {
                 toast(r.msg || '已保存');
-                // 输入框同步规范化成 ASCII 逗号，避免下次再带全角符号
+
                 document.getElementById('tplSecLayout').value = ((r.data && r.data.layout) || ids).join(', ');
                 loadTplSections();
             }
         } finally { btn.disabled = false; }
     });
 
-    // 删除自定义区块（自定义确认弹窗；删文件 + 自动从布局声明移除）
     box.querySelectorAll('[data-sec-del]').forEach(b => {
         b.addEventListener('click', () => {
             const id = b.dataset.secDel;
@@ -431,7 +405,6 @@ async function loadTplSections() {
         });
     });
 
-    // 保存单个自定义区块
     box.querySelectorAll('[data-sec-save]').forEach(b => {
         b.addEventListener('click', async () => {
             const id = b.dataset.secSave;
@@ -444,7 +417,6 @@ async function loadTplSections() {
         });
     });
 
-    // 新增自定义区块
     document.getElementById('tplSecNewSave').addEventListener('click', async () => {
         const btn = document.getElementById('tplSecNewSave');
         const idEl = document.getElementById('tplSecNewId');

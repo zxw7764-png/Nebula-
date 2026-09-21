@@ -1,0 +1,300 @@
+<?php
+/**
+ * admin action: system_update_do
+ * ------------------------------------------------------------------
+ * 一键自动更新：下载更新包 → SHA-256 校验 → 备份 → 解压覆盖 → 更新版本号
+ *
+ * 请求方式：POST
+ * 参数：
+ *   download_url  下载地址
+ *   sha256       SHA-256 校验值
+ *   version      目标版本号
+ *   build        目标 Build 编号
+ */
+
+// ------------------------------------------------------------------
+// 参数校验
+// ------------------------------------------------------------------
+$downloadUrl = trim((string)($input['download_url'] ?? ''));
+$sha256      = trim((string)($input['sha256'] ?? ''));
+$targetVer   = trim((string)($input['version'] ?? ''));
+$targetBuild = (int)($input['build'] ?? 0);
+
+if ($downloadUrl === '' || !preg_match('#^https?://#i', $downloadUrl)) {
+    Response::error(1001, '下载地址不合法');
+}
+if ($sha256 === '' || strlen($sha256) !== 64) {
+    Response::error(1001, 'SHA-256 校验值不合法');
+}
+if ($targetVer === '' || !preg_match('/^\d+\.\d+\.\d+/', $targetVer)) {
+    Response::error(1001, '版本号不合法');
+}
+
+// ------------------------------------------------------------------
+// 更新锁（防并发）
+// ------------------------------------------------------------------
+$lockFile = NB_ROOT . '/logs/update.lock';
+if (is_file($lockFile)) {
+    $lockAge = time() - (int)@filemtime($lockFile);
+    if ($lockAge < 1800) {
+        Response::error(1001, '系统正在更新中，请 ' . ceil((1800 - $lockAge) / 60) . ' 分钟后再试');
+    }
+    @unlink($lockFile);
+}
+$lockDir = dirname($lockFile);
+if (!is_dir($lockDir)) @mkdir($lockDir, 0750, true);
+$fp = @fopen($lockFile, 'x');
+if ($fp === false) {
+    Response::error(1001, '获取更新锁失败，请稍后重试');
+}
+fwrite($fp, json_encode(['pid' => getmypid(), 'time' => time(), 'ip' => Util::ip()]));
+fclose($fp);
+
+// ------------------------------------------------------------------
+// 存储目录
+// ------------------------------------------------------------------
+$pkgDir   = NB_ROOT . '/logs/update_packages';
+$bakDir   = NB_ROOT . '/logs/update_backups/' . date('Ymd_His');
+if (!is_dir($pkgDir)) @mkdir($pkgDir, 0750, true);
+if (!is_dir($bakDir)) @mkdir($bakDir, 0750, true);
+
+$pkgPath = $pkgDir . '/update_' . $targetVer . '.zip';
+
+// ------------------------------------------------------------------
+// 保护目录（不被覆盖）
+// ------------------------------------------------------------------
+$protectedDirs = ['config', 'logs', 'data', 'uploads', '.catpaw', '.git', '.freebuff', '.workbuddy'];
+
+try {
+
+    // ----------------------------------------------------------------
+    // 1. 下载更新包
+    // ----------------------------------------------------------------
+    $downloadOk = false;
+    $downloadErr = '';
+    if (function_exists('curl_init')) {
+        $fp2 = @fopen($pkgPath, 'wb');
+        if ($fp2 === false) {
+            throw new RuntimeException('无法创建下载文件，请检查 logs 目录权限');
+        }
+        $ch = curl_init($downloadUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_FILE => $fp2,
+            CURLOPT_TIMEOUT => 300,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => 0,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 3,
+            CURLOPT_USERAGENT => 'Nebula-Updater/' . NB_VERSION,
+        ]);
+        $ok = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err = curl_error($ch);
+        curl_close($ch);
+        fclose($fp2);
+        if (!$ok || $httpCode >= 400) {
+            @unlink($pkgPath);
+            $downloadErr = '下载失败：' . ($err ?: 'HTTP ' . $httpCode);
+        } else {
+            $downloadOk = true;
+        }
+    } else {
+        // 回退到 file_get_contents
+        $ctx = stream_context_create(['http' => ['timeout' => 300], 'ssl' => ['verify_peer' => false, 'verify_peer_name' => false]]);
+        $data = @file_get_contents($downloadUrl, false, $ctx);
+        if ($data === false) {
+            $downloadErr = '下载失败：无法连接更新服务器';
+        } else {
+            @file_put_contents($pkgPath, $data);
+            $downloadOk = true;
+        }
+    }
+    if (!$downloadOk) {
+        throw new RuntimeException($downloadErr);
+    }
+
+    // ----------------------------------------------------------------
+    // 2. SHA-256 校验
+    // ----------------------------------------------------------------
+    $actualHash = hash_file('sha256', $pkgPath);
+    if ($actualHash === false) {
+        throw new RuntimeException('无法计算下载文件 SHA-256');
+    }
+    if (!hash_equals(strtolower($sha256), strtolower($actualHash))) {
+        @unlink($pkgPath);
+        throw new RuntimeException('SHA-256 校验失败，文件可能已损坏或被篡改');
+    }
+
+    // ----------------------------------------------------------------
+    // 3. 打开 ZIP 并验证 manifest
+    // ----------------------------------------------------------------
+    if (!extension_loaded('zip')) {
+        throw new RuntimeException('服务器未安装 PHP zip 扩展，无法解压更新包');
+    }
+    $zip = new ZipArchive();
+    if ($zip->open($pkgPath) !== true) {
+        throw new RuntimeException('无法打开更新包，文件可能已损坏');
+    }
+
+    // 读取 manifest.json
+    $manifestIdx = $zip->locateName('manifest.json');
+    if ($manifestIdx === false) {
+        $zip->close();
+        throw new RuntimeException('更新包中未找到 manifest.json');
+    }
+    $manifestJson = $zip->getFromIndex($manifestIdx);
+    $manifest = json_decode($manifestJson, true);
+    if (!is_array($manifest)) {
+        $zip->close();
+        throw new RuntimeException('manifest.json 格式错误');
+    }
+
+    // 校验产品标识
+    $manifestProduct = $manifest['product'] ?? '';
+    if ($manifestProduct !== 'nebula-verification') {
+        $zip->close();
+        throw new RuntimeException('产品标识不匹配（' . $manifestProduct . '），此更新包不适用于当前系统');
+    }
+
+    // ----------------------------------------------------------------
+    // 4. 备份当前文件
+    // ----------------------------------------------------------------
+    $filesBackedUp = 0;
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        $entry = $zip->getNameIndex($i);
+        // 兼容 PHP 7.3：用 substr 判断是否为目录条目（以 / 结尾）
+        if (substr($entry, -1) === '/') continue;
+        // 跳过 manifest.json 本身
+        if ($entry === 'manifest.json') continue;
+        // 跳过保护目录
+        $skip = false;
+        $entryNorm = str_replace('\\', '/', $entry);
+        foreach ($protectedDirs as $pdir) {
+            if ($entryNorm === $pdir || substr($entryNorm, 0, strlen($pdir) + 1) === $pdir . '/') { $skip = true; break; }
+        }
+        if ($skip) continue;
+        // Zip Slip 防护
+        if (substr($entryNorm, 0, 1) === '/' || strpos($entryNorm, '..') !== false) continue;
+        if (preg_match('#^[a-zA-Z]:#', $entryNorm)) continue;
+
+        $srcPath = NB_ROOT . '/' . $entryNorm;
+        if (!is_file($srcPath)) continue;
+        $bakPath = $bakDir . '/' . $entryNorm;
+        $bakDirName = dirname($bakPath);
+        if (!is_dir($bakDirName)) @mkdir($bakDirName, 0750, true);
+        if (@copy($srcPath, $bakPath)) $filesBackedUp++;
+    }
+
+    // 备份 bootstrap.php（NB_VERSION 定义）
+    $bootstrapFile = NB_ROOT . '/lib/bootstrap.php';
+    if (is_file($bootstrapFile)) {
+        @copy($bootstrapFile, $bakDir . '/bootstrap.php.bak');
+    }
+    // 写备份信息
+    @file_put_contents($bakDir . '/backup_info.json', json_encode([
+        'from_version' => NB_VERSION,
+        'to_version'   => $targetVer,
+        'to_build'     => $targetBuild,
+        'created_at'   => date('Y-m-d H:i:s'),
+        'files_count'  => $filesBackedUp,
+    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+
+    // ----------------------------------------------------------------
+    // 5. 解压覆盖文件
+    // ----------------------------------------------------------------
+    $updated = 0;
+    $errors = [];
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        $entry = $zip->getNameIndex($i);
+        // 兼容 PHP 7.3：用 substr 判断是否为目录条目（以 / 结尾）
+        if (substr($entry, -1) === '/') continue;
+        if ($entry === 'manifest.json') continue;
+
+        $entryNorm = str_replace('\\', '/', $entry);
+        $skip = false;
+        foreach ($protectedDirs as $pdir) {
+            if ($entryNorm === $pdir || substr($entryNorm, 0, strlen($pdir) + 1) === $pdir . '/') { $skip = true; break; }
+        }
+        if ($skip) continue;
+        // Zip Slip 防护
+        if (substr($entryNorm, 0, 1) === '/' || strpos($entryNorm, '..') !== false) continue;
+        if (preg_match('#^[a-zA-Z]:#', $entryNorm)) continue;
+
+        $targetPath = NB_ROOT . '/' . $entryNorm;
+        $targetDirName = dirname($targetPath);
+        if (!is_dir($targetDirName)) @mkdir($targetDirName, 0750, true);
+        $content = $zip->getFromIndex($i);
+        if ($content === false) { $errors[] = "读取失败：{$entry}"; continue; }
+        if (@file_put_contents($targetPath, $content) === false) { $errors[] = "写入失败：{$entry}"; continue; }
+        $updated++;
+    }
+    $zip->close();
+
+    // ----------------------------------------------------------------
+    // 6. 更新版本号（lib/bootstrap.php 中的 NB_VERSION）
+    // ----------------------------------------------------------------
+    if (is_file($bootstrapFile)) {
+        $content = file_get_contents($bootstrapFile);
+        if ($content !== false) {
+            // 替换 NB_VERSION 定义
+            $newContent = preg_replace(
+                "/define\('NB_VERSION',\s*'[^']*'\)/",
+                "define('NB_VERSION', '" . $targetVer . "')",
+                $content
+            );
+            if ($newContent !== null && $newContent !== $content) {
+                @file_put_contents($bootstrapFile, $newContent);
+            }
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // 7. 清理缓存
+    // ----------------------------------------------------------------
+    Cache::del('system_update_check');
+    // 清除模板缓存等
+    $cacheDir = NB_ROOT . '/logs/cache';
+    if (is_dir($cacheDir)) {
+        $iter = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($cacheDir, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
+        );
+        foreach ($iter as $f) {
+            if ($f->isFile()) @unlink($f->getPathname());
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // 8. 清理下载包
+    // ----------------------------------------------------------------
+    @unlink($pkgPath);
+
+    // 释放锁
+    @unlink($lockFile);
+
+    // 记录日志
+    Logger::log('admin_system_update', $admin['id'] ?? 0, "系统更新 {$targetVer}", [
+        'from' => NB_VERSION,
+        'to' => $targetVer,
+        'updated_files' => $updated,
+        'backed_up_files' => $filesBackedUp,
+        'backup_path' => $bakDir,
+    ]);
+
+    Response::ok([
+        'updated_files' => $updated,
+        'backup_path' => basename($bakDir),
+        'backup_files' => $filesBackedUp,
+        'errors' => $errors,
+        'new_version' => $targetVer,
+    ], '系统更新完成');
+
+} catch (Throwable $e) {
+    // 释放锁
+    @unlink($lockFile);
+    // 清理下载的半成品
+    if (isset($pkgPath) && is_file($pkgPath)) @unlink($pkgPath);
+
+    Logger::log('admin_system_update', $admin['id'] ?? 0, '系统更新失败：' . $e->getMessage());
+    Response::error(1001, '更新失败：' . $e->getMessage());
+}

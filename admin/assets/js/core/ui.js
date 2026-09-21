@@ -1,10 +1,5 @@
-/* ======================================================================
-   core/ui.js — UI 组件：提示 / 模态框 / 分页 / 批量选择条
-   ====================================================================== */
-
 import { esc } from './util.js';
 
-/* ------------------------- 轻提示 ------------------------- */
 export function toast(msg, type = 'ok') {
     const box = document.getElementById('toasts');
     if (!box) return;
@@ -25,7 +20,6 @@ export function toast(msg, type = 'ok') {
     }, 2600);
 }
 
-/* ------------------------- 模态框 ------------------------- */
 export function openModal(title, bodyHtml, buttons = [], size = '') {
     const root = document.getElementById('modalRoot');
     const id = 'm' + Date.now();
@@ -43,7 +37,7 @@ export function openModal(title, bodyHtml, buttons = [], size = '') {
         </div>
     </div>`;
     const mask = document.getElementById(id);
-    // 遮罩点击关闭：按下与松开都在遮罩上才关，防止输入框内选择文字误关
+
     let downOnMask = false;
     mask.addEventListener('mousedown', e => { downOnMask = e.target === mask; });
     mask.addEventListener('click', e => { if (e.target === mask && downOnMask) { downOnMask = false; closeModal(); } });
@@ -60,7 +54,6 @@ export function closeModal() {
     if (root) root.innerHTML = '';
 }
 
-/** 确认框 */
 export function confirmBox(title, msg, onOk, danger = false) {
     openModal(title, `<p style="color:var(--text-sub)">${esc(msg)}</p>`,
         [{ text: '取消', cls: 'ghost', act: closeModal },
@@ -68,7 +61,6 @@ export function confirmBox(title, msg, onOk, danger = false) {
         'sm');
 }
 
-/** 需要输入管理密码的二次确认（用于敏感操作） */
 export function confirmPassword(title, msg, onOk) {
     openModal(title, `
         <p style="color:var(--text-sub);margin-bottom:14px">${esc(msg)}</p>
@@ -86,7 +78,6 @@ export function confirmPassword(title, msg, onOk) {
     setTimeout(() => { const i = document.getElementById('cpPass'); if (i) i.focus(); }, 50);
 }
 
-/* ------------------------- 分页 ------------------------- */
 export function pager(total, page, size) {
     const pages = Math.max(1, Math.ceil(total / size));
     let btns = '';
@@ -110,16 +101,6 @@ export function bindPager(container, onGo) {
     });
 }
 
-/* ------------------------- 批量选择 ------------------------- */
-/**
- * 创建批量选择管理器。
- * 用法：
- *   const sel = createSelection({
- *       root: 容器元素,
- *       allIds: [1,2,3],
- *       onChange: ids => {...}
- *   });
- */
 export function createSelection({ root, allIds = [], onChange = null }) {
     const set = new Set();
     const notify = () => {
@@ -147,7 +128,6 @@ export function createSelection({ root, allIds = [], onChange = null }) {
         }
     }
 
-    // 行勾选
     root.querySelectorAll('[data-row-check]').forEach(cb => {
         cb.addEventListener('change', () => {
             const id = String(cb.dataset.rowCheck);
@@ -156,7 +136,6 @@ export function createSelection({ root, allIds = [], onChange = null }) {
         });
     });
 
-    // 全选
     const all = root.querySelector('[data-check-all]');
     if (all) {
         all.addEventListener('change', () => {
@@ -166,7 +145,6 @@ export function createSelection({ root, allIds = [], onChange = null }) {
         });
     }
 
-    // 取消选择按钮
     root.querySelectorAll('[data-check-clear]').forEach(b => {
         b.addEventListener('click', () => { set.clear(); notify(); });
     });
@@ -174,9 +152,7 @@ export function createSelection({ root, allIds = [], onChange = null }) {
     syncCheckboxes();
 
     return {
-        // id 可能是数字（列表页传 x.id），也可能是带前缀的字符串（如分类页传 cat_0）。
-        // 早期实现用 parseInt 过滤，会把非数字 id 全部丢弃 ——
-        // 表现为「明明勾选了，却提示请先选择」。
+
         ids: () => [...set]
             .filter(x => x !== '' && x !== null && x !== undefined)
             .map(x => (/^-?\d+$/.test(String(x)) ? parseInt(x, 10) : String(x))),
@@ -187,12 +163,10 @@ export function createSelection({ root, allIds = [], onChange = null }) {
     };
 }
 
-/** 生成表头里的全选框 */
 export function checkAllBox() {
     return '<th class="col-check"><input type="checkbox" data-check-all></th>';
 }
 
-/** 生成行内的勾选框 */
 export function rowCheckBox(id) {
     return `<td class="col-check"><input type="checkbox" data-row-check="${id}"></td>`;
 }

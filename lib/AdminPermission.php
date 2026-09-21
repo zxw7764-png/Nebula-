@@ -196,6 +196,11 @@ final class AdminPermission
         'files_scan'            => self::SETTINGS_BUSINESS,
         'file_view'             => self::SETTINGS_BUSINESS,
         'file_delete'           => self::SETTINGS_BUSINESS,
+
+        // ---- 系统更新（对接 update-system 在线版本更新） ----
+        'system_update_check'   => self::SETTINGS_INFRA,
+        'system_update_save'    => self::SETTINGS_INFRA,
+        'system_update_do'      => self::SETTINGS_INFRA,
     ];
 
     // ------------------------------------------------------------------

@@ -69,28 +69,51 @@ class ShopAuth
         }
         try {
             $u = Database::one(
-                'SELECT id, username, password, status, lock_until FROM ' . Database::t('users') . ' WHERE username = ?',
+                'SELECT id, username, password, status, lock_until, login_fail_cnt FROM ' . Database::t('users') . ' WHERE username = ?',
                 [$username]
             );
         } catch (Throwable $e) {
             return ['ok' => false, 'msg' => '用户系统不可用，请联系管理员'];
         }
+        // 锁定检查（在密码校验前）
+        if ($u && (int) ($u['lock_until'] ?? 0) > time()) {
+            $left = (int) $u['lock_until'] - time();
+            return ['ok' => false, 'msg' => '账号已锁定，请 ' . ceil($left / 60) . ' 分钟后再试'];
+        }
         if (!$u || !password_verify($password, (string) $u['password'])) {
+            // 账号级失败锁定：与 Auth::onLoginFail 同策略
+            if ($u) {
+                $fail     = (int) ($u['login_fail_cnt'] ?? 0) + 1;
+                $threshold = (int) Config::get('policy.login_fail_threshold', 5);
+                $lockSec  = (int) Config::get('policy.login_lock_seconds', 900);
+                $data = ['login_fail_cnt' => $fail];
+                if ($fail >= $threshold) {
+                    $data['lock_until'] = time() + $lockSec;
+                    $data['login_fail_cnt'] = 0;
+                }
+                try {
+                    Database::update('users', $data, 'id = :id', ['id' => (int) $u['id']]);
+                } catch (Throwable $e) {
+                    // 统计字段写失败不影响拒绝
+                }
+            }
             return ['ok' => false, 'msg' => '用户名或密码不正确'];
         }
         if ((int) $u['status'] !== 1) {
             return ['ok' => false, 'msg' => '账号已被封禁或冻结，请联系管理员'];
-        }
-        if ((int) ($u['lock_until'] ?? 0) > time()) {
-            return ['ok' => false, 'msg' => '账号已临时锁定，请稍后再试'];
         }
         self::rotateSession();
         $_SESSION['shop_uid']   = (int) $u['id'];
         $_SESSION['nb_web_uid'] = (int) $u['id'];   // 官网个人中心同步登录
         $_SESSION['nb_web_time'] = time();
         try {
-            Database::update('users', ['last_login_time' => time(), 'last_login_ip' => Util::ip()],
-                'id = :id', ['id' => (int) $u['id']]);
+            // 登录成功：重置失败计数与锁定
+            Database::update('users', [
+                'last_login_time' => time(),
+                'last_login_ip'   => Util::ip(),
+                'login_fail_cnt'  => 0,
+                'lock_until'      => 0,
+            ], 'id = :id', ['id' => (int) $u['id']]);
         } catch (Throwable $e) {
             // 统计字段写失败不影响登录
         }

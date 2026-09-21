@@ -1,8 +1,3 @@
-/* ======================================================================
-   pages/files.js — 文件管理：完整性校验 / 挂马扫描 / 受控文件查看删除
-   支持单删 + 勾选批量删除（管理密码一次性确认）
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { loading, empty, esc, tag } from '../core/util.js';
@@ -10,24 +5,20 @@ import { openModal, closeModal, confirmBox, toast } from '../core/ui.js';
 
 const fmtTime = t => t ? new Date(t * 1000).toLocaleString('zh-CN', { hour12: false }) : '-';
 
-/* 通用：查看 / 单删按钮 */
 function fileOps(rel) {
     return `
         <button class="btn ghost sm" data-view="${esc(rel)}">查看</button>
         <button class="btn danger sm" data-del="${esc(rel)}">删除</button>`;
 }
 
-/* 通用：勾选框（批量删除用） */
 function selBox(rel) {
     return `<input type="checkbox" class="fSel" data-sel="${esc(rel)}" title="选择该文件">`;
 }
 
-/* 通用：读取当前容器内勾选的文件 */
 function getSelected(c) {
     return [...c.querySelectorAll('input.fSel[data-sel]:checked')].map(x => x.dataset.sel);
 }
 
-/* 通用：批量删除弹窗（密码一次性确认，逐个回执） */
 function batchDeleteModal(c, files, onDone) {
     if (!files.length) { toast('请先勾选要删除的文件', 'warn'); return; }
     const listHtml = files.slice(0, 30).map(f =>
@@ -54,7 +45,6 @@ function batchDeleteModal(c, files, onDone) {
     ]);
 }
 
-/* 通用：绑定查看 / 单删 / 「删除选中」按钮 */
 function bindFileOps(c, onDone) {
     c.querySelectorAll('button[data-view]').forEach(b => {
         b.addEventListener('click', async () => {
@@ -87,7 +77,7 @@ function bindFileOps(c, onDone) {
             ]);
         });
     });
-    /* 批量删除按钮（不存在则创建）+ 全选切换 + 勾选后按钮计数刷新 */
+
     const refreshCount = () => {
         const btn = c.querySelector('button[data-batchdel]');
         if (!btn) return;
@@ -123,7 +113,6 @@ function bindFileOps(c, onDone) {
     bindBatch();
 }
 
-/* 表格：文件列表（含勾选列，deletable=false 时只给查看） */
 function fileTable(list, { withSel = true } = {}) {
     return `
     <div class="table-wrap"><table>
@@ -142,13 +131,9 @@ function fileTable(list, { withSel = true } = {}) {
     </table></div>`;
 }
 
-/* 批量删除按钮（固定在工具条中，初始隐藏） */
 const batchBtn = `
     <button class="btn danger" data-batchdel style="display:none"><i class="bi bi-trash3"></i> 删除选中</button>`;
 
-/* =====================================================================
-   子页一：完整性校验
-   ===================================================================== */
 register('files_integrity', async function render() {
     const c = document.getElementById('content');
     c.innerHTML = loading();
@@ -219,9 +204,6 @@ register('files_integrity', async function render() {
     bindFileOps(c, render);
 });
 
-/* =====================================================================
-   子页二：挂马扫描
-   ===================================================================== */
 register('files_scan', async function render() {
     const c = document.getElementById('content');
     c.innerHTML = loading();
@@ -267,7 +249,6 @@ register('files_scan', async function render() {
         toast('扫描完成', 'ok');
     });
 
-    /* 运行时目录 PHP：最高危表格 */
     function uploadPhpHtml(list) {
         return `
         <div class="card-body" style="padding-top:12px">
@@ -276,7 +257,6 @@ register('files_scan', async function render() {
         </div>`;
     }
 
-    /* 可疑特征文件：命中规则卡片，规则名标签化 + 行号徽标 + 片段独立框 */
     function hitsHtml(list) {
         return `
         <div class="card-body" style="padding-top:12px">

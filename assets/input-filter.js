@@ -1,13 +1,3 @@
-/**
- * 统一输入过滤（全站引入）
- * 根据输入框 name/id/autocomplete 自动识别字段类型，仅放行对应字符：
- *   num   纯数字        —— 手机号/端口/QQ 等
- *   alnum 字母+数字      —— 用户名/验证码/卡密等
- *   id    字母+数字+_-  —— 前缀/标识符等
- *   host  域名/主机字符  —— 字母数字 . - :
- *   ascii 可见英文符号  —— 密码（含常用符号，不含中文/空格外控制符）
- * 未匹配到的输入框（中文文本类）不做限制。
- */
 (function () {
     'use strict';
 
@@ -55,7 +45,7 @@
 
     function init() {
         bindAll(document);
-        // 后台/动态表单：监听新增节点自动绑定
+
         if (window.MutationObserver) {
             new MutationObserver(function (muts) {
                 muts.forEach(function (m) {

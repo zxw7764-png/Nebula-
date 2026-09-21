@@ -790,6 +790,7 @@ class Shop
         // 0 元免费商品同样走下单 → 易支付 → 回调发卡的完整流程（money=0.00，
         // 回调金额校验 0===0 通过后自动发卡）；决定自动还是人工与付费商品一致
         $payType = (self::payMode() === 'auto' && (self::epayReady() || Pay::ready(Pay::active()))) ? self::PAY_EPAY : self::PAY_MANUAL;
+        $payDriver = $payType === self::PAY_EPAY ? Pay::active() : '';
 
         // 下单凭证（手机号/邮箱/自定义内容）+ 查询密码：买家后续凭「凭证+密码」查单
         $mode    = self::contactMode();
@@ -831,6 +832,7 @@ class Shop
             'amount'      => $amount,
             'qty'         => $qty,
             'pay_type'    => $payType,
+            'pay_driver'  => $payDriver,
             'channel'     => $payType === self::PAY_EPAY ? preg_replace('/[^a-z]/', '', strtolower($channel)) : '',
             'status'      => self::ORDER_PENDING,
             'contact'     => $contact,
@@ -858,13 +860,13 @@ class Shop
         ];
 
         if ($payType === self::PAY_EPAY) {
-            // 支付驱动统一走 Pay 层：内置 epay 或已安装插件（支付宝/微信/聚合等）
+            // 支付驱动统一走 Pay 层：用下单时快照的驱动，防止管理员切换驱动后用错驱动验签
             $payUrl = Pay::payUrl([
                 'order_no' => $orderNo,
                 'product'  => $plan['name'],
                 'amount'   => $amount,
                 'channel'  => $channel,
-            ], rtrim($notifyBase, '/') . '/shop/notify.php', rtrim($returnBase, '/') . '/shop/?o=' . urlencode($orderNo));
+            ], rtrim($notifyBase, '/') . '/shop/notify.php', rtrim($returnBase, '/') . '/shop/?o=' . urlencode($orderNo), $payDriver);
             if ($payUrl === '') {
                 // 理论上 epayReady 已挡住，这里兜底降级人工
                 Database::update('shop_orders', ['pay_type' => self::PAY_MANUAL], 'order_no = :ono', ['ono' => $orderNo]);
@@ -887,13 +889,14 @@ class Shop
     public static function repayUrl(string $orderNo, string $base): string
     {
         $o = Database::one(
-            'SELECT order_no, plan_name, amount, pay_type, status, channel FROM ' . Database::t('shop_orders') . ' WHERE order_no = ?',
+            'SELECT order_no, plan_name, amount, pay_type, status, channel, pay_driver FROM ' . Database::t('shop_orders') . ' WHERE order_no = ?',
             [strtoupper(trim($orderNo))]
         );
         if (!$o || (int) $o['status'] !== self::ORDER_PENDING || (int) $o['pay_type'] !== self::PAY_EPAY) {
             return '';
         }
-        if (!Pay::ready(Pay::active())) {
+        $drv = (string) ($o['pay_driver'] ?? '');
+        if ($drv === '' || !Pay::ready($drv)) {
             return '';
         }
         return Pay::payUrl([
@@ -901,7 +904,7 @@ class Shop
             'product'  => (string) $o['plan_name'],
             'amount'   => (int) $o['amount'],
             'channel'  => (string) $o['channel'] ?: 'alipay',
-        ], rtrim($base, '/') . '/shop/notify.php', rtrim($base, '/') . '/shop/?o=' . urlencode((string) $o['order_no']));
+        ], rtrim($base, '/') . '/shop/notify.php', rtrim($base, '/') . '/shop/?o=' . urlencode((string) $o['order_no']), $drv);
     }
 
     // --------------------------------------------------------------
@@ -1353,21 +1356,40 @@ class Shop
     public static function handleNotify(array $params): array
     {
         $orderNo = (string) ($params['out_trade_no'] ?? '');
-        [$signOk, $payOrderNo, $payMoneyFen] = Pay::verifyNotify($params);
-        // 插件驱动的订单号 / 金额字段可能与易支付不同，以驱动返回为准
-        if ($orderNo === '') {
-            $orderNo = $payOrderNo;
-        }
-        if ($orderNo === '' || !$signOk) {
-            return ['ok' => false, 'msg' => '验签失败'];
-        }
-
+        // 先取订单，用订单上快照的 pay_driver 验签（防止管理员下单后切换驱动）
         $order = Database::one(
             'SELECT * FROM ' . Database::t('shop_orders') . ' WHERE order_no = ?',
             [$orderNo]
         );
         if (!$order) {
-            return ['ok' => false, 'msg' => '订单不存在'];
+            // 订单号可能来自不同驱动的不同字段，回退用当前驱动解析
+            $drv = Pay::active();
+            [$signOk, $payOrderNo, $payMoneyFen] = Pay::verifyNotify($params, $drv);
+            $orderNo = $payOrderNo;
+            if ($orderNo === '' || !$signOk) {
+                return ['ok' => false, 'msg' => '验签失败'];
+            }
+            $order = Database::one(
+                'SELECT * FROM ' . Database::t('shop_orders') . ' WHERE order_no = ?',
+                [$orderNo]
+            );
+            if (!$order) {
+                return ['ok' => false, 'msg' => '订单不存在'];
+            }
+        } else {
+            $orderNo = (string) $order['order_no'];
+            $drv = (string) ($order['pay_driver'] ?? '');
+            if ($drv === '') {
+                $drv = Pay::active(); // 老订单没有快照，回退用当前驱动
+            }
+        }
+
+        [$signOk, $payOrderNo, $payMoneyFen] = Pay::verifyNotify($params, $drv);
+        if ($orderNo === '') {
+            $orderNo = $payOrderNo;
+        }
+        if ($orderNo === '' || !$signOk) {
+            return ['ok' => false, 'msg' => '验签失败'];
         }
         // 金额一致性校验：以本地订单金额为准，防止篡改金额的低额支付
         $payMoney = $payMoneyFen >= 0 ? $payMoneyFen : (int) round(((float) ($params['money'] ?? 0)) * 100);

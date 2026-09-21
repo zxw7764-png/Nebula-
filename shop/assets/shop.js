@@ -1,15 +1,9 @@
-/* ======================================================================
- * Nebula Menu · 发卡商店交互
- * 依赖 window.__NB_SHOP__（index.php 注入）：
- *   { api, csrf, open, manual, qrcode, contact, plans[], back_no }
- * ====================================================================== */
 (function () {
     'use strict';
 
     var S = window.__NB_SHOP__ || {};
     var $ = function (sel) { return document.querySelector(sel); };
 
-    // ---------------- Toast ----------------
     function toast(msg, type, ms) {
         var box = $('#toasts');
         if (!box) { return; }
@@ -24,8 +18,6 @@
         }, ms || 3000);
     }
 
-    // ---------------- 请求封装 ----------------
-    // ---------------- 自定义确认弹窗 ----------------
     function customConfirm(title, message, onConfirm) {
         var m = document.createElement('div');
         m.className = 'modal';
@@ -70,23 +62,16 @@
         });
     }
 
-    // ---------------- 商品详情（整页 / 弹窗双形态） ----------------
     var currentPlan = null;
     var modal = $('#orderModal');
     var pageHost = $('#detailPage');
     if (!modal) { return; }
-    var host = null;   // 当前详情渲染容器
+    var host = null;
 
     function yuan(fen) {
         return (fen / 100).toFixed(2);
     }
 
-    /**
-     * 把详情里 <style> 的样式限定作用域，防止污染全页：
-     * · html/body 选择器映射到详情容器本身（贴整份 HTML 文档时 max-width 等落在容器上）
-     * · 其余选择器自动加「.dp-intro.html 」前缀（.k1 → .dp-intro.html .k1）
-     * 支持 @media 嵌套；@keyframes/@font-face 内容原样保留。
-     */
     function scopeCss(css, scope) {
         var out = '', i = 0, n = css.length;
         function parseBlock() {
@@ -96,14 +81,14 @@
                 if (i >= n) { out += css.slice(start); return; }
                 var head = css.slice(start, i).trim();
                 if (css.charAt(i) === '}') { out += css.slice(start, i); i++; return; }
-                i++; // 跳过 '{'
+                i++;
                 if (/^@(media|supports|layer|container)/i.test(head)) {
                     out += head + '{';
-                    parseBlock();          // 递归处理内部规则（含消费配对 '}'）
+                    parseBlock();
                     continue;
                 }
                 if (head.charAt(0) === '@') {
-                    // @keyframes / @font-face 等：大括号配对原样保留
+
                     var innerStart = i, depth = 1;
                     while (i < n && depth > 0) {
                         if (css.charAt(i) === '{') { depth++; }
@@ -113,7 +98,7 @@
                     out += head + '{' + css.slice(innerStart, i);
                     continue;
                 }
-                // 普通规则：scope 化选择器，声明块原样
+
                 var declStart = i, d2 = 0;
                 while (i < n) {
                     var c = css.charAt(i);
@@ -122,7 +107,7 @@
                     i++;
                 }
                 var decls = css.slice(declStart, i);
-                if (i < n) { i++; } // 跳过 '}'
+                if (i < n) { i++; }
                 var sels = head.split(',').map(function (s) {
                     s = s.trim();
                     if (!s) { return s; }
@@ -137,10 +122,6 @@
         return out;
     }
 
-    /**
-     * 整理详情富文本：贴进来的是整份 HTML 文档（doctype/html/head/body）也能正常渲染——
-     * 剥掉文档壳、提取 <style> 并 scope 化，只留内容片段 + 限定作用域的样式。
-     */
     function detailFragment(src) {
         var s = String(src), css = '';
         s = s.replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, function (m, inner) {
@@ -154,7 +135,6 @@
         return { html: s, css: css };
     }
 
-    /** 规格时长展示：时长卡秒数 → 年/月/星期/天/小时/分钟，点数/次数原值，永久卡 → 空串（sp-name 已含「永久卡」，不重复） */
     function cdurText(c) {
         var v = parseInt(c.card_duration, 10) || 0;
         var t = Number(c.card_type);
@@ -165,14 +145,13 @@
         for (var i = 0; i < U.length; i++) { if (v % U[i][0] === 0) return (v / U[i][0]) + ' ' + U[i][1]; }
         return v + ' 秒';
     }
-    /** 金额后缀单位文本：永久卡返回「永久」，其余同 cdurText */
+
     function unitText(c) {
         var t = Number(c.card_type);
         if (t === 4) return '永久';
         return cdurText(c);
     }
 
-    /** 构建详情 HTML：左侧媒体 + 右侧购买面板 + 宝贝详情 */
     function buildDetail(plan) {
         var isManual = !!S.manual;
         var media = plan.icon
@@ -183,7 +162,7 @@
         if (plan.highlight) { tags += '<span class="dp-tag hot">推荐</span>'; }
         if (plan.badge) { tags += '<span class="dp-tag hot">' + esc(plan.badge) + '</span>'; }
         if (plan.is_ext) {
-            // 外部卡密商品：显示导入池库存与发货提示
+
             tags += plan.stock > 0
                 ? '<span class="dp-tag">库存 <b>' + esc(plan.stock) + '</b> 张</span>'
                 : '<span class="dp-tag out">暂时缺货</span>';
@@ -222,8 +201,6 @@
             pts += '</ul>';
         }
 
-        // 多规格挂卡类型：一个商品可选多种卡类型（月卡/季卡/年卡…），买家选一种下单。
-        // 单规格时不展示选择区，沿用商品默认售价。
         var specs = (Array.isArray(plan.cards) ? plan.cards : []).filter(function (c) { return Number(c.price) >= 0; });
         var specBlock = '';
         if (specs.length > 1) {
@@ -237,8 +214,6 @@
                 + '</div></div>';
         }
 
-        // 详情内容支持 HTML：含标签时按富文本渲染（<style> 自动限定作用域，
-        // 贴整份 HTML 文档也会剥壳处理，不会污染页面）；纯文本按换行展示（兼容旧数据）
         var detailHtml = '';
         if (plan.detail) {
             if (/<[a-z!/][^>]*>/i.test(plan.detail)) {
@@ -252,7 +227,6 @@
             detailHtml = '<p class="dp-intro">' + esc(plan.intro) + '</p>';
         }
 
-        // 首屏价格与「应付金额」初值都用有效售价（规格价优先，回落默认售价）
         var firstPrice = specs.length ? effPrice(specs[0], plan.shop_price) : (parseFloat(plan.shop_price) || 0);
 
         return '<div class="dp-grid">'
@@ -285,17 +259,12 @@
             + '</section></div>';
     }
 
-    /**
-     * 有效售价：规格售价 > 0 时用规格价，否则回落到商品默认售价。
-     * 与后台商品列表的价格区间、下单金额完全同口径，避免「列表显示一个价、下单又是另一个价」。
-     */
     function effPrice(card, base) {
         var v = parseFloat(card && card.price);
         var b = parseFloat(base) || 0;
         return (isFinite(v) && v > 0) ? v : b;
     }
 
-    /** 图片灯箱：详情大图点击查看原图，点击任意处关闭 */
     function openImgViewer(src, alt) {
         var v = document.getElementById('imgViewer');
         if (!v) {
@@ -310,17 +279,15 @@
         v.hidden = false;
     }
 
-    /** 容器内绑定交互：数量步进 / 渠道选择 / 提交 */
     function bindDetail(box, plan) {
         var qtyEl  = box.querySelector('[data-qty]');
-        // 多规格：价格随所选规格联动（默认第一个规格）；规格价填 0 时回落默认售价
+
         var specEls = box.querySelectorAll('[data-specs] .spec-item');
         var price  = specEls.length
             ? effPrice({ price: specEls[0].dataset.price }, plan.shop_price)
             : (parseFloat(plan.shop_price) || 0);
         var maxQty = plan.stock > 0 ? Math.min(99, plan.stock) : 99;
 
-        // 规格选择：切换价格与选中态
         Array.prototype.forEach.call(specEls, function (lab) {
             lab.addEventListener('click', function () {
                 Array.prototype.forEach.call(specEls, function (x) { x.classList.remove('on'); });
@@ -336,7 +303,6 @@
             });
         });
 
-        // 详情大图：点击查看原图（灯箱）
         var mediaImg = box.querySelector('.dp-media img');
         if (mediaImg) {
             mediaImg.addEventListener('click', function () {
@@ -379,7 +345,7 @@
                 query_pwd: pEl ? (pEl.value || '').trim() : '',
                 qty:       qty()
             };
-            // 多规格：把所选规格序号带给后端（后端据此取对应卡类型/时长/价格）
+
             if (specChecked) payload.spec_index = parseInt(specChecked.value, 10) || 0;
             if (!S.user) {
                 if (payload.contact === '') {
@@ -416,13 +382,13 @@
     function openOrder(plan) {
         currentPlan = plan;
         if (S.dstyle !== 'modal' && pageHost) {
-            // 整页详情
+
             host = pageHost;
             host.innerHTML = buildDetail(plan);
             bindDetail(host, plan);
             showView('detail');
         } else {
-            // 弹窗详情
+
             host = $('#modalHost');
             host.innerHTML = '<button class="modal-close" data-close type="button" aria-label="关闭">&times;</button>'
                 + '<h3 class="modal-title">商品详情</h3>' + buildDetail(plan);
@@ -440,8 +406,6 @@
         currentPlan = null;
     }
 
-    // 遮罩点击关闭：仅当按下与松开都发生在遮罩上才关闭，
-    // 防止在输入框内选择文字时鼠标移出弹窗松开导致误关
     function backdropClose(el, fn) {
         var downOnMask = false;
         el.addEventListener('mousedown', function (e) { downOnMask = e.target === el; });
@@ -451,7 +415,6 @@
     }
     backdropClose(modal, closeOrder);
 
-    // ---------------- 登录 / 注册 / 退出 ----------------
     var authModal = document.getElementById('authModal');
     var authMode  = 'login';
     var setShopCaptcha = function (img) {
@@ -492,7 +455,7 @@
         var payload;
         var captchaInput = document.getElementById('authCaptcha');
         if (spec.need_code) {
-            // 卡密类登录方式（用户名+激活码 / 纯激活码）：无独立注册，激活码即凭证
+
             payload = {
                 op: 'login',
                 username: document.getElementById('authUser') ? document.getElementById('authUser').value.trim() : '',
@@ -529,7 +492,6 @@
         });
     }
 
-    // ---------------- 激活码找回（后台开关开启 + 密码登录方式） ----------------
     var reclaimForm = document.getElementById('reclaimForm');
     if (reclaimForm) {
         var authForm = document.getElementById('authForm');
@@ -554,7 +516,6 @@
         });
         rcCaptchaImg.addEventListener('click', rcRefreshCaptcha);
 
-        // 第一步：激活码 → 绑定账号的用户名自动填入
         document.getElementById('rcLookup').addEventListener('click', function () {
             var code = document.getElementById('rcCode').value.trim();
             if (!code) { toast('请先输入激活码', 'warn'); return; }
@@ -570,7 +531,6 @@
             document.getElementById('rcUser').readOnly = false;
         });
 
-        // 第二步：设置新密码
         reclaimForm.addEventListener('submit', function (e) {
             e.preventDefault();
             var p1 = document.getElementById('rcPass').value;
@@ -597,8 +557,6 @@
         });
     }
 
-    // 弹窗公告：内容框统一渲染。PHP 端已把 <style> 包成 template 并剥掉文档壳，
-    // 这里取出样式做作用域化后注入，只作用于弹窗内容框、不污染全页
     (function () {
         var pb = document.querySelector('.pop-body');
         if (!pb) { return; }
@@ -615,14 +573,14 @@
         }
     })();
 
-    // 弹窗公告：「关闭」本会话不再弹，「不再提示」永久不弹
     var pop = document.getElementById('popNotice');
     if (pop) {
         var seen = false, forever = false;
         try {
             seen = !!sessionStorage.getItem('nb_pop_seen');
             forever = !!localStorage.getItem('nb_pop_forever');
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+ }
         if (!seen && !forever) { pop.hidden = false; }
         pop.addEventListener('click', function (e) {
             if (e.target === pop || (e.target.closest && (e.target.closest('[data-close]') || e.target.closest('[data-forever]')))) {
@@ -633,7 +591,8 @@
                     } else {
                         sessionStorage.setItem('nb_pop_seen', '1');
                     }
-                } catch (err) { /* ignore */ }
+                } catch (err) {
+ }
             }
         });
     }
@@ -641,7 +600,6 @@
         if (e.key === 'Escape' && !modal.hidden) { closeOrder(); }
     });
 
-    // 横幅大图：无扩展名地址嗅探，视频内容自动替换为 <video> 自动循环播放
     (function () {
         var wrap = document.getElementById('shopBanner');
         var img = wrap && wrap.querySelector('img');
@@ -656,7 +614,8 @@
                 v.autoplay = true; v.muted = true; v.loop = true; v.playsInline = true;
                 img.replaceWith(v);
             }
-        }).catch(function () { /* 探测失败保持图片 */ });
+        }).catch(function () {
+ });
     })();
 
     function renderResult(box, ok, html) {
@@ -686,7 +645,6 @@
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
-    // ---------------- 商品分类页签 ----------------
     var catTabs = $('#catTabs');
     if (catTabs) {
         var catCards = Array.prototype.slice.call(document.querySelectorAll('#goodsGrid .goods-card'));
@@ -704,7 +662,6 @@
         });
     }
 
-    // ---------------- 商品按钮 ----------------
     Array.prototype.forEach.call(document.querySelectorAll('[data-goods]'), function (b) {
         b.onclick = function () {
             if (!S.plans || !S.plans.length) { return; }
@@ -715,7 +672,6 @@
         };
     });
 
-    // ---------------- 选择式布局（pick）：分类+商品按钮，点商品在下方内联展开下单面板 ----------------
     var pickCats = $('#pickCats');
     var pickGoods = $('#pickGoods');
     var pickDetail = $('#pickDetail');
@@ -724,7 +680,6 @@
         var pickGoodsArea = $('#pickGoodsArea');
         var pickHint = $('#pickHint');
 
-        // 选中某个商品：高亮按钮，按钮行下方内联渲染完整下单面板（复用详情构建，无需弹窗）
         var showPick = function (btn) {
             Array.prototype.forEach.call(pickGoods.querySelectorAll('button'), function (x) {
                 x.classList.toggle('on', x === btn);
@@ -738,14 +693,12 @@
             if (pickDetail.scrollIntoView) { pickDetail.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
         };
 
-        // 切分类：只过滤商品按钮，不默认选中任何商品（点商品按钮才高亮并展开下单面板）
-        // cat=''（「请选择分类」占位态）：虚线框内显示占位提示，商品区整体隐藏
         var applyPickCat = function (cat) {
             if (pickHint) { pickHint.hidden = cat !== ''; }
             if (pickGoodsArea) { pickGoodsArea.hidden = cat === ''; }
             pickBtns.forEach(function (b) {
                 b.hidden = cat === '' ? true : (b.dataset.pcat || '') !== cat;
-                b.classList.remove('on');       // 清除残留选中态，避免「看似默认选中却无详情」
+                b.classList.remove('on');
             });
             pickDetail.hidden = true;
             pickDetail.innerHTML = '';
@@ -763,12 +716,10 @@
         Array.prototype.forEach.call(pickBtns, function (b) {
             b.onclick = function () { showPick(b); };
         });
-        // 初始「请选择分类」：有分类时进入页面不显示全部商品，选分类后才出现该分类的商品按钮；
-        // 无任何分类可选时（后台未配置分类且商品未填分类）保持直接展示全部商品
+
         if (pickCats.querySelector('button[data-cat=""]')) { applyPickCat(''); }
     }
 
-    // ---------------- 视图切换：商店 / 订单查询 ----------------
     var viewShop    = $('#viewShop');
     var viewQuery   = $('#viewQuery');
     var viewDetail  = $('#viewDetail');
@@ -807,7 +758,6 @@
         };
     }
 
-    // ---------------- 我的订单（登录账号关联） ----------------
     function loadAccount() {
         var box = $('#accountBox');
         if (!box) { return; }
@@ -854,7 +804,6 @@
         };
     }
 
-    // 订单内直接激活卡密（委托绑定：我的订单 / 订单查询结果通用）
     document.addEventListener('click', function (e) {
         var btn = e.target.closest && e.target.closest('[data-activate]');
         if (!btn) { return; }
@@ -878,14 +827,12 @@
         });
     });
 
-    // 待支付订单「继续支付」：跳转重新生成的收银台地址
     document.addEventListener('click', function (e) {
         var b = e.target.closest && e.target.closest('[data-repay]');
         if (!b || !b.dataset.repay) { return; }
         location.href = b.dataset.repay;
     });
 
-    // 待支付订单「取消订单」：关闭后刷新当前视图（我的订单 / 订单查询）
     document.addEventListener('click', function (e) {
         var b = e.target.closest && e.target.closest('[data-close-order]');
         if (!b || !b.dataset.closeOrder) { return; }
@@ -902,9 +849,8 @@
         });
     });
 
-    /* 状态横幅：支付回跳 / 查询结果按订单状态给出明确的成功 / 失败 / 确认中提示 */
     function orderBanner(st) {
-        // 状态：0 待支付 1 已发卡 2 已关闭 3 人工处理中
+
         if (st === 1) {
             return '<div class="or-box ok"><b>&#10003; 支付成功，卡密已发货</b><p class="qr-tip">卡密在下方，请复制保存；也可直接点「激活」到账。</p></div>';
         }
@@ -917,7 +863,6 @@
         return '<div class="or-box"><b>支付结果确认中…</b><p class="qr-tip">银行/支付平台确认稍有延迟，正在自动刷新查询。</p></div>';
     }
 
-    // ---------------- 订单查询 ----------------
     function doQuery(orderNo, silent) {
         api('query', { order_no: orderNo }, function (j) {
             var box = $('#queryResult');
@@ -944,9 +889,6 @@
         });
     }
 
-    /* 支付回跳轮询：易支付同步回跳常早于异步回调，订单可能还是待支付，
-       每 3 秒重查一次，最多 10 次；查到非「待支付」状态或离开查询页即停。
-       轮询期间状态展示为「核验中」，且不给「继续支付」按钮（避免回调未到又重复下单支付） */
     var pollTimer = null, pollLeft = 0, verifying = false;
     function pollOrder(orderNo) {
         clearInterval(pollTimer);
@@ -973,7 +915,6 @@
         }, 3000);
     }
 
-    // 查询方式切换：按订单号 / 按凭证+密码
     var qType = 'no';
     var qSwitch = $('#querySwitch');
     if (qSwitch) {
@@ -1013,7 +954,6 @@
         };
     }
 
-    // 凭证查询结果：订单列表（每单可展开复制卡密）
     function orderBox(o) {
         var stMap = { 0: 's0', 1: 's1', 2: 's2', 3: 's3' };
         var stTxt = (o.status === 0 && verifying) ? '核验中' : esc(o.status_text);
@@ -1090,8 +1030,6 @@
         });
     }
 
-    // 支付完成回跳：?o=订单号 自动切到查询页并查询；随后清掉 URL 上的回跳参数，
-    // 避免刷新页面重复触发查询/回跳链路
     if (S.back_no) {
         var qn = $('#queryNo');
         if (qn) { qn.value = S.back_no; }
@@ -1100,6 +1038,7 @@
         pollOrder(S.back_no);
         try {
             window.history.replaceState(null, '', location.pathname);
-        } catch (e) { /* file:// 等环境下忽略 */ }
+        } catch (e) {
+ }
     }
 })();

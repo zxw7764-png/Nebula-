@@ -1,10 +1,3 @@
-/* ======================================================================
-   pages/client_notice.js — 客户端公告（软件管理子标签，按软件分组配置）
-   类型：type=2 弹窗公告（客户端弹窗展示）/ type=4 列表公告（客户端公告栏）
-   归属：software_id=0 全部软件通用，否则仅该软件的客户端可见
-   客户端 SDK init / getNotices() 拉取的就是这里的公告。
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register, replayContentAnim } from '../core/router.js';
 import { pageState } from '../core/state.js';
@@ -13,8 +6,8 @@ import { openModal, closeModal, confirmBox, toast, createSelection, checkAllBox,
 
 const DEFAULTS = { page: 1, size: 50, sw: '', type: '' };
 let sel = null;
-let lastList = [];   // 最近一次渲染的数据列表（供批量操作取完整对象）
-let swList = [];     // 软件缓存（tab 条用）
+let lastList = [];
+let swList = [];
 
 register('client_notice_list', render);
 
@@ -22,7 +15,7 @@ async function render() {
     const st = pageState('client_notice_list', DEFAULTS);
     const c = document.getElementById('content');
     c.innerHTML = loading();
-    const typeParam = st.type === '' ? '2,3,4' : st.type;   // 空类型=客户端全部（弹窗+立即+列表）
+    const typeParam = st.type === '' ? '2,3,4' : st.type;
     const res = await api('notice_list', { page: st.page, size: st.size, sw: st.sw, type: typeParam });
     if (res.code !== 0) return;
     const d = res.data;
@@ -110,14 +103,12 @@ async function render() {
         });
     });
 
-    // 批量选择
     sel = createSelection({ root: c, allIds: d.list.map(x => x.id), onChange: ids => {
         const box = document.getElementById('cnBulkBox');
         if (box) { box.hidden = ids.length === 0; box.dataset.count = String(ids.length); }
         c.querySelectorAll('.bulk-hide').forEach(b => { b.hidden = ids.length > 0; });
     }});
 
-    // 批量操作：下拉选择 + 执行
     const bulkRun = document.getElementById('cnBulkRun');
     if (bulkRun) bulkRun.addEventListener('click', () => {
         const op = document.getElementById('cnBulkOp').value;
@@ -126,7 +117,7 @@ async function render() {
 }
 
 function doSearch() {
-    replayContentAnim();   // 搜索/筛选时重播内容区入场动画
+    replayContentAnim();
     const st = pageState('client_notice_list', DEFAULTS);
     st.sw = document.getElementById('cnSw').value;
     st.type = document.getElementById('cnTypeF').value;
@@ -134,7 +125,6 @@ function doSearch() {
     render();
 }
 
-/* ------------------------- 批量操作 ------------------------- */
 async function doBulk(op) {
     const ids = sel ? sel.ids() : [];
     if (!ids.length) return toast('请先选择公告', 'warn');
@@ -177,9 +167,9 @@ async function doBulk(op) {
 function noticeEdit(n) {
     const st = pageState('client_notice_list', DEFAULTS);
     n = n || {};
-    // 新增时默认归属：当前选中的软件 tab；「全部软件」tab 则默认通用
+
     const curSw = n.id ? (Number(n.software_id) || 0) : (st.sw === '' ? 0 : parseInt(st.sw, 10) || 0);
-    const curType = (n.type === 2 || n.type === 3 || n.type === 4) ? n.type : 4;   // 默认列表公告
+    const curType = (n.type === 2 || n.type === 3 || n.type === 4) ? n.type : 4;
     const swOptions = swList.map(s =>
         `<option value="${s.id}" ${curSw === Number(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('');
 
@@ -248,7 +238,7 @@ function noticeEdit(n) {
     openModal(n.id ? '编辑客户端公告' : '发布客户端公告', body, [
         { text: '取消', cls: 'ghost', act: closeModal },
         { text: '保存', cls: 'success', act: async () => {
-            // 时间：数字 + 单位（相对当前的偏移）。留空 = 新增时用默认（立即/永久）、编辑时保持原值
+
             const now = Math.floor(Date.now() / 1000);
             const startV = document.getElementById('cnStart').value.trim();
             const endV   = document.getElementById('cnEnd').value.trim();

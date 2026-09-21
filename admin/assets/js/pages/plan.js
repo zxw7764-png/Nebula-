@@ -1,8 +1,3 @@
-/* ======================================================================
-   pages/plan.js — 官网价格套餐管理
-   套餐直接展示在官网首页「价格套餐」区块。
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { loading, empty, esc, tag } from '../core/util.js';
@@ -11,7 +6,7 @@ import { openModal, closeModal, confirmBox, toast, createSelection, checkAllBox,
 register('plan_list', render);
 
 let sel = null;
-let lastList = [];   // 最近一次渲染的数据列表（供批量操作取完整对象）
+let lastList = [];
 
 async function render() {
     const c = document.getElementById('content');
@@ -86,14 +81,14 @@ async function render() {
         });
     });
 
-    // 批量选择
+
     sel = createSelection({ root: c, allIds: d.list.map(x => x.id), onChange: ids => {
         const box = document.getElementById('pBulkBox');
         if (box) { box.hidden = ids.length === 0; box.dataset.count = String(ids.length); }
         c.querySelectorAll('.bulk-hide').forEach(b => { b.hidden = ids.length > 0; });
     }});
 
-    // 批量操作：下拉选择 + 执行
+
     const bulkRun = document.getElementById('pBulkRun');
     if (bulkRun) bulkRun.addEventListener('click', () => {
         const op = document.getElementById('pBulkOp').value;
@@ -101,7 +96,8 @@ async function render() {
     });
 }
 
-/* ------------------------- 批量操作 ------------------------- */
+
+
 async function doBulk(op) {
     const ids = sel ? sel.ids() : [];
     if (!ids.length) return toast('请先选择套餐', 'warn');

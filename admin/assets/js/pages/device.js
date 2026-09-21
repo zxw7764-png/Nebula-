@@ -1,7 +1,3 @@
-/* ======================================================================
-   pages/device.js — 设备管理（多选批量解绑）
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { pageState } from '../core/state.js';
@@ -13,14 +9,16 @@ import {
 
 const DEFAULTS = { page: 1, size: 20, keyword: '', status: '', online: false, risk: '', fp: '' };
 
-/** 缓存当前页设备，供详情弹窗取用（避免为看明细再打一次接口） */
+
+
 const rowCache = new Map();
 
 let sel = null;
 
 register('device_list', render);
 
-/** 设备指纹风险标记 → 彩色小标签 */
+
+
 function riskTag(x) {
     if (!x.risk || !x.risk.length) return '';
     const color = x.vm ? 'red' : 'amber';
@@ -28,7 +26,8 @@ function riskTag(x) {
     return `<span title="${esc(text)}">${tag(x.vm ? '虚拟环境' : '风险', color)}</span>`;
 }
 
-/** 指纹摘要：组件数 + 组件名简写，客户端未上报时显示「未上报」 */
+
+
 function fpCell(x) {
     if (!x.fp_count) {
         return '<span style="color:#9ca3af" title="客户端未上报 device_fp">未上报</span>';
@@ -150,12 +149,12 @@ async function render() {
             else if (b.dataset.act === 'fp') devFp(id);
         });
     });
-    // 「硬件指纹」列里的链接同样打开详情
+
     c.querySelectorAll('[data-fp]').forEach(a => {
         a.addEventListener('click', () => devFp(parseInt(a.dataset.fp, 10)));
     });
 
-    // 批量选择：下拉选择操作 + 执行
+
     sel = createSelection({ root: c, allIds: d.list.map(x => x.id), onChange: ids => {
         const box = document.getElementById('dBulkBox');
         if (box) { box.hidden = ids.length === 0; box.dataset.count = String(ids.length); }
@@ -190,7 +189,8 @@ function doSearch() {
     render();
 }
 
-/* ------------------------- 设备指纹详情 ------------------------- */
+
+
 function devFp(id) {
     const x = rowCache.get(id);
     if (!x) return;
@@ -329,7 +329,8 @@ function devGc() {
     });
 }
 
-/* ------------------------- 批量删除设备记录 ------------------------- */
+
+
 function devDelete(ids) {
     openModal('批量删除设备记录', `
         <p style="color:var(--danger);margin-bottom:14px">

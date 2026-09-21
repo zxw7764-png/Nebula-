@@ -1,15 +1,3 @@
-/* ======================================================================
-   pages/setting.js — 系统设置（页签版）
-   ----------------------------------------------------------------------
-   四个页签与服务端设置分档（P1-10）一一对齐，每个页签只含本档的键：
-     站点 = settings.site     业务 = settings.business
-     安全 = settings.security 系统 = settings.infra
-   好处：保存按钮只需单一权限，不再出现「一张卡片混两档权限、
-   缺任一档就永远禁用」的情况；无权限的页签自动变为只读。
-   页签选中状态记忆在 localStorage（nb_setting_tab_v1），
-   保存成功触发 render() 重渲染后仍停留在原页签。
-   ====================================================================== */
-
 import { api, apiDownload, uploadHeaders } from '../core/api.js';
 import { register } from '../core/router.js';
 import { loading, esc, tag, downloadBlob, copyText } from '../core/util.js';
@@ -18,16 +6,7 @@ import { can } from '../core/state.js';
 import { API_ENTRY } from '../core/state.js';
 
 register('setting', render);
-// 发卡网配置已拆到运营分区独立页面 pages/shop_setting.js（action: shop_setting_save），
-// 业务页签不再包含任何 shop_* 键。
 
-/**
- * 设置项分档（P1-10）——与服务端 admin/handlers/setting_save.php
- * 的 $tiers 一一对应。前端据此把无权编辑的页签转为只读（纯体验优化），
- * 真正的拦截在服务端：混合提交含越权键会被整单拒绝。
- *
- * 注意：两端的分档表必须保持一致。改动任一端时，另一端同步。
- */
 const TIER_PERM = {
     site:     'settings.site',
     business: 'settings.business',
@@ -35,16 +14,8 @@ const TIER_PERM = {
     infra:    'settings.infra',
 };
 
-/**
- * 系统维护档权限（settings.infra）。
- * 必须做成模块级函数：render() 里的 canTab 是局部变量，
- * 模块级的 loadBackup()/loadHealth() 访问不到它 —— 之前正是在
- * loadBackup 里读了 canTab，抛 ReferenceError 被 catch 住，
- * 备份区才会显示「备份信息读取失败: canTab is not defined」。
- */
 const canMaint = () => can(TIER_PERM.infra);
 
-/** 页签定义：key 与面板容器 id（stP-<key>）对应 */
 const TABS = [
     { key: 'site',     label: '站点', tierName: '站点设置' },
     { key: 'business', label: '业务', tierName: '业务设置' },
@@ -52,20 +23,16 @@ const TABS = [
     { key: 'system',   label: '系统', tierName: '系统与缓存' },
     { key: 'maint',    label: '维护', tierName: '系统维护' },
 ];
-/** 页签 → 权限档 */
+
 const TAB_PERM = { site: 'site', business: 'business', security: 'security', system: 'infra', maint: 'infra' };
 
-/** 记住的页签（跨 render 保留，保存成功重渲染时回到原页签） */
 let curTab = 'site';
 try {
     const t = localStorage.getItem('nb_setting_tab_v1');
     if (TABS.some(x => x.key === t)) curTab = t;
-} catch (e) { /* ignore */ }
+} catch (e) {
+ }
 
-/**
- * 无权限时的只读提示条。
- * 说明具体缺哪个权限，避免用户以为是页面出错。
- */
 function noPermBar(tierName) {
     return `<div class="hint" style="color:#f59e0b;background:rgba(245,158,11,.08);
         border:1px solid rgba(245,158,11,.25);border-radius:6px;padding:10px 12px;margin-bottom:14px">
@@ -80,7 +47,7 @@ async function render() {
     if (res.code !== 0) return;
     const d = res.data;
     const s = d.settings || {};
-    // 防御：后端任一子节点缺失时用空对象兜底，避免读取 undefined.path 抛异常
+
     const cfg = Object.assign({
         crypto: {}, policy: {}, version: {}, admin: {},
     }, d.config || {});
@@ -88,11 +55,10 @@ async function render() {
     cfg.policy = cfg.policy || {};
     cfg.version = cfg.version || {};
     cfg.admin = cfg.admin || {};
-    // 缓存出厂值（config/cache 段，不含密码）：后台没保存过的字段用它回显
+
     const cfgCache = Object.assign({ redis: {} }, d.cache_config || {});
     cfgCache.redis = cfgCache.redis || {};
 
-    // 缓存层运行状态：bootstrap 已把后台配置合并进 Cache，这里是真实生效值
     const cacheStatus = (info) => {
         if (!info) return '';
         const badge = info.driver === 'redis'
@@ -119,12 +85,6 @@ async function render() {
             <option value="0" ${val !== '1' ? 'selected' : ''}>关闭</option>
         </select>`;
 
-    // ------------------------------------------------------------------
-    // 页签权限：无权限时该页签整体只读（提示条 + 按钮禁用）。
-    // 超管的 permissions 是 '*'，can() 一律返回 true。
-    // 这只是体验优化 —— 即便前端被绕过，服务端 setting_save.php 仍会
-    // 按档校验并整单拒绝越权提交。
-    // ------------------------------------------------------------------
     const canTab = {
         site:     can(TIER_PERM.site),
         business: can(TIER_PERM.business),
@@ -132,9 +92,6 @@ async function render() {
         system:   can(TIER_PERM.infra),
     };
 
-    // 「当前生效值」提示：这几个策略项由后端 Policy::debugTable() 统一按
-    // 「数据库（后台改的） → config/config.php（出厂默认）」取值。
-    // 显示来源可以一眼确认改动是否已落到运行时，避免再次出现「改了没效果」的困惑。
     const EFF_LABELS = {
         single_login: '同账号单点登录',
         geo_block: '异地登录拦截',
@@ -173,14 +130,11 @@ async function render() {
         </div>`;
     };
 
-    // 登录方式下拉：选项由后端 LoginMethod::all() 下发，避免前后端各硬编码一份
     const lmOpts = d.login_methods_options || { password: '用户名 + 密码' };
     const lmCur  = d.login_method || s.login_methods || 'password';
     const lmSel  = Object.keys(lmOpts).map(k =>
         `<option value="${esc(k)}" ${lmCur === k ? 'selected' : ''}>${esc(lmOpts[k])}</option>`).join('');
 
-    // ==================== 页签一：站点（settings.site） ====================
-    // 官网首页文案字段已迁至「内容运营 → 官网内容」（pages/portal_web.js）
     const pSite = `
         ${canTab.site ? '' : noPermBar('站点设置')}
         <div class="row2">
@@ -223,7 +177,6 @@ async function render() {
             <input id="stMaintMsg" value="${esc(s.maintain_msg || '')}"></div>
         <button class="btn" id="stSaveSite" ${canTab.site ? '' : 'disabled'}>保存站点设置</button>`;
 
-    // ==================== 页签二：业务（settings.business） ====================
     const pBusiness = `
         ${canTab.business ? '' : noPermBar('业务设置')}
         <div class="row2">
@@ -265,7 +218,6 @@ async function render() {
         </div>
         <button class="btn" id="stSaveBiz" ${canTab.business ? '' : 'disabled'}>保存业务设置</button>`;
 
-    // ==================== 页签三：安全（settings.security） ====================
     const pSecurity = `
         ${canTab.security ? '' : noPermBar('安全设置')}
         <div class="field"><label>登录方式</label>
@@ -342,7 +294,6 @@ async function render() {
         ${effBox(d.effective)}
         <button class="btn" id="stSaveSec" ${canTab.security ? '' : 'disabled'}>保存安全设置</button>`;
 
-    // ==================== 页签四：系统（settings.infra） ====================
     const pSystem = `
         ${canTab.system ? '' : noPermBar('系统与缓存')}
         <div class="card-head" style="padding-left:0"><h3 style="font-size:13px">缓存与 Redis</h3></div>
@@ -439,8 +390,6 @@ async function render() {
                 <span class="hint">管理后台的防暴力破解策略（与 API 侧登录限流相互独立）</span></span>
         </div>`;
 
-    // ---- 维护页签：健康巡检 + 数据备份 ----
-    // 无权限时不渲染「检测中 / 加载中」占位（否则会永远停在那里，看起来像卡死）
     const pMaint = `
         ${canTab.system ? '' : noPermBar('系统维护')}
         <div class="maint-grid">
@@ -501,10 +450,10 @@ async function render() {
         ).join('')}
     </div>`;
 
-    // 页签切换
     const switchTab = (key) => {
         curTab = key;
-        try { localStorage.setItem('nb_setting_tab_v1', key); } catch (e) { /* ignore */ }
+        try { localStorage.setItem('nb_setting_tab_v1', key); } catch (e) {
+ }
         c.querySelectorAll('#stTabs button').forEach(b =>
             b.classList.toggle('on', b.dataset.tab === key));
         TABS.forEach(t => {
@@ -515,7 +464,6 @@ async function render() {
     c.querySelectorAll('#stTabs button').forEach(btn =>
         btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
 
-    // ---- 维护页签：健康巡检 + 数据备份（无权限时不发请求，占位已提示无权限） ----
     if (canTab.system) {
         const bkSel = document.getElementById('stBkMode');
         if (bkSel) bkSel.addEventListener('change', () => { markBkDirty(); syncBkModeUI(); });
@@ -528,17 +476,15 @@ async function render() {
         loadHealth();
         loadBackup();
     }
-    // 先把模式说明填上（无权限时下拉不存在，这行只是补全默认文案）
+
     syncBkModeUI();
     const stHealthRun = document.getElementById('stHealthRun');
     if (stHealthRun) stHealthRun.addEventListener('click', loadHealth);
     const stBkRun = document.getElementById('stBackupRun');
     if (stBkRun) stBkRun.addEventListener('click', runBackup);
 
-    // 各页签保存按钮（无权限时按钮已禁用，这里正常绑定即可）
     document.getElementById('stSaveSite').addEventListener('click', saveSite);
 
-    // 响应签名公钥复制：C++ 片段（NEBULA_STR，换行转义）/ 原始 PEM
     const gracePubCpp = pem => {
         const lines = String(pem).trim().split(/\r?\n/).map(l => '    "' + l + '\\n"');
         return 'NEBULA_STR(\n' + lines.join('\n') + ')';
@@ -556,7 +502,6 @@ async function render() {
         copyText(pem).then(() => toast('已复制公钥 PEM'));
     });
 
-    // ---- 前台 Logo 上传（multipart，走 shop_goods_upload 同款校验） ----
     const logoBtn = document.getElementById('stLogoUpload');
     if (logoBtn) {
         logoBtn.addEventListener('click', () => {
@@ -594,7 +539,6 @@ async function render() {
         });
     }
 
-    // ---- 保存 Logo（shop_logo 归发卡网配置档，走 shop_setting_save） ----
     const saveLogoBtn = document.getElementById('stSaveLogo');
     if (saveLogoBtn) {
         saveLogoBtn.addEventListener('click', async () => {
@@ -609,7 +553,6 @@ async function render() {
     document.getElementById('stSaveSys').addEventListener('click', saveSystem);
 }
 
-/* ------------------------- 保存：站点（settings.site） ------------------------- */
 async function saveSite() {
     const res = await api('setting_save', {
         settings: {
@@ -625,7 +568,6 @@ async function saveSite() {
     if (res.code === 0) toast('站点设置已保存');
 }
 
-/* ------------------------- 保存：业务（settings.business） ------------------------- */
 async function saveBusiness() {
     const price = document.getElementById('stAgPrice').value.trim();
     if (price !== '' && (isNaN(Number(price)) || Number(price) < 0)) {
@@ -646,9 +588,8 @@ async function saveBusiness() {
     if (res.code === 0) toast('业务设置已保存');
 }
 
-/* ------------------------- 保存：安全（settings.security） ------------------------- */
 async function saveSecurity() {
-    // 数值项先做本地校验，避免把 0 / 负数 / 非数字存进去（服务端也会兜底，但早拦早提示）
+
     const rules = [
         ['stHb',      '心跳间隔',   1, 3600],
         ['stTimeout', '离线判定',   1, 86400],
@@ -681,13 +622,12 @@ async function saveSecurity() {
     });
     if (res.code === 0) {
         toast('安全设置已保存');
-        render();   // 重新拉取，刷新「当前生效值」提示
+        render();
     }
 }
 
-/* ------------------------- 保存：系统（settings.infra） ------------------------- */
 async function saveSystem() {
-    // 数值项本地校验：端口 1~65535，库号 0~15；服务端 bootstrap 合并时还会兜底
+
     const rules = [
         ['stCachePort', 'Redis 端口', 1, 65535],
         ['stCacheDb',   'Redis 库号', 0, 15],
@@ -710,11 +650,9 @@ async function saveSystem() {
     });
     if (res.code === 0) {
         toast('系统设置已保存，缓存立即生效');
-        render();   // 重新拉取，刷新「当前驱动」运行状态
+        render();
     }
 }
-
-/* ------------------------- 维护页签：巡检 / 备份 ------------------------- */
 
 function lvTag(level) {
     if (level === 'ok') return tag('正常', 'green');
@@ -722,13 +660,11 @@ function lvTag(level) {
     return tag('异常', 'red');
 }
 
-/** 请求失败占位（带重试按钮）——任何失败都必须结束 loading 态，否则页面看起来像卡死 */
 function failBox(msg, retryId) {
     return `<div class="empty">${esc(msg)}<div style="margin-top:10px">`
         + `<button class="btn ghost sm" id="${retryId}">重试</button></div></div>`;
 }
 
-/** 给请求加超时上限：无论服务端卡住还是网络黑洞，加载态都必须结束 */
 function withTimeout(promise, ms) {
     let timer;
     return Promise.race([
@@ -744,44 +680,31 @@ function bindRetry(box, id, fn) {
     if (b) b.addEventListener('click', fn);
 }
 
-/* -------- 备份设置（不备份 / 自动备份 / 手动备份） -------- */
-
-/** 用户是否正在编辑备份设置：为真时不覆盖其输入 */
 let bkDirty = false;
 
-/** 当前下拉里选中的模式（无权限/未渲染时返回空串） */
 function bkMode() {
     const el = document.getElementById('stBkMode');
     return el ? el.value : '';
 }
 
-/** 各模式的一句话说明（显示在标题下方 hint 里） */
 const BK_HINT = {
     off:    '当前为「不备份」：cron 与后台都不会生成备份。',
     auto:   'cron 按上方周期自动备份；超出保留份数的旧备份会自动清理。',
     manual: '只在点击「立即备份」时生成，cron 不会自动备份；超出保留份数的旧备份会自动清理。',
 };
 
-/** 标记「有未保存改动」，并亮出提示 */
 function markBkDirty() {
     bkDirty = true;
     const dot = document.getElementById('stBkDirty');
     if (dot) dot.hidden = false;
 }
 
-/** 清掉未保存标记 */
 function clearBkDirty() {
     bkDirty = false;
     const dot = document.getElementById('stBkDirty');
     if (dot) dot.hidden = true;
 }
 
-/**
- * 模式联动：
- *   off    → 禁用「间隔」「立即备份」
- *   auto   → 间隔可填（cron 按它节流）
- *   manual → 间隔无意义（置灰但保留原值，不让用户以为丢了配置）
- */
 function syncBkModeUI() {
     const mode = bkMode() || 'auto';
 
@@ -804,7 +727,6 @@ function syncBkModeUI() {
     }
 }
 
-/** 用服务端数据回填设置表单（用户正在编辑时不覆盖） */
 function fillBackupCfg(d) {
     const sel = document.getElementById('stBkMode');
     if (!sel || bkDirty) return;
@@ -821,7 +743,7 @@ async function saveBackupCfg() {
     const mode = bkMode();
     if (!mode) { toast('请先选择备份模式', 'warn'); return; }
     let hours = parseInt((document.getElementById('stBkHours') || {}).value, 10);
-    // 非「自动备份」模式时间隔无意义，留空时按默认值兜底，不打断保存
+
     if (mode !== 'auto' && !(hours >= 1 && hours <= 720)) hours = 24;
     const keep = parseInt((document.getElementById('stBkKeep') || {}).value, 10);
     if (!(hours >= 1 && hours <= 720)) { toast('自动备份间隔需在 1 ~ 720 小时之间', 'warn'); return; }
@@ -846,7 +768,6 @@ async function saveBackupCfg() {
     }
 }
 
-/** 备份列表为空时的文案（按模式区分，避免「不备份」也提示去备份） */
 function bkEmptyText(mode) {
     if (mode === 'off') return '当前为「不备份」模式，不会生成任何备份。';
     if (mode === 'manual') return '暂无备份记录。当前为「手动备份」模式，点上方「立即备份」即可生成一份。';
@@ -884,7 +805,7 @@ async function loadHealth() {
                     </tr>`).join('')}</tbody>
             </table></div>`;
     } catch (e) {
-        // 渲染期异常也必须收口，否则 #stHealth 会永远停在「检测中...」
+
         box.innerHTML = failBox('巡检失败：' + ((e && e.message) || e), 'stHealthRetry');
         bindRetry(box, 'stHealthRetry', loadHealth);
     }
@@ -907,7 +828,7 @@ async function loadBackup() {
 
         const d = res.data || {};
         const list = Array.isArray(d.list) ? d.list : [];
-        // 回填标题栏工具条（下拉 + 间隔 + 保留）；用户已改动时不覆盖
+
         fillBackupCfg(d);
 
         const mode = d.mode || (d.enabled ? 'auto' : 'off');
@@ -943,7 +864,7 @@ async function loadBackup() {
         box.querySelectorAll('button[data-del]').forEach(b =>
             b.addEventListener('click', () => delBackup(b.dataset.del, b)));
     } catch (e) {
-        // 渲染期异常也必须收口，否则 #stBackup 会永远停在「加载中...」
+
         box.innerHTML = failBox('备份信息读取失败：' + ((e && e.message) || e), 'stBackupRetry');
         bindRetry(box, 'stBackupRetry', loadBackup);
     }
@@ -969,12 +890,6 @@ async function runBackup() {
     }
 }
 
-/**
- * 下载一份备份。
- * 备份是整库转储，服务端要求二次输入登录密码（confirm_pwd），
- * 所以先弹密码框，再把密码随请求发出。
- * 走 apiDownload（POST + blob）：接口需要后台会话头，不能直接用 <a href> 拉。
- */
 function dlBackup(name, btn) {
     confirmPassword(
         '下载数据库备份',
@@ -996,7 +911,6 @@ function dlBackup(name, btn) {
         });
 }
 
-/** 删除备份：二次点击确认，避免误删（不依赖全局确认框组件） */
 async function delBackup(name, btn) {
     if (btn.dataset.armed !== '1') {
         btn.dataset.armed = '1';

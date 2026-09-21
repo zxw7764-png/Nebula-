@@ -1,12 +1,3 @@
-/* ======================================================================
-   pages/games.js — 小游戏与排行榜（内容运营子页）
-   ------------------------------------------------------------------
-   · 官网小游戏开关（web_games_enabled）：关闭后前台模板右下角
-     不再显示小游戏，游客只能看历史榜单不能提交新分数
-   · 排行榜记录：跨用户榜单（nb_game_scores），支持按游戏筛选、
-     分页、单条删除、一键清空（game_list / game_del）
-   ====================================================================== */
-
 import { api } from '../core/api.js';
 import { register } from '../core/router.js';
 import { loading, esc } from '../core/util.js';
@@ -31,7 +22,7 @@ async function render() {
     try {
         res = await api('setting_get');
     } catch (e) {
-        return; // api() 已 toast 具体错误
+        return;
     }
     if (res.code !== 0) return;
     const s = res.data.settings || {};
@@ -94,7 +85,6 @@ async function render() {
         </div>
     </div>`;
 
-    /* ---- 开关回填（默认开启） ---- */
     const enabledEl = document.getElementById('gmEnabled');
     enabledEl.value = String(s.web_games_enabled === '0' ? '0' : '1');
 
@@ -103,20 +93,18 @@ async function render() {
         if (r.code === 0) toast(enabledEl.value === '1' ? '小游戏已开启' : '小游戏已关闭，前台刷新即生效');
     });
 
-    /* ---- 游戏参数回填与保存（时长 / 榜单条数 / 频控 / 分游戏时长，经 __NB_GAMES__.cfg 下发） ---- */
     const clampInt = (v, min, max, def) => Math.max(min, Math.min(max, parseInt(v, 10) || def));
     const durEl = document.getElementById('gmDuration');
     const topEl = document.getElementById('gmTopN');
     const rateEl = document.getElementById('gmRate');
     const durList = document.getElementById('gmDurList');
-    const BUILTIN = ['farm', 'mario', 'ink', 'space']; // 内置四款为无尽/自结算模式，不配时长
+    const BUILTIN = ['farm', 'mario', 'ink', 'space'];
     let perGameSaved = {};
     try { perGameSaved = JSON.parse(s.game_durations || '{}') || {}; } catch (e) { perGameSaved = {}; }
     durEl.value = String(clampInt(s.game_duration, 10, 300, 30));
     topEl.value = String(clampInt(s.game_top_n, 3, 20, 10));
     rateEl.value = String(clampInt(s.game_rate_limit, 1, 60, 10));
 
-    // 逐游戏时长行：模板小游戏识别出来后逐个渲染（games 来自 game_list，含内置+模板）
     let durRowsBuilt = false;
     const buildDurRows = (games) => {
         if (durRowsBuilt) { return; }
@@ -148,7 +136,6 @@ async function render() {
         if (r.code === 0) toast('游戏配置已保存，前台刷新即生效');
     });
 
-    /* ---- 排行榜（game_list / game_del） ---- */
     const board = document.getElementById('gmBoard');
     const pager = document.getElementById('gmPager');
 
@@ -191,8 +178,8 @@ async function render() {
         });
         if (r.code === 0) {
             paint(r.data);
-            buildDurRows(r.data.games || {});   // 模板小游戏识别出来后渲染逐游戏时长行
-            // 筛选下拉补上模板自带小游戏（game_list 返回 {id: 名称}；首次合并即可）
+            buildDurRows(r.data.games || {});
+
             const sel = document.getElementById('gmFilter');
             const games = r.data.games || {};
             const known = new Set(Array.from(sel.options).map(o => o.value));
@@ -213,7 +200,7 @@ async function render() {
         const g = document.getElementById('gmFilter').value;
         if (!g) return toast('请先在「榜单筛选」里选择要清空的游戏', 'warn');
         const opt = Array.from(document.getElementById('gmFilter').options).find(o => o.value === g);
-        const name = opt ? opt.textContent : g;   // 模板自带游戏不在 GAME_NAMES 里，直接取下拉文案
+        const name = opt ? opt.textContent : g;
         if (!confirm(`确定清空「${name}」的全部榜单记录？该操作不可恢复。`)) return;
         const r = await api('game_del', { game: g });
         if (r.code === 0) { toast(r.msg || '已清空'); load(1); }
