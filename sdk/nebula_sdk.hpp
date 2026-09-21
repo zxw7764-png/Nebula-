@@ -2122,6 +2122,7 @@ inline void guardAuth(bool ok, FnOk&& onOk, FnFail&& onFail) {
     } else {
         onFail();
     }
+    NEBULA_MARK_VM_END();
 }
 
 } // namespace nebula
