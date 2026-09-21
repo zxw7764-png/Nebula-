@@ -1,5 +1,10 @@
 #pragma once
 // Nebula 客户端 C++ SDK  (header-only)
+// 通知 VMProtect 跳过源码扫描（避免 __LINE__ 宏导致汇编解析错误）
+#ifdef _VMPROTECT_
+#pragma push_macro("__LINE__")
+#undef __LINE__
+#endif
 // 协议与 docs/API.md 严格对齐：
 //   · 请求信封  { data, sign, t, n, k }
 //     data  = base64( iv[16] + AES-256-CBC密文 )，key = SHA256(AES_KEY) 前 32 字节；
