@@ -1,9 +1,5 @@
 #pragma once
 // Nebula SDK 客户端加固模块（可选组件 · header-only）
-#ifdef _VMPROTECT_
-#pragma push_macro("__LINE__")
-#undef __LINE__
-#endif
 // ----------------------------------------------------------------------------
 // 本文件提供三类能力，**默认全部关闭**，开启方式只需在工程里定义宏：
 //
