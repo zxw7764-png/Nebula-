@@ -36,11 +36,40 @@
     "time": 1789019337,
     "data": {
         "server_time": 1789019337,
+        "app_key": "SWDEFAULT",
+        "software": { "id": 1, "name": "默认软件" },
         "site_name": "Nebula Menu",
         "heartbeat_interval": 60,
         "session_ttl": 3600,
         "register_enable": true,
         "maintain_mode": false,
+        "login": {
+            "method": "password",
+            "label": "用户名 + 密码",
+            "need_username": true,
+            "need_password": true,
+            "need_code": false,
+            "fields": ["username", "password"]
+        },
+        "device_fp": {
+            "enable": true,
+            "components": ["board", "cpu", "disk", "bios", "gpu", "mac"],
+            "core": ["board", "cpu"],
+            "weights": { "board": 30, "cpu": 25, "disk": 20, "bios": 15, "gpu": 10, "mac": 10 }
+        },
+        "session": {
+            "k": "73811dfa5b772607",
+            "s": "0123456789abcdef0123456789abcdef0123456789abcdef"
+        },
+        "grace": {
+            "enable": true,
+            "seconds": 3600,
+            "max_seconds": 7200,
+            "algorithm": "ES256",
+            "kid": "3f9a1c2b",
+            "public_key": "-----BEGIN PUBLIC KEY-----\nMFkw...\n-----END PUBLIC KEY-----",
+            "ticket_prefix": "G1"
+        },
         "crypto": {
             "enforce": true,
             "algo": "AES-256-CBC",
@@ -57,14 +86,16 @@
             "update_note": "",
             "changelog": "",
             "file_hash": "",
-            "file_size": 9999
+            "file_size": 0,
+            "self_file_hash": "",
+            "self_file_size": 0
         },
         "notices": [
             {
                 "id": 6,
                 "title": "公告",
                 "content": "感谢你使用Nebula菜单",
-                "type": 1
+                "type": 4
             }
         ]
     }
@@ -161,7 +192,7 @@
         "force_update": false,
         "download_url": "",
         "file_hash": "",
-        "file_size": 9999,
+        "file_size": 0,
         "changelog": ""
     }
 }
@@ -242,6 +273,8 @@
         "token": "c61b44e10233bfa4174cc3ce1ea9fb0c150a84a0900f471ff5a5e3e87e44eac0",
         "expire_at": 1789022937,
         "ttl": 3600,
+        "login_method": "password",
+        "account_created": false,
         "user": {
             "user_id": 61,
             "username": "capture8024fc",
@@ -264,7 +297,19 @@
             "machine_id": "DEMO-MACHINE-0001",
             "auto_bound": true,
             "max_devices": 1,
-            "bound_count": 1
+            "bound_count": 1,
+            "risk": []
+        },
+        "grace": {
+            "ticket": "G1.eyJ2IjoxLCJ1Ijo2MSwibSI6ImRlbW8iLCJrIjoiYWNjIiwiZSI6LTEsImkiOjE3ODkwMTkzMzd9.dGVzdA==",
+            "until": 1789022937,
+            "seconds": 3600,
+            "issued_at": 1789019337,
+            "server_time": 1789019337,
+            "algorithm": "ES256",
+            "kid": "3f9a1c2b",
+            "machine_bind": "demo",
+            "public_key": "-----BEGIN PUBLIC KEY-----\nMFkw...\n-----END PUBLIC KEY-----"
         }
     }
 }
@@ -430,7 +475,18 @@
         "points": 0,
         "session_ttl": 3600,
         "force_offline": false,
-        "has_notice": false
+        "has_notice": false,
+        "flash_notices": [],
+        "grace": {
+            "ticket": "G1.eyJ2IjoxLCJ1Ijo2MSwibSI6ImRlbW8iLCJrIjoiYWNjIiwiZSI6LTEsImkiOjE3ODkwMTkzMzd9.dGVzdA==",
+            "until": 1789022937,
+            "seconds": 3600,
+            "issued_at": 1789019337,
+            "server_time": 1789019337,
+            "algorithm": "ES256",
+            "kid": "3f9a1c2b",
+            "machine_bind": "demo"
+        }
     }
 }
 ```

@@ -97,8 +97,8 @@ POST http://<域名>/api/index.php?action=<接口名>
    - 缺 `k`、`k` 无效或过期 → `5002`
 2. 服务端**响应用「验请求所用的同一把盐」签名**：init 响应用主盐，业务响应用会话盐
 3. 密钥管理：每次 `init` 重新下发（同一 `machine_id` 仅保留最新一把），7 天未续自动过期；init 时可携带旧 `k` 平滑轮换
-4. 安全效果：主盐只保 `init/notice/version` 三个只读接口可用；即使主盐被 dump，也无法伪造业务请求，且换一次 init 旧密钥即作废
-5. 服务端开关：`config.php` → `security.session_key_required`（默认 `true`）
+4. 安全效果：主盐只保 `init/notice/version/online` 四个只读接口可用；即使主盐被 dump，也无法伪造业务请求，且换一次 init 旧密钥即作废
+5. 服务端开关：代码中硬编码为 `true`，可通过 `config.php` → `security.session_key_required` 配置关闭（默认开启）
 
 ### 1.3 响应格式
 
@@ -208,11 +208,31 @@ POST http://<域名>/api/index.php?action=<接口名>
   "msg": "ok",
   "data": {
     "server_time": 1726000000,
+    "app_key": "SWxxxx",
+    "software": { "id": 1, "name": "默认软件" },
     "site_name": "Nebula 网络验证",
     "heartbeat_interval": 60,
     "session_ttl": 3600,
     "register_enable": true,
     "maintain_mode": false,
+    "login": {
+      "method": "password",
+      "label": "用户名 + 密码",
+      "need_username": true,
+      "need_password": true,
+      "need_code": false,
+      "fields": ["username", "password"]
+    },
+    "device_fp": {
+      "enable": true,
+      "components": ["board", "cpu", "disk", "bios", "gpu", "mac"],
+      "core": ["board", "cpu"],
+      "weights": { "board": 30, "cpu": 25, "disk": 20, "bios": 15, "gpu": 10, "mac": 10 }
+    },
+    "session": {
+      "k": "a1b2c3d4e5f6a7b8",
+      "s": "0123456789abcdef0123456789abcdef0123456789abcdef"
+    },
     "grace": {
       "enable": true,
       "seconds": 3600,
@@ -231,7 +251,12 @@ POST http://<域名>/api/index.php?action=<接口名>
       "need_update": true,
       "force_update": false,
       "update_url": "https://example.com/app.exe",
-      "update_note": "修复若干问题"
+      "update_note": "修复若干问题",
+      "changelog": "修复若干问题",
+      "file_hash": "",
+      "file_size": 0,
+      "self_file_hash": "",
+      "self_file_size": 0
     },
     "notices": [
       { "id": 1, "title": "欢迎使用", "content": "系统已上线", "type": 4 }
@@ -430,6 +455,7 @@ POST http://<域名>/api/index.php?action=<接口名>
     "session_ttl": 3600,
     "force_offline": false,
     "has_notice": false,
+    "flash_notices": [],
     "grace": {
       "ticket": "G1.eyJ2IjoxLCJ1IjoxMCwibSI6ImExYjJjM2Q0...<base64url>.<sig-base64url>",
       "until": 1726007260,

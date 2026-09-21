@@ -171,9 +171,12 @@ c.stopHeartbeat();
 | `online`        | 是否在线                 |
 | `kick`          | 被强制下线（后台踢出，status=3） |
 | `force_offline` | 顶号下线（他处登录，status=2）  |
+| `has_notice`    | 是否有新弹窗/立即公告         |
 | `need_relogin`  | 会话失效，需重新登录           |
 | `need_activate` | 账号过期待激活              |
 | `grace_ticket`  | 最新离线宽限票据（SDK 已自动缓存）  |
+| `grace_until`   | 离线宽限票据到期时间戳           |
+| `flash_notices` | 本轮心跳下发的立即公告列表（type=3） |
 
 收到 `kick / force_offline / need_relogin` 时应停止业务并回登录界面；提示可用 `c.kickAlert(msg)`（第 6 节）。
 

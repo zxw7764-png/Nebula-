@@ -85,8 +85,6 @@ yanzheng/
 │   │       │   └── router.js   菜单/路由/页面注册
 │   │       └── pages/          各功能页面（一页一文件）
 │   │           ├── dashboard.js  数据概览
-│   │           ├── bigscreen.js  数据大屏（实时在线/曲线/代理排行）
-│   │           ├── analytics.js  留存复购分析（D1/D3/D7、复购、活跃分层）
 │   │           ├── stat.js       API 统计
 │   │           ├── user.js       用户管理（批量/导入导出）
 │   │           ├── card.js       卡密管理（批量/编辑/详情/关联商品生成）
@@ -158,7 +156,7 @@ yanzheng/
 ├── install/
 │   ├── install.php         网页安装向导
 │   ├── install.lock        安装锁（存在则禁止重装）
-│   ├── schema.sql          数据库结构（26 张表）
+│   ├── schema.sql          数据库结构（38 张表）
 │   ├── migrate_agent.php   升级脚本：新增代理商体系（可重复执行）
 │   ├── migrate_agent_types.php 升级脚本：代理商激活码 + 按卡类型计费（可重复执行）
 │   ├── migrate_type_groups.php 升级脚本：按卡类型指定激活用户组（可重复执行）
@@ -616,7 +614,7 @@ https://你的域名/cron.php?key=<config.php 中的 sign_salt>
     'sign_salt'      => '...',   // 签名盐
     'time_window'    => 300,     // 时间戳容差（秒）
     'enforce_crypto' => true,    // 是否强制加密（调试时可设 false）
-    'plain_whitelist'=> ['init', 'notice'],  // 允许明文的接口
+    'plain_whitelist'=> ['init', 'notice', 'version', 'online'],  // 允许明文的接口
 ],
 ```
 
