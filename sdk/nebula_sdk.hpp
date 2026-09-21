@@ -320,7 +320,7 @@ inline const std::string kTlsCertSha256 = NEBULA_STR("f31dc7cd4dbed7b9b6034bae75
 //   严格时这些命中也会按 action 弹窗退出（能拦下"隐身 VM"等伪装环境，但会误伤 VM 用户）。
 //   注意：真实调试铁证（debugged）无论开关都按 action 处置，不受此开关影响。
 // ============================================================
-inline const bool kProtectStrictPolicy = false;   // ← 改成 true 即对 VM/沙箱/hook 一律拦截
+inline const bool kProtectStrictPolicy = true;   // 严格：VM/沙箱/hook 一律拦截（误伤 VM 用户）
 } // namespace cfg
 
 constexpr int MAX_TOKEN_LEN  = 256;
