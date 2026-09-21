@@ -1454,13 +1454,11 @@ public:
     void loginAndGuard(const std::string& account, const std::string& secret,
                        Ok&& onOk, Fail&& onFail) {
         LoginResult lr = login(account, secret);
-        NEBULA_MARK_VM_BEGIN();       // 判定分支进入壳虚拟化段（防 patch）
         if (lr.ok) {
             onOk(lr);
         } else {
             onFail(lr);
         }
-        NEBULA_MARK_VM_END();
     }
 
     // ---------------- 业务接口（登录后） ----------------
@@ -1685,10 +1683,6 @@ public:
         std::string payload_b64 = ticket.substr(p1 + 1, p2 - p1 - 1);
         std::string sig_b64url  = ticket.substr(p2 + 1);
 
-        // ① 壳标记：离线票据的验签与绑定校验是"本地授权判定"的核心，值得上最强保护。
-        //    checkOffline 调用频率远低于 post()，可以放心用虚拟化（更慢但更难逆）。
-        //    未开启加固时 NEBULA_MARK_VM_BEGIN/END 是空宏，零开销。
-        NEBULA_MARK_VM_BEGIN();
         // ② 核心代码混淆：不透明谓词 + 虚假分支
         if (obf::opaqueFalse()) { NEBULA_DEAD_BRANCH(); }
 
@@ -1721,7 +1715,6 @@ public:
                 gr.code = -3; gr.msg = "票据与当前会话不匹配"; return gr;
             }
         }
-        NEBULA_MARK_VM_END();
         // 5. 有效期（容忍 120 秒时钟偏差）
         int64_t now = nowSec();
         if (gr.until_ts > 0 && now > gr.until_ts + CLOCK_SKEW) {
@@ -1799,12 +1792,7 @@ private:
             return r;
         }
 
-        // ① 壳标记：加解密 + 签名是破解者最先想改的地方。
-        //    post() 每次请求都会走，所以默认只挂「变异(MUTATE)」——性能影响小；
-        //    想更狠就换成 NEBULA_MARK_VM_BEGIN()（虚拟化，明显更慢）。
-        //    未开启加固（NEBULA_SHELL_ENABLE=0）时这两行是空宏，零开销。
-        NEBULA_MARK_MUTATE_BEGIN();
-        // ② 核心代码混淆：不透明谓词 + 虚假分支（打乱静态分析的控制流视图）
+        // 核心代码混淆：不透明谓词 + 虚假分支（打乱静态分析的控制流视图）
         if (obf::opaqueFalse()) { NEBULA_DEAD_BRANCH(); }
 
         // 1. 加密业务参数：key = SHA256(AES_KEY) 前 32 字节；IV = MD5(AES_KEY) 前 16 字节（随密文前 16 字节发送）
@@ -1815,7 +1803,7 @@ private:
         std::string blob = obf::vcallR(&Bcrypt::aesRaw, key32, iv, payloadJson, true);
         if (blob.empty()) { r.code = -2; r.msg = "本地加密失败"; return r; }
         std::string data_b64 = b64Encode(blob);
-
+        NEBULA_MARK_MUTATE_BEGIN();
         // 2. 时间戳（秒）+ 一次性随机串
         int64_t t = nowSec();
         std::string n = generateNonce();
@@ -1825,7 +1813,6 @@ private:
         bool whitelist = isWhitelist(action);
         std::string salt = whitelist ? salt_ : (session_s_.empty() ? salt_ : session_s_);
         std::string sign = obf::vcallR(&Bcrypt::hmacHex, salt, data_b64 + "|" + std::to_string(t) + "|" + n);
-        NEBULA_MARK_MUTATE_END();
 
         // 4. 信封：{ data, sign, t, n, k? }
         std::string envelope = "{\"data\":" + jsonString(data_b64)
@@ -1837,7 +1824,7 @@ private:
         // 软件标识（外层明文，必带：服务端 resolve 用它选软件 → 决定用哪套密钥与数据隔离）
         envelope += ",\"app_key\":" + jsonString(app_key_);
         envelope += "}";
-
+        NEBULA_MARK_MUTATE_END();
         // 5. 发送
         auto [status, body] = Http::post(actionUrl(action), envelope);
         r.http_code = status;
@@ -2135,7 +2122,6 @@ inline void guardAuth(bool ok, FnOk&& onOk, FnFail&& onFail) {
     } else {
         onFail();
     }
-    NEBULA_MARK_VM_END();
 }
 
 } // namespace nebula
