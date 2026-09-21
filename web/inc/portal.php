@@ -189,7 +189,11 @@ function webSettingBool(string $key, bool $default): bool
     return Setting::bool($key, $default);
 }
 
-/** 公告列表（softwareId>0 = 该软件+通用；0 = 仅通用） */function web_notices_for(int $softwareId, int $limit = 6): array
+/**
+ * 官网门户公告列表（type=1，公开展示区）
+ *   · softwareId>0（已登录已激活）→ 该软件公告 + 通用公告
+ *   · softwareId=0（未登录）     → 全部已发布官网公告（门户区对访客公开）
+ */function web_notices_for(int $softwareId, int $limit = 6): array
 {
     $now = time();
     if ($softwareId > 0) {
@@ -203,9 +207,10 @@ function webSettingBool(string $key, bool $default): bool
             [$softwareId, $now, $now]
         );
     } else {
+        // 未登录：官网门户公告区对访客公开，展示全部已发布官网公告（type=1）
         $rows = Database::all(
             'SELECT id, title, content, type, created_at FROM ' . Database::t('notices') . '
-             WHERE status = 1 AND type = 1 AND software_id = 0
+             WHERE status = 1 AND type = 1
                AND (start_at = 0 OR start_at <= ?)
                AND (end_at = 0 OR end_at >= ?)
              ORDER BY sort DESC, id DESC LIMIT ' . $limit,
