@@ -47,8 +47,14 @@ class FileGuard
     public static function safePath(string $rel): string
     {
         $rel = str_replace('\\', '/', trim($rel));
-        if ($rel === '' || strpos($rel, '..') !== false || strpos($rel, "\0") !== false) {
+        if ($rel === '' || strpos($rel, "\0") !== false) {
             return '';
+        }
+        // 逐路径组件判断「..」，避免 strpos($rel, '..') 误伤合法文件名（如 foo..bar.php）
+        foreach (explode('/', $rel) as $seg) {
+            if ($seg === '..') {
+                return '';
+            }
         }
         $rel = ltrim($rel, '/');
         $abs = NB_ROOT . '/' . $rel;

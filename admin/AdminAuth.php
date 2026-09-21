@@ -393,7 +393,8 @@ class AdminAuth
         if (!$row || empty($row['totp_recovery'])) {
             return false;
         }
-        $list = json_decode((string) $row['totp_recovery'], true);
+        $oldJson = (string) $row['totp_recovery'];
+        $list = json_decode($oldJson, true);
         if (!is_array($list) || !$list) {
             return false;
         }
@@ -403,10 +404,24 @@ class AdminAuth
             return false;
         }
         unset($list[$idx]);
-        Database::exec(
-            'UPDATE ' . Database::t('admins') . ' SET totp_recovery = ? WHERE id = ?',
-            [json_encode(array_values($list)), $adminId]
-        );
+        $newJson = json_encode(array_values($list));
+
+        // 原子消费：条件限定 totp_recovery = 刚读到的旧值（乐观锁）。
+        // 两个并发请求即使同时读到同一恢复码，也只有先完成这次 UPDATE 的那个
+        // 能让 WHERE 命中（旧值已被改成新值），rowCount 才是 1；
+        // 后到者 rowCount 为 0，视为消费失败 → 一次性凭证真正做到只可消费一次。
+        try {
+            $affected = Database::exec(
+                'UPDATE ' . Database::t('admins')
+                    . ' SET totp_recovery = ? WHERE id = ? AND totp_recovery = ?',
+                [$newJson, $adminId, $oldJson]
+            );
+        } catch (Throwable $e) {
+            return false;
+        }
+        if ($affected !== 1) {
+            return false;
+        }
         Logger::log('admin_totp', 1, '使用恢复码登录', ['admin_id' => $adminId]);
         return true;
     }

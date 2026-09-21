@@ -73,6 +73,21 @@ $enforce    = (bool) Config::get('security.enforce_crypto', true);
 $whitelist  = (array) Config::get('security.plain_whitelist', []);
 $allowPlain = !$enforce || in_array($action, $whitelist, true);
 
+// 日志脱敏：即使管理员误开 record_raw，也不让密码 / token / 密钥写进日志。
+$SENSITIVE_KEYS = [
+    'password', 'password2', 'confirm_pwd', 'old_password',
+    'token', 'session_key', 'skey', 'code', 'code_list',
+    'csrf', 'machine_id', 'aes_key', 'sign_salt',
+];
+$sanitizeLogInput = static function (array $raw) use ($SENSITIVE_KEYS): array {
+    foreach ($SENSITIVE_KEYS as $k) {
+        if (array_key_exists($k, $raw)) {
+            $raw[$k] = '[REDACTED]';
+        }
+    }
+    return $raw;
+};
+
 // ------------------------------------------------------------------
 // 多软件识别：外层明文字段 app_key 指认软件。
 // 命中后用该软件独立的 AES_KEY / SIGN_SALT 解密验签；
@@ -89,7 +104,7 @@ try {
     $parsed      = Crypto::parseRequest($input, $allowPlain);
     $requestData = $parsed['data'];
 } catch (CryptoException $e) {
-    Logger::log($action ?: 'unknown', 0, 'crypto: ' . $e->getMessage(), ['raw' => $input]);
+    Logger::log($action ?: 'unknown', 0, 'crypto: ' . $e->getMessage(), ['raw' => $sanitizeLogInput($input)]);
     $codeMap = [
         'missing_field' => 1001,
         'time_expired'  => 5003,
@@ -150,7 +165,7 @@ if ($action !== '' && !in_array($action, $publicActions, true)) {
 // ------------------------------------------------------------------
 $limit = Policy::rateLimitPerMin();
 if ($action !== '' && !RateLimit::byIp($action, $limit)) {
-    Logger::log($action, 0, '请求过于频繁', ['raw' => $input]);
+    Logger::log($action, 0, '请求过于频繁', ['raw' => $sanitizeLogInput($input)]);
     Response::error(5001, '请求过于频繁，请稍后再试');
 }
 
