@@ -367,7 +367,7 @@ foreach ($nbBuiltins as $nbKey) {
         </div>
         <p class="plans-note">
             <?php if (!empty($site['shop']['enabled'])): ?>
-                套餐内容以后台实际配置为准；如需长期使用或批量采购，可前往发卡网查看完整套餐并联系客服。
+                套餐内容以后台实际配置为准；如需长期使用或批量采购，可前往发卡网查看完整套餐并购买。
             <?php else: ?>
                 套餐内容以后台实际配置为准；如需长期使用或批量采购，可点击「立即购买」查看联系方式。
             <?php endif; ?>
