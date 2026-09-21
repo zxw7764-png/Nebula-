@@ -173,6 +173,17 @@ b { font-weight: 600; }
 }
 .goods-card h3 { font-size: 17px; font-weight: 700; }
 .goods-card .price { margin: 2px 0 0; }
+.goods-card .price .orig {
+    display: inline-block; margin-right: 8px; vertical-align: baseline;
+    font-size: 14px; font-weight: 500; color: var(--text-dim);
+    text-decoration: line-through; text-decoration-color: var(--text-dim);
+}
+.goods-card .price .sale {
+    display: inline-block; margin-left: 6px; padding: 2px 7px;
+    vertical-align: 6px; border-radius: 6px;
+    font-size: 12px; font-weight: 800; color: #fff;
+    background: linear-gradient(135deg, #ff6b4a, #f43f5e);
+}
 .goods-card .price b {
     font-size: 28px; font-weight: 800; letter-spacing: .5px;
     background: linear-gradient(135deg, #fff, var(--primary-2));
@@ -589,6 +600,11 @@ b { font-weight: 600; }
 .dp-tag.hot { border-color: var(--primary); color: var(--primary); font-weight: 600; }
 .dp-tag.out { border-color: #dc2626; color: #dc2626; }
 .dp-price { font-size: 15px; color: var(--text-dim, #888); margin: 2px 0 12px; }
+.dp-price .dp-orig {
+    font-size: 15px; font-weight: 500; color: var(--text-dim, #888);
+    text-decoration: line-through; text-decoration-color: var(--text-dim, #888);
+    margin-right: 2px;
+}
 .dp-price b { font-size: 30px; font-weight: 800; color: var(--primary); margin-left: 2px; }
 .dp-unit { font-size: 14px; color: var(--text-dim, #888); margin-left: 2px; font-weight: 400; }
 

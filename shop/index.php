@@ -379,7 +379,11 @@ $webBack = '../web/' . ($nbWebApp !== '' ? '?app=' . urlencode($nbWebApp) : '');
                 <?php endif; ?>
                 <h3><?php if ($p['icon'] !== '' && !in_array($style['layout'], ['rows', 'sidebar', 'pick'], true)): ?><img class="ticon" src="<?= esc_attr($p['icon']) ?>" alt="" loading="lazy" referrerpolicy="no-referrer"><?php endif; ?><?= esc_html($p['name']) ?></h3>
                 <?php $ptext = (string) ($p['price_text'] ?? (string) $p['shop_price']); ?>
-                <div class="price"><b><?= $ptext === '免费' ? '免费' : '&yen;' . esc_html($ptext) ?></b></div>
+                <div class="price">
+                    <?php if (($p['orig_price'] ?? '') !== ''): ?><s class="orig" aria-label="划线原价">&yen;<?= esc_html($p['orig_price']) ?></s><?php endif; ?>
+                    <b><?= $ptext === '免费' ? '免费' : '&yen;' . esc_html($ptext) ?></b>
+                    <?php if ((int) ($p['discount_pct'] ?? 0) > 0): ?><span class="sale">-<?= (int) $p['discount_pct'] ?>%</span><?php endif; ?>
+                </div>
                 <div class="intro"><?= esc_html($p['intro'] !== '' ? $p['intro'] : ($p['is_ext'] ? '付款后自动发货' : $p['spec_text'])) ?></div>
                 <div class="spec"><?= esc_html($p['spec_text']) ?></div>
                 <?php if ($p['duration'] !== ''): ?>

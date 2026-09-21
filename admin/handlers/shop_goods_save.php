@@ -32,6 +32,7 @@ $SHOP_TYPES = [
 
 $shopStatus     = Util::int($input, 'shop_status', 0) === 1 ? 1 : 0;
 $shopPriceRaw   = trim(Util::str($input, 'shop_price', '0'));
+$shopOrigRaw    = trim(Util::str($input, 'shop_orig_price', '0')); // 划线原价（仅展示用，0=无折扣）
 $cardType       = Util::int($input, 'card_type', Card::TYPE_DURATION);
 $cardDuration   = max(0, Util::int($input, 'card_duration', 0));
 $cardMaxDevices = Util::int($input, 'card_max_devices', 1);
@@ -120,6 +121,10 @@ if ($shopStatus === 1) {
     if ($shopPriceRaw === '' || !is_numeric($shopPriceRaw) || (float) $shopPriceRaw < 0) {
         Response::error(1001, '发卡售价需为不小于 0 的数字（0=免费商品）');
     }
+    // 划线原价（可选）：不小于 0 的数字，0 / 留空 = 不展示折扣
+    if ($shopOrigRaw !== '' && (!is_numeric($shopOrigRaw) || (float) $shopOrigRaw < 0)) {
+        Response::error(1001, '划线原价需为不小于 0 的数字（0 / 留空 = 不展示折扣）');
+    }
     // 卡面数值校验（多规格时 cardDuration 已被首张规格覆盖，此校验兼容旧单字段调用）
     if ($cardType !== Card::TYPE_FOREVER && $cardDuration <= 0) {
         Response::error(1001, $SHOP_TYPES[$cardType] . '必须填写卡面数值（时长秒数 / 点数 / 次数）');
@@ -146,6 +151,7 @@ $data = [
     'card_source'      => $cardSource,
     'shop_status'      => $shopStatus,
     'shop_price'       => number_format((float) $shopPriceRaw, 2, '.', ''),
+    'shop_orig_price'  => number_format((float) ($shopOrigRaw !== '' ? $shopOrigRaw : 0), 2, '.', ''),
     'card_type'        => $cardType,
     'card_duration'    => $cardDuration,
     'card_max_devices' => $cardMaxDevices,
@@ -205,7 +211,7 @@ if (!$old) {
 Database::update('shop_plans', $data, 'id = :id', ['id' => $id]);
 Shop::syncPlanCards($id, $cards);
 
-$pickKeys = ['card_source', 'shop_status', 'shop_price', 'card_type', 'card_duration',
+$pickKeys = ['card_source', 'shop_status', 'shop_price', 'shop_orig_price', 'card_type', 'card_duration',
     'card_max_devices', 'card_group_id', 'shop_category', 'shop_name', 'shop_icon', 'shop_intro', 'shop_detail'];
 if ($swColReady) {
     $pickKeys[] = 'shop_software_id';

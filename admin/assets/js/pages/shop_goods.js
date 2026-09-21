@@ -513,7 +513,7 @@ async function renderGoods() {
 function goodsEdit(p, allList) {
     const isNew = !p;
     if (isNew) {
-        p = { name: '', shop_status: 1, shop_price: '0.00', card_source: 0, card_type: 1, card_duration: 0,
+        p = { name: '', shop_status: 1, shop_price: '0.00', shop_orig_price: '0.00', card_source: 0, card_type: 1, card_duration: 0,
               card_max_devices: 1, card_group_id: 0, shop_category: '', shop_icon: '', shop_intro: '', shop_detail: '', shop_name: '',
               highlight: 0, badge: '' };
     }
@@ -579,6 +579,11 @@ function goodsEdit(p, allList) {
             <input id="gShopPrice" value="${esc(p.shop_price != null ? p.shop_price : '0.00')}" placeholder="例如：30.00">
             <div class="hint" id="gPriceHint"></div>
         </div>
+        <div class="field" style="max-width:320px">
+            <label>划线原价（元）<span class="sub">· 展示用</span></label>
+            <input id="gOrigPrice" value="${esc(p.shop_orig_price != null && p.shop_orig_price != '0.00' ? p.shop_orig_price : '')}" placeholder="留空 = 不展示折扣，例如：60.00">
+            <div class="hint">填一个「高于实售价」的原价时，前台商品卡会显示划线原价与折扣角标（如 -50%）；<b>结算金额仍按实售价</b>，仅作促销展示。</div>
+        </div>
         <div class="hint" id="gSpecHint">发货时按「类型 + 卡面 + 设备上限 + 用户组」从官方直发卡库自动取卡；请确保卡密中心的库存规格与这里完全一致，否则商品会显示缺货。</div>
     </div>
     <div class="modal-divider">商品陈列（发卡商店展示）</div>
@@ -632,6 +637,7 @@ function goodsEdit(p, allList) {
                 id: p.id || 0,
                 shop_status: parseInt(document.getElementById('gShopStatus').value, 10),
                 shop_price: document.getElementById('gShopPrice').value.trim(),
+                shop_orig_price: document.getElementById('gOrigPrice').value.trim(),
                 cards: cards,
                 card_source: cardSource,
                 shop_category: document.getElementById('gShopCategory').value.trim(),

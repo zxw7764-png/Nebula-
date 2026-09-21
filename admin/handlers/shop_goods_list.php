@@ -12,9 +12,11 @@ $tbl = Database::t('shop_plans');
 $swCol = Shop::hasShopSwCol() ? ', shop_software_id' : ', 0 AS shop_software_id';
 // 查单提示列（未跑迁移的老库缺列时补空串，避免整列表报错）
 $noticeCol = Shop::hasShopNoticeCol() ? ', shop_notice' : ", '' AS shop_notice";
+// 划线原价列（老库缺列时补 0）
+$origCol = Shop::hasShopOrigPriceCol() ? ', shop_orig_price' : ', 0 AS shop_orig_price';
 $rows = Database::all(
-    'SELECT id, name, status, shop_status, shop_price, card_source, software_id, card_type, card_duration, card_max_devices, card_group_id,
-            shop_category, shop_icon, shop_intro, shop_detail, shop_name, shop_badge, shop_highlight' . $swCol . $noticeCol . '
+    'SELECT id, name, status, shop_status, shop_price, shop_orig_price, card_source, software_id, card_type, card_duration, card_max_devices, card_group_id,
+            shop_category, shop_icon, shop_intro, shop_detail, shop_name, shop_badge, shop_highlight' . $swCol . $noticeCol . $origCol . '
      FROM ' . $tbl . '
      ORDER BY shop_status DESC, id ASC'
 );
@@ -35,6 +37,7 @@ $list = array_map(static function (array $p) {
         'status'           => (int) $p['status'],
         'shop_status'      => (int) ($p['shop_status'] ?? 0),
         'shop_price'       => (string) ($p['shop_price'] ?? '0.00'),
+        'shop_orig_price'  => (string) ($p['shop_orig_price'] ?? '0.00'),
         'card_source'      => $src,
         'card_type'        => $type,
         'card_duration'    => $dur,
