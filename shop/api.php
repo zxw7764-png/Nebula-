@@ -94,6 +94,7 @@ switch ($action) {
         $qty      = (int) Util::get($input, 'qty', 1);
         $specIdx  = Util::get($input, 'spec_index', -1);
         $specIdx  = is_numeric($specIdx) ? (int) $specIdx : -1;
+        $openid   = Util::str($input, 'openid', '');
 
         // 支付完成后的回跳/回调地址：优先用后台「发卡网配置 → 站点地址」，
         // 防止 Host 头伪造篡改 return_url / notify_url；未配置时按当前请求生成
@@ -111,7 +112,7 @@ switch ($action) {
 
         $me = ShopAuth::user();
         $r = Shop::createOrder($planId, $contact, $queryPwd, $channel, $base, $base, Util::ip(), $qty,
-            $me ? (int) $me['id'] : 0, $specIdx);
+            $me ? (int) $me['id'] : 0, $specIdx, trim($openid));
 
         if (!$r['ok']) {
             Response::error($r['code'], $r['msg']);

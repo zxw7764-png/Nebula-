@@ -452,6 +452,23 @@ class Shop
         return $has;
     }
 
+    /** 未跑迁移的老库：划线原价列不存在时降级为无折扣，避免 SQL 报错。 */
+    public static function hasShopOrigPriceCol(): bool
+    {
+        static $has = null;
+        if ($has !== null) {
+            return $has;
+        }
+        try {
+            $has = (bool) Database::one(
+                'SHOW COLUMNS FROM ' . Database::t('shop_plans') . " LIKE 'shop_orig_price'"
+            );
+        } catch (Throwable $e) {
+            $has = false;
+        }
+        return $has;
+    }
+
     /**
      * 取商品「查单自定义提示」：商品级单条文案，买家查到该商品已支付订单时展示。
      * @param int $planId     商品 ID（shop_plans.id）
@@ -545,13 +562,15 @@ class Shop
         }
         // 显示归属软件列一并取出：发货时它同时决定自动生成 / 取卡的卡密归属软件
         $swSelect = $hasSwCol ? ', shop_software_id' : ', 0 AS shop_software_id';
+        // 划线原价列（未跑迁移的老库缺列时降级为 0 = 无折扣）
+        $origCol = self::hasShopOrigPriceCol() ? ', shop_orig_price' : ', 0 AS shop_orig_price';
         try {
             $rows = Database::all(
                 'SELECT id, name, duration, `desc`, shop_category, shop_icon, shop_intro, shop_detail,
                         shop_name, shop_badge, shop_highlight,
                         shop_status, shop_price, card_source,
                         software_id, card_type, card_duration, card_max_devices, card_group_id'
-                        . $swSelect . '
+                        . $swSelect . $origCol . '
                  FROM ' . Database::t('shop_plans') . '
                  WHERE shop_status = 1' . $swWhere . '
                  ORDER BY sort DESC, id ASC',
@@ -592,6 +611,20 @@ class Shop
                 function ($s) { return $s !== ''; }));
 
             $shopName = trim((string) ($p['shop_name'] ?? ''));
+
+            // 划线原价折扣：原价 > 有效实售价时展示划线原价 + 折扣角标（-N%）。
+            // 仅展示用，结算金额仍按 shop_price（或规格价），与价格链路无耦合。
+            $origPrice = (float) ($p['shop_orig_price'] ?? 0);
+            $sellPrice = (float) $p['shop_price'];
+            foreach ((array) $cards as $c) {
+                if ((float) ($c['price'] ?? 0) > 0) {
+                    $sellPrice = (float) $c['price'];
+                    break;
+                }
+            }
+            $discountPct = ($origPrice > 0 && $sellPrice > 0 && $origPrice > $sellPrice)
+                ? (int) round((1 - $sellPrice / $origPrice) * 100) : 0;
+
             $out[] = [
                 'id'             => (int) $p['id'],
                 'name'           => $shopName !== '' ? $shopName : (string) $p['name'],
@@ -607,6 +640,8 @@ class Shop
                 'intro'          => mb_substr(trim((string) ($p['shop_intro'] ?? '')), 0, 200),
                 'detail'         => trim((string) ($p['shop_detail'] ?? '')),
                 'shop_price'     => number_format((float) $p['shop_price'], 2, '.', ''), // 实售价（元）
+                'orig_price'     => $origPrice > 0 ? number_format($origPrice, 2, '.', '') : '',   // 划线原价（元，空=无折扣）
+                'discount_pct'   => $discountPct,
                 'card_type'      => $type,
                 'card_type_text' => self::cardTypeText($type),
                 'card_duration'  => $dur,
@@ -761,7 +796,8 @@ class Shop
         string $ip,
         int $qty = 1,
         int $userId = 0,
-        int $specIndex = -1
+        int $specIndex = -1,
+        string $openid = ''
     ): array {
         if (!self::enabled() || self::mode() !== 'built') {
             return ['ok' => false, 'code' => 4001, 'msg' => '发卡网未开启', 'data' => null];
@@ -825,26 +861,27 @@ class Shop
         $now     = time();
 
         $orderId = (int) Database::insert('shop_orders', [
-            'order_no'    => $orderNo,
-            'plan_id'     => $plan['id'],
-            'plan_name'   => $plan['name'],
-            'software_id' => self::deliverSoftwareId($plan),
-            'card_source' => (int) ($plan['card_source'] ?? self::SOURCE_SYSTEM),
-            'card_type'   => $plan['card_type'],
-            'duration'    => $plan['card_duration'],
-            'max_devices' => $plan['card_max_devices'],
-            'group_id'    => $plan['card_group_id'],
-            'amount'      => $amount,
-            'qty'         => $qty,
-            'pay_type'    => $payType,
-            'pay_driver'  => $payDriver,
-            'channel'     => $payType === self::PAY_EPAY ? preg_replace('/[^a-z]/', '', strtolower($channel)) : '',
-            'status'      => self::ORDER_PENDING,
-            'contact'     => $contact,
-            'query_pwd'   => $queryPwd !== '' ? password_hash($queryPwd, PASSWORD_DEFAULT) : '',
-            'user_id'     => $userId,
-            'client_ip'   => $ip,
-            'created_at'  => $now,
+            'order_no'        => $orderNo,
+            'plan_id'         => $plan['id'],
+            'plan_name'       => $plan['name'],
+            'software_id'     => self::deliverSoftwareId($plan),
+            'card_source'     => (int) ($plan['card_source'] ?? self::SOURCE_SYSTEM),
+            'card_type'       => $plan['card_type'],
+            'duration'        => $plan['card_duration'],
+            'max_devices'     => $plan['card_max_devices'],
+            'group_id'        => $plan['card_group_id'],
+            'amount'          => $amount,
+            'qty'             => $qty,
+            'pay_type'        => $payType,
+            'pay_driver'      => $payDriver,
+            'channel'         => $payType === self::PAY_EPAY ? preg_replace('/[^a-z]/', '', strtolower($channel)) : '',
+            'openid'          => trim($openid),
+            'status'          => self::ORDER_PENDING,
+            'contact'         => $contact,
+            'query_pwd'       => $queryPwd !== '' ? password_hash($queryPwd, PASSWORD_DEFAULT) : '',
+            'user_id'         => $userId,
+            'client_ip'       => $ip,
+            'created_at'      => $now,
         ]);
 
         Logger::log('shop_order', 1, '发卡网下单', [
@@ -879,6 +916,19 @@ class Shop
                 $data += self::manualInfo();
             } else {
                 $data['pay_url'] = $payUrl;
+                // 微信 Native 驱动返回的是 code_url（二维码扫码链接），前端据此渲染二维码而非跳转
+                if ($payDriver === 'wechat') {
+                    $data['code_url'] = $payUrl;
+                    $data['pay_url'] = '';
+                    Database::update('shop_orders', ['wechat_code_url' => $payUrl], 'order_no = :ono', ['ono' => $orderNo]);
+                }
+                // 微信 JSAPI 驱动返回 JSON（jsapi_params），前端用 WeixinJSBridge 调起支付
+                if ($payDriver === 'wechatauth') {
+                    $data['jsapi_params'] = $payUrl;
+                    $data['pay_url'] = '';
+                    // 存 jsapi_params 到订单，查询时可重新展示（过期需重新下单）
+                    Database::update('shop_orders', ['jsapi_params' => $payUrl], 'order_no = :ono', ['ono' => $orderNo]);
+                }
             }
         } else {
             $data += self::manualInfo();
@@ -1449,7 +1499,7 @@ class Shop
             return null;
         }
         $o = Database::one(
-            'SELECT order_no, plan_id, software_id, plan_name, amount, pay_type, status, card_code, created_at, paid_at, delivered_at
+            'SELECT order_no, plan_id, software_id, plan_name, amount, pay_type, status, card_code, wechat_code_url, jsapi_params, created_at, paid_at, delivered_at
              FROM ' . Database::t('shop_orders') . ' WHERE order_no = ?',
             [$orderNo]
         );
@@ -1474,16 +1524,18 @@ class Shop
             $notice = self::planNotice((int) $o['plan_id'], (int) $o['software_id']);
         }
         return [
-            'order_no'    => (string) $o['order_no'],
-            'plan_name'   => (string) $o['plan_name'],
-            'amount'      => number_format(((int) $o['amount']) / 100, 2, '.', ''),
-            'pay_type'    => (int) $o['pay_type'],
-            'status'      => (int) $o['status'],
-            'status_text' => self::orderStatusText((int) $o['status']),
-            'card_code'   => (int) $o['status'] === self::ORDER_DELIVERED ? (string) $o['card_code'] : '',
-            'codes'       => $codes,
-            'created_at'  => Util::date((int) $o['created_at']),
-            'notice'      => $notice,
+            'order_no'      => (string) $o['order_no'],
+            'plan_name'     => (string) $o['plan_name'],
+            'amount'        => number_format(((int) $o['amount']) / 100, 2, '.', ''),
+            'pay_type'      => (int) $o['pay_type'],
+            'status'        => (int) $o['status'],
+            'status_text'   => self::orderStatusText((int) $o['status']),
+            'card_code'     => (int) $o['status'] === self::ORDER_DELIVERED ? (string) $o['card_code'] : '',
+            'codes'         => $codes,
+            'created_at'    => Util::date((int) $o['created_at']),
+            'notice'        => $notice,
+            'code_url'      => ((int) $o['status'] === self::ORDER_PENDING && (string) ($o['wechat_code_url'] ?? '') !== '') ? (string) $o['wechat_code_url'] : '',
+            'jsapi_params'  => ((int) $o['status'] === self::ORDER_PENDING && (string) ($o['jsapi_params'] ?? '') !== '') ? (string) $o['jsapi_params'] : '',
         ];
     }
 
@@ -1500,7 +1552,7 @@ class Shop
             return [];
         }
         $rows = Database::all(
-            'SELECT order_no, plan_id, software_id, plan_name, amount, pay_type, status, card_code, query_pwd, created_at
+            'SELECT order_no, plan_id, software_id, plan_name, amount, pay_type, status, card_code, query_pwd, wechat_code_url, jsapi_params, created_at
              FROM ' . Database::t('shop_orders') . '
              WHERE contact = ? AND query_pwd <> ?
              ORDER BY id DESC LIMIT 20',
@@ -1529,16 +1581,18 @@ class Shop
                 $notice = self::planNotice((int) $o['plan_id'], (int) $o['software_id']);
             }
             $out[] = [
-                'order_no'    => (string) $o['order_no'],
-                'plan_name'   => (string) $o['plan_name'],
-                'amount'      => number_format(((int) $o['amount']) / 100, 2, '.', ''),
-                'pay_type'    => (int) $o['pay_type'],
-                'status'      => (int) $o['status'],
-                'status_text' => self::orderStatusText((int) $o['status']),
-                'card_code'   => (int) $o['status'] === self::ORDER_DELIVERED ? (string) $o['card_code'] : '',
-                'codes'       => $codes,
-                'notice'      => $notice,
-                'created_at'  => Util::date((int) $o['created_at']),
+                'order_no'      => (string) $o['order_no'],
+                'plan_name'     => (string) $o['plan_name'],
+                'amount'        => number_format(((int) $o['amount']) / 100, 2, '.', ''),
+                'pay_type'      => (int) $o['pay_type'],
+                'status'        => (int) $o['status'],
+                'status_text'   => self::orderStatusText((int) $o['status']),
+                'card_code'     => (int) $o['status'] === self::ORDER_DELIVERED ? (string) $o['card_code'] : '',
+                'codes'         => $codes,
+                'notice'        => $notice,
+                'created_at'    => Util::date((int) $o['created_at']),
+                'code_url'      => ((int) $o['status'] === self::ORDER_PENDING && (string) ($o['wechat_code_url'] ?? '') !== '') ? (string) $o['wechat_code_url'] : '',
+                'jsapi_params'  => ((int) $o['status'] === self::ORDER_PENDING && (string) ($o['jsapi_params'] ?? '') !== '') ? (string) $o['jsapi_params'] : '',
             ];
         }
         return $out;

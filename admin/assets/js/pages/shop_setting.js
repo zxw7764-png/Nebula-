@@ -54,6 +54,9 @@ async function render() {
         epay:    { label: '易支付', ready: epayReady },
         codepay: { label: '码支付', ready: ['gateway', 'pid', 'key'].every(k => ((payCfgAllS.codepay || {})[k] || '').trim() !== '') },
         vmq:     { label: 'V免签', ready: ['gateway', 'key'].every(k => ((payCfgAllS.vmq || {})[k] || '').trim() !== '') },
+        wechat:  { label: '微信支付（Native扫码）', ready: ['appid', 'mchid', 'apiKey', 'cert', 'serial'].every(k => ((payCfgAllS.wechat || {})[k] || '').trim() !== '') },
+        wechatauth: { label: '微信支付（JSAPI微信内网页）', ready: ['appid', 'jsapi_appid', 'mchid', 'apiKey', 'cert', 'serial'].every(k => ((payCfgAllS.wechatauth || {})[k] || '').trim() !== '') },
+        alipay:  { label: '支付宝', ready: ['appid', 'privateKey', 'publicKey'].every(k => ((payCfgAllS.alipay || {})[k] || '').trim() !== '') },
         manual:  { label: '人工确认', ready: true },
     };
     const drvMeta = DRV_META[curDrv] || DRV_META.epay;
@@ -99,6 +102,9 @@ async function render() {
                     <option value="epay" ${curDrv === 'epay' ? 'selected' : ''}>彩虹易支付（内置，推荐）</option>
                     <option value="codepay" ${curDrv === 'codepay' ? 'selected' : ''}>码支付（个人免签 · 支付宝/微信/QQ）</option>
                     <option value="vmq" ${curDrv === 'vmq' ? 'selected' : ''}>V免签（聚合支付 · 支付宝/微信）</option>
+                    <option value="wechat" ${curDrv === 'wechat' ? 'selected' : ''}>微信支付官方（Native 扫码）</option>
+                    <option value="wechatauth" ${curDrv === 'wechatauth' ? 'selected' : ''}>微信支付官方（JSAPI 微信内网页）</option>
+                    <option value="alipay" ${curDrv === 'alipay' ? 'selected' : ''}>支付宝官方（电脑网站/当面付）</option>
                     <option value="manual" ${manual ? 'selected' : ''}>人工确认（收款码 + 后台确认发货）</option>
                 </select>
                 <div class="hint">选择支付通道后按提示填写对应配置；人工模式不走在线支付</div>
@@ -363,6 +369,26 @@ const PAY_DRV_FIELDS = {
         { key: 'gateway', label: 'V免签网关地址', ph: 'https://pay.example.com（V免签端域名）' },
         { key: 'key', label: '通讯密钥', ph: 'V免签后台设置的通讯密钥', pwd: true },
     ],
+    wechat: [
+        { key: 'appid', label: 'AppID', ph: '微信支付 AppID' },
+        { key: 'mchid', label: '商户号', ph: '微信支付商户号' },
+        { key: 'serial', label: '商户证书序列号', ph: '证书管理页面查看，不含空格' },
+        { key: 'apiKey', label: 'API v3 密钥', ph: '平台设置→API安全→API密钥' },
+        { key: 'cert', label: '商户私钥 PEM', ph: 'apiclient_key.pem 完整内容，含 -----BEGIN PRIVATE KEY-----' },
+    ],
+    wechatauth: [
+        { key: 'appid', label: '商户 AppID', ph: '微信支付商户 AppID' },
+        { key: 'jsapi_appid', label: 'JSAPI AppID（公众号/小程序）', ph: '微信公众账号或小程序的 AppID（与商户 AppID 可不同）' },
+        { key: 'mchid', label: '商户号', ph: '微信支付商户号' },
+        { key: 'serial', label: '商户证书序列号', ph: '证书管理页面查看，不含空格' },
+        { key: 'apiKey', label: 'API v3 密钥', ph: '平台设置→API安全→API密钥' },
+        { key: 'cert', label: '商户私钥 PEM', ph: 'apiclient_key.pem 完整内容，含 -----BEGIN PRIVATE KEY-----' },
+    ],
+    alipay: [
+        { key: 'appid', label: '应用 APPID', ph: '支付宝开放平台应用 ID' },
+        { key: 'privateKey', label: '应用私钥 PEM', ph: '应用私钥，含 -----BEGIN PRIVATE KEY-----' },
+        { key: 'publicKey', label: '支付宝公钥 PEM', ph: '支付宝公钥（非应用公钥），含 -----BEGIN PUBLIC KEY-----' },
+    ],
 };
 let payCfgAll = {};
 
@@ -385,6 +411,86 @@ function renderPayCfg(drv, s) {
             <input id="ssEpayKey" value="${esc(s.shop_epay_key || '')}" placeholder="易支付商户密钥" autocomplete="new-password">
             <div class="hint">异步回调地址：<code>${esc(location.origin)}/shop/notify.php</code>，请在易支付商户后台保持一致（服务端自动验签）</div>
         </div>`;
+        return;
+    }
+    if (drv === 'wechat') {
+        const cur = payCfgAll[drv] || {};
+        box.innerHTML = `
+        <div class="row2">
+            <div class="field"><label>AppID</label>
+                <input data-payf="appid" value="${esc(cur.appid || '')}" placeholder="微信支付 AppID">
+            </div>
+            <div class="field"><label>商户号</label>
+                <input data-payf="mchid" value="${esc(cur.mchid || '')}" placeholder="微信支付商户号">
+            </div>
+        </div>
+        <div class="row2">
+            <div class="field"><label>商户证书序列号</label>
+                <input data-payf="serial" value="${esc(cur.serial || '')}" placeholder="证书管理页面查看">
+            </div>
+            <div class="field"><label>API v3 密钥</label>
+                <input data-payf="apiKey" value="${esc(cur.apiKey || '')}" placeholder="平台设置 → API安全 → API密钥" autocomplete="new-password">
+            </div>
+        </div>
+        <div class="field"><label>商户私钥 PEM</label>
+            <textarea data-payf="cert" rows="5" style="font-family:monospace;font-size:12px" placeholder="完整 apiclient_key.pem 内容，包含 BEGIN PRIVATE KEY 行">${esc(cur.cert || '')}</textarea>
+            <div class="hint">请将 <code>apiclient_key.pem</code> 完整粘贴，无需下载；平台证书目录留空则在 certs/wechat/ 下自动下载缓存</div>
+        </div>
+        <div class="hint">异步回调地址：<code>${esc(location.origin)}/shop/wechat_notify.php</code>，请在微信支付商户后台「API证书」→「APIv3」中配置通知URL</div>`;
+        return;
+    }
+    if (drv === 'wechatauth') {
+        const cur = payCfgAll[drv] || {};
+        box.innerHTML = `
+        <div class="row2">
+            <div class="field"><label>商户 AppID</label>
+                <input data-payf="appid" value="${esc(cur.appid || '')}" placeholder="微信支付商户 AppID">
+            </div>
+            <div class="field"><label>JSAPI AppID（公众号/小程序）</label>
+                <input data-payf="jsapi_appid" value="${esc(cur.jsapi_appid || cur.appid || '')}" placeholder="微信公众号或小程序 AppID（通常与商户 AppID 相同）">
+            </div>
+        </div>
+        <div class="row2">
+            <div class="field"><label>商户号</label>
+                <input data-payf="mchid" value="${esc(cur.mchid || '')}" placeholder="微信支付商户号">
+            </div>
+            <div class="field"><label>商户证书序列号</label>
+                <input data-payf="serial" value="${esc(cur.serial || '')}" placeholder="证书管理页面查看">
+            </div>
+        </div>
+        <div class="row2">
+            <div class="field"><label>API v3 密钥</label>
+                <input data-payf="apiKey" value="${esc(cur.apiKey || '')}" placeholder="平台设置 → API安全 → API密钥" autocomplete="new-password">
+            </div>
+            <div class="field"><label>商户私钥 PEM</label>
+                <textarea data-payf="cert" rows="5" style="font-family:monospace;font-size:12px" placeholder="完整 apiclient_key.pem 内容">${esc(cur.cert || '')}</textarea>
+            </div>
+        </div>
+        <div class="hint">适用于买家在微信内置浏览器中直接唤起微信支付（无需扫码）。买家需先在微信内完成授权获取 openid 后方可下单。</div>`;
+        return;
+    }
+    if (drv === 'alipay') {
+        const cur = payCfgAll[drv] || {};
+        box.innerHTML = `
+        <div class="row2">
+            <div class="field"><label>应用 APPID</label>
+                <input data-payf="appid" value="${esc(cur.appid || '')}" placeholder="支付宝开放平台应用 ID">
+            </div>
+            <div class="field"><label>密钥模式</label>
+                <select data-payf="signType">
+                    <option value="RSA2" ${((cur.signType || 'RSA2') === 'RSA2') ? 'selected' : ''}>RSA2（SHA-256，推荐）</option>
+                    <option value="RSA" ${cur.signType === 'RSA' ? 'selected' : ''}>RSA（SHA-1，仅兼容老应用）</option>
+                </select>
+            </div>
+        </div>
+        <div class="field"><label>应用私钥 PEM</label>
+            <textarea data-payf="privateKey" rows="5" style="font-family:monospace;font-size:12px" placeholder="完整应用私钥，包含 BEGIN PRIVATE KEY 行">${esc(cur.privateKey || '')}</textarea>
+        </div>
+        <div class="field"><label>支付宝公钥 PEM</label>
+            <textarea data-payf="publicKey" rows="5" style="font-family:monospace;font-size:12px" placeholder="完整支付宝公钥，包含 BEGIN PUBLIC KEY 行">${esc(cur.publicKey || '')}</textarea>
+            <div class="hint">请在「接口加签方式」里使用「公钥」模式并上传应用公钥，此处填写支付宝返回的「支付宝公钥」</div>
+        </div>
+        <div class="hint">异步回调地址：<code>${esc(location.origin)}/shop/alipay_notify.php</code>，同步回跳：<code>${esc(location.origin)}/shop/</code></div>`;
         return;
     }
     const cur = payCfgAll[drv] || {};

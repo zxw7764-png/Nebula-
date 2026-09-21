@@ -234,7 +234,7 @@
             + '<div class="dp-side">'
             + '<h2 class="dp-name">' + esc(plan.name) + '</h2>'
             + '<div class="dp-tags">' + tags + '</div>'
-            + '<div class="dp-price">&yen;<b data-price>' + firstPrice.toFixed(2) + '</b>' + (specs.length > 1 && unitText(specs[0]) ? '<span class="dp-unit">/' + esc(unitText(specs[0])) + '</span>' : '') + '</div>'
+            + '<div class="dp-price"><s class="dp-orig" data-orig hidden></s>&yen;<b data-price>' + firstPrice.toFixed(2) + '</b>' + (specs.length > 1 && unitText(specs[0]) ? '<span class="dp-unit">/' + esc(unitText(specs[0])) + '</span>' : '') + '</div>'
             + specBlock
             + (S.user
                 ? '<div class="logged-tip">已登录 <b>' + esc(S.user.nickname) + '</b>，下单免填凭证，订单自动关联账号，可在「我的订单」随时查看</div>'
@@ -265,6 +265,19 @@
         return (isFinite(v) && v > 0) ? v : b;
     }
 
+    // 详情弹窗划线原价：原价 > 当前实售价时显示，否则隐藏
+    function setOrig(box, plan, price) {
+        var el = box.querySelector('[data-orig]');
+        if (!el) return;
+        var o = parseFloat(plan && plan.orig_price);
+        if (isFinite(o) && o > 0 && o > price) {
+            el.textContent = '\u00a5' + esc(plan.orig_price) + ' ';
+            el.hidden = false;
+        } else {
+            el.hidden = true;
+        }
+    }
+
     function openImgViewer(src, alt) {
         var v = document.getElementById('imgViewer');
         if (!v) {
@@ -286,6 +299,7 @@
         var price  = specEls.length
             ? effPrice({ price: specEls[0].dataset.price }, plan.shop_price)
             : (parseFloat(plan.shop_price) || 0);
+        setOrig(box, plan, price);
         var maxQty = plan.stock > 0 ? Math.min(99, plan.stock) : 99;
 
         Array.prototype.forEach.call(specEls, function (lab) {
@@ -295,6 +309,7 @@
                 var r = lab.querySelector('input[name="spec"]');
                 if (r) r.checked = true;
                 price = effPrice({ price: lab.dataset.price }, plan.shop_price);
+                setOrig(box, plan, price);
                 var dpe = box.querySelector('[data-price]');
                 if (dpe) dpe.textContent = price.toFixed(2);
                 var due = box.querySelector('.dp-unit');
@@ -345,6 +360,8 @@
                 query_pwd: pEl ? (pEl.value || '').trim() : '',
                 qty:       qty()
             };
+            // 微信 JSAPI：从页面环境获取 openid（由后端签名接口注入或前端 JSSDK 获取）
+            if (S.openid) payload.openid = S.openid;
 
             if (specChecked) payload.spec_index = parseInt(specChecked.value, 10) || 0;
             if (!S.user) {
@@ -368,7 +385,15 @@
                     return;
                 }
                 var d = j.data;
-                if (d.pay_type === 1 && d.pay_url) {
+                if (d.pay_type === 1 && d.code_url) {
+                    // 微信支付 Native：渲染二维码而非跳转
+                    try { sessionStorage.setItem('nb_shop_last', d.order_no); } catch (e) {}
+                    renderWechatQrResult(box, submitBtn, d);
+                } else if (d.pay_type === 1 && d.jsapi_params) {
+                    // 微信支付 JSAPI：微信内网页直接调起支付
+                    try { sessionStorage.setItem('nb_shop_last', d.order_no); } catch (e) {}
+                    renderWechatJsapiResult(box, submitBtn, d);
+                } else if (d.pay_type === 1 && d.pay_url) {
                     try { sessionStorage.setItem('nb_shop_last', d.order_no); } catch (e) {}
                     toast('订单已创建，正在跳转支付…', 'ok');
                     setTimeout(function () { window.location.href = d.pay_url; }, 500);
@@ -624,6 +649,70 @@
         el.innerHTML = '<div class="or-box ' + (ok ? 'ok' : 'err') + '">' + html + '</div>';
     }
 
+    function renderWechatQrResult(box, submitBtn, d) {
+        var html = '<div class="or-box ok">'
+            + '<p>订单已创建！请保存订单号：<span class="or-no"><code>' + esc(d.order_no) + '</code></span></p>'
+            + '<p class="qr-tip">应付 <b>&yen;' + esc(d.amount_text || yuan(d.amount)) + '</b>，请使用微信扫描下方二维码完成支付。</p>'
+            + '</div>';
+        // 用第三方二维码 API 渲染（无需额外依赖）
+        html += '<div class="qr-box" style="text-align:center;margin-top:14px">'
+            + '<img src="' + esc(d.code_url) + '" alt="微信支付二维码" style="width:220px;height:220px;border-radius:8px;display:block;margin:0 auto" referrerpolicy="no-referrer">'
+            + '<p class="qr-tip" style="margin-top:10px">订单号：<code>' + esc(d.order_no) + '</code> · 支付完成后自动发卡</p>'
+            + '</div>';
+        renderResult(box, true, html);
+        submitBtn.textContent = '完成';
+        submitBtn.onclick = closeOrder;
+    }
+
+    function renderWechatJsapiResult(box, submitBtn, d) {
+        var params;
+        try { params = JSON.parse(d.jsapi_params); } catch (e) { params = null; }
+        if (!params || !params.appId) {
+            renderResult(box, false, (params && params.msg) ? params.msg : '订单已创建，请在微信内重新下单');
+            return;
+        }
+        renderResult(box, true,
+            '<div class="or-box ok">'
+            + '<p>订单已创建！请保存订单号：<span class="or-no"><code>' + esc(d.order_no) + '</code></span></p>'
+            + '<p class="qr-tip">应付 <b>&yen;' + esc(d.amount_text || yuan(d.amount)) + '</b>，正在唤起微信支付…</p>'
+            + '</div>');
+        submitBtn.disabled = true;
+        submitBtn.textContent = '支付中…';
+        // 微信 JSAPI 调起支付
+        if (typeof WeixinJSBridge === 'undefined') {
+            if (document.addEventListener) {
+                document.addEventListener('WeixinJSBridgeReady', onWeixinJsApiReady, false);
+            } else if (document.attachEvent) {
+                document.attachEvent('WeixinJSBridgeReady', onWeixinJsApiReady);
+                document.attachEvent('onWeixinJSBridgeReady', onWeixinJsApiReady);
+            }
+        } else {
+            onWeixinJsApiReady();
+        }
+        function onWeixinJsApiReady() {
+            WeixinJSBridge.invoke('getBrandWCPayRequest', {
+                'appId':     params.appId,
+                'timeStamp': params.timeStamp,
+                'nonceStr':  params.nonceStr,
+                'package':   params.package,
+                'signType':  params.signType || 'RSA',
+                'paySign':   params.paySign,
+            }, function (res) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '完成';
+                submitBtn.onclick = closeOrder;
+                if (res.err_msg === 'get_brand_wcpay_request:ok') {
+                    toast('支付成功！正在查询订单…', 'ok');
+                    setTimeout(function () { showView('order'); queryOrderByOrderNo(d.order_no); }, 800);
+                } else if (res.err_msg === 'get_brand_wcpay_request:cancel') {
+                    renderResult(box, false, '支付已取消，订单仍有效，可重新发起支付。');
+                } else {
+                    renderResult(box, false, '支付未完成（' + esc(res.err_msg || '未知错误') + '），请检查后重试。');
+                }
+            });
+        }
+    }
+
     function renderManualResult(box, submitBtn, d) {
         var html = '<div class="or-box ok">'
             + '<p>订单已创建！请保存订单号：<span class="or-no"><code>' + esc(d.order_no) + '</code></span></p>'
@@ -834,6 +923,19 @@
     });
 
     document.addEventListener('click', function (e) {
+        var b = e.target.closest && e.target.closest('[data-jsapi-repay]');
+        if (!b || !b.dataset.no) { return; }
+        var no = b.dataset.no;
+        api('query', { order_no: no }, function (j) {
+            if (j.code !== 0 || !j.data || !j.data.jsapi_params) {
+                toast('唤起失败，请重新下单', 'warn');
+                return;
+            }
+            renderWechatJsapiResult(null, { disabled: false, textContent: '唤起中…', onclick: null }, j.data);
+        });
+    });
+
+    document.addEventListener('click', function (e) {
         var b = e.target.closest && e.target.closest('[data-close-order]');
         if (!b || !b.dataset.closeOrder) { return; }
         var no = b.dataset.closeOrder;
@@ -988,6 +1090,15 @@
                 html += S.manual
                     ? '<p class="qr-tip">订单待支付。人工发货订单请按页面提示完成付款并联系管理员确认。</p>'
                     : '<p class="qr-tip">订单待支付。请尽快完成支付，支付成功后系统将自动发卡；若已付款未到账，请稍后刷新本页查看。</p>';
+                if (o.code_url) {
+                    html += '<div class="qr-box" style="text-align:center;margin-top:12px">'
+                        + '<img src="' + esc(o.code_url) + '" alt="微信支付二维码" style="width:180px;height:180px;border-radius:8px;display:block;margin:0 auto" referrerpolicy="no-referrer">'
+                        + '<p class="qr-tip">用微信扫描下方二维码支付 · 支付完成后自动发卡</p>'
+                        + '</div>';
+                }
+                if (o.jsapi_params) {
+                    html += '<button class="btn primary sm" type="button" data-jsapi-repay data-no="' + esc(o.order_no) + '">唤起微信支付</button> ';
+                }
                 if (o.pay_url) {
                     html += '<button class="btn primary sm" type="button" data-repay="' + esc(o.pay_url) + '">继续支付</button> ';
                 }
