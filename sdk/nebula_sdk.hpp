@@ -250,12 +250,12 @@ namespace nebula {
 //  AES_KEY / SIGN_SALT / API 地址；未开启时等价于普通 std::string，零开销。
 // ============================================================
 namespace cfg {
-inline const std::string kApiUrl   = NEBULA_STR("http://your-domain.com/api/index.php");  // ← 改成你的 API 入口
+inline const std::string kApiUrl   = NEBULA_STR("https://yz.baige.fun/api/index.php");  // ← 改成你的 API 入口
 // kAppKey 用 SecureString 存储：长度 ≤15 会被 std::string SSO 内联进 .data 静态区，
 // 直接放 std::string 会让明文在内存 dump 时一眼可见；SecureString 只在 str() 时临时解码。
-inline const SecureString kAppKey = SecureString(NEBULA_STR("SWXXXXXXXX"));                 // ← 改成你的软件 app_key
-inline const std::string kAesKey   = NEBULA_STR("00000000000000000000000000000000");      // ← 32位hex，后台软件管理复制
-inline const std::string kSignSalt = NEBULA_STR("000000000000000000000000000000000000000000000000"); // ← 48位hex，后台软件管理复制
+inline const SecureString kAppKey = SecureString(NEBULA_STR("SWBFE6879E94DD"));                 // ← 改成你的软件 app_key
+inline const std::string kAesKey   = NEBULA_STR("eb32f8087805a06cf8e45e306e7a8d5f");      // ← 32位hex，后台软件管理复制
+inline const std::string kSignSalt = NEBULA_STR("147ea3cc63530253a1617df4da45d7b0cc1a345f67fe2db3"); // ← 48位hex，后台软件管理复制
 
 // ★ 响应防伪造签名（必填 ）：
 //   把服务端 config/grace_keys.php 里的 public 字段（PEM）原样填到这里，
@@ -281,7 +281,11 @@ inline const std::string kSignSalt = NEBULA_STR("0000000000000000000000000000000
 //
 //   ✅ 必须保留 -----BEGIN/END PUBLIC KEY----- 头尾标记（SDK 靠它们定位密钥体，
 //      去掉后验签必败）；❌ 引号内不能有真实回车；空格/加号/等号原样保留。
-inline const std::string kRespSignPubKey = NEBULA_STR("");  // ← 必填：服务端 PEM 公钥（填法见上方说明）
+inline const std::string kRespSignPubKey = NEBULA_STR(
+    "-----BEGIN PUBLIC KEY-----\n"
+    "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5eoEEPofNhvvXs39pnNgP6C48ypS\n"
+    "RtTZoHHTfsb1kqJK6EGc2sST5tuVGSxn628z2N7f+QNnAla3SCyA6+qzAg==\n"
+    "-----END PUBLIC KEY-----\n");
 
 // ★ TLS 证书指纹锁定（可选但强烈建议，防透明代理 / 中间人抓包）：
 //   填服务端 HTTPS 证书的 SHA256 指纹（64 位 hex，大小写均可、可带冒号）。
@@ -307,7 +311,7 @@ inline const std::string kRespSignPubKey = NEBULA_STR("");  // ← 必填：服�
 //   · 服务器换证书（续期/更换 CA）后这里必须同步更新，否则所有客户端连不上；
 //   · 留空 = 不校验证书指纹（仍走系统标准 TLS 校验）。
 //   · 填写后 SDK 会同时拒绝 http:// 的 API 地址（明文传输 + 无法锁证书）。
-inline const std::string kTlsCertSha256 = NEBULA_STR("");  // ← 服务端证书 SHA256 指纹，留空不锁定
+inline const std::string kTlsCertSha256 = NEBULA_STR("f31dc7cd4dbed7b9b6034bae7577452a6e50102ff3121775e64698b76f08b80d");  // ← 服务端证书 SHA256 指纹，留空不锁定
 
 // ============================================================
 // ★ 疑似环境处置策略（false=宽松[默认]，true=严格）
@@ -689,8 +693,6 @@ public:
         BCRYPT_ALG_HANDLE alg = nullptr;
         if (!BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(&alg, BCRYPT_ECDSA_P256_ALGORITHM, nullptr, 0))) return false;
         bool ok = false;
-        // BCRYPT_ECCKEY_BLOB { dwMagic, cbKey, X[32], Y[32] }（big-endian 原序）
-        // 新版 Windows SDK 已不再提供 BCRYPT_ECDSA_BLOB，其布局与 BCRYPT_ECCKEY_BLOB 完全一致
         std::vector<BYTE> blob(sizeof(BCRYPT_ECCKEY_BLOB) + 64);
         BCRYPT_ECCKEY_BLOB* hdr = (BCRYPT_ECCKEY_BLOB*)blob.data();
         hdr->dwMagic = BCRYPT_ECDSA_PUBLIC_P256_MAGIC;
@@ -700,7 +702,6 @@ public:
         if (BCRYPT_SUCCESS(BCryptImportKeyPair(alg, nullptr, BCRYPT_ECCPUBLIC_BLOB, &k,
                 blob.data(), (ULONG)blob.size(), 0))) {
             std::string digest = sha256(msg);
-            // bcrypt 期望原生格式签名 r[32]||s[32]；新版 SDK 的 BCryptVerifySignature 为 7 参数（第 2 个是 pPaddingInfo，ECDSA 传 nullptr）
             ok = BCRYPT_SUCCESS(BCryptVerifySignature(k, nullptr, (PUCHAR)digest.data(), (ULONG)digest.size(),
                                                       (PUCHAR)raw.data(), (ULONG)raw.size(), 0));
             BCryptDestroyKey(k);
@@ -791,7 +792,11 @@ private:
         size_t p = pem.find("-----BEGIN");
         size_t e = pem.find("-----END");
         if (p == std::string::npos || e == std::string::npos) return {};
-        for (size_t i = p + 10; i < e; ++i) {
+        // 从 BEGIN 行之后的换行处开始收集，避免把表头/表尾行里的
+        // P/U/B/L/I/C/K/E/Y 等字母误当作 base64 混入（否则解码出错误 DER）
+        size_t s = pem.find('\n', p);
+        if (s == std::string::npos) s = p;
+        for (size_t i = s + 1; i < e; ++i) {
             char c = pem[i];
             if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
                 || c == '+' || c == '/' || c == '=') b64 += c;
@@ -1106,6 +1111,7 @@ public:
         std::string msg;
         int64_t server_time = 0;
         std::string site_name;
+        std::string software_name;     // software.name（init 下发，用于派生提示框标题）
         int     heartbeat_interval = 60;
         int64_t session_ttl = 0;
         bool    register_enable = true;
@@ -1199,6 +1205,11 @@ public:
         const std::string& d = r.raw;
         res.server_time         = atoll(findJsonValue(d, "server_time").c_str());
         res.site_name           = findJsonValue(d, "site_name");
+        // software.{name} 内嵌对象，先 extractObject 再取 name
+        {
+            std::string sw = extractObject(d, "software");
+            if (!sw.empty()) res.software_name = findJsonValue(sw, "name");
+        }
         std::string hi          = findJsonValue(d, "heartbeat_interval");
         res.heartbeat_interval  = hi.empty() ? 60 : atoi(hi.c_str());
         res.session_ttl         = atoll(findJsonValue(d, "session_ttl").c_str());
@@ -1255,6 +1266,7 @@ public:
         hb_default_ms_ = res.heartbeat_interval > 0 ? res.heartbeat_interval * 1000 : 60000;
         state_ = STATE_READY;
         last_init_ = res;   // 缓存最近一次 init 结果（内置提示 versionAlert / enforceSelfIntegrity 使用）
+        deriveTitles();
         return res;
     }
 
@@ -1268,6 +1280,14 @@ public:
     //   接入方可用 msg 与返回值自行渲染任意 UI；回调在调用线程执行。
     using UiHandler = std::function<void(const char* kind, const std::string& msg)>;
     void setUiHandler(UiHandler h) { ui_ = std::move(h); }
+
+    // 自定义内置提示框标题（init 前调用，影响所有 Alert/Notice 弹窗）
+    void setVersionTitle(const std::wstring& t)   { title_version_   = t; }
+    void setMaintainTitle(const std::wstring& t)  { title_maintain_  = t; }
+    void setKickTitle(const std::wstring& t)      { title_kick_      = t; }
+    void setIntegrityTitle(const std::wstring& t) { title_integrity_ = t; }
+    void setFlashTitle(const std::wstring& t)     { title_flash_     = t; }
+    void setPopupTitle(const std::wstring& t)     { title_popup_     = t; }
 
     // ---------------- 客户端加固（可选 · 默认关闭 · 见 sdk/SDK_PROTECTION.md） ----------------
     // 三项加固（壳标记 / 代码混淆 / 运行时防护）默认全部关闭；开启后可用下面几个接口微调。
@@ -1327,27 +1347,27 @@ public:
             uiAlert("version",
                     (std::string("当前版本过低（") + client_ver_ + "），请升级到 "
                      + last_init_.latest + " 后使用。"),
-                    L"Nebula 版本更新", MB_ICONWARNING);
+                    title_version_, MB_ICONWARNING);
             return false;
         }
         if (last_init_.need_update) {
             uiAlert("version",
                     "发现新版本 " + last_init_.latest + "，建议尽快升级。",
-                    L"Nebula 版本更新", MB_ICONINFORMATION);
+                    title_version_, MB_ICONINFORMATION);
         }
         return true;
     }
 
     // init 成功后调用：维护模式提示（登录仍由服务端 6002 兜底拦截）
     void maintainAlert() const {
-        uiAlert("maintain", "服务器维护中，请稍后再试。", L"Nebula 公告", MB_ICONWARNING);
+        uiAlert("maintain", "服务器维护中，请稍后再试。", title_maintain_, MB_ICONWARNING);
     }
 
     // 心跳被踢 / 顶号 / 需重新登录时调用（可在心跳回调线程内）：提示服务端下线原因
     void kickAlert(const std::string& serverMsg) const {
         uiAlert("kick",
                 serverMsg.empty() ? "您的账号已下线，请重新登录。" : serverMsg,
-                L"Nebula 下线通知", MB_ICONWARNING);
+                title_kick_, MB_ICONWARNING);
     }
 
     // 被踢/下线展示文案（返回 UTF-8，接入方自行转宽字符显示）：
@@ -1368,7 +1388,7 @@ public:
     bool enforceSelfIntegrity() const {
         const std::string err = verifySelfIntegrity(last_init_.self_file_hash, last_init_.self_file_size);
         if (err.empty()) return true;
-        uiAlert("integrity", err, L"Nebula 安全校验", MB_ICONERROR);
+        uiAlert("integrity", err, title_integrity_, MB_ICONERROR);
         return false;
     }
 
@@ -1615,7 +1635,7 @@ public:
         for (auto& n : list) {
             uiAlert("flash",
                     n.title + (n.content.empty() ? std::string() : ("\n\n" + n.content)),
-                    L"Nebula 公告", MB_ICONINFORMATION);
+                    title_flash_, MB_ICONINFORMATION);
             markNoticeRead(n.id);
         }
         return list;
@@ -1632,7 +1652,7 @@ public:
         for (auto& n : out) {
             uiAlert("popup",
                     n.title + (n.content.empty() ? std::string() : ("\n\n" + n.content)),
-                    L"Nebula 公告", MB_ICONINFORMATION);
+                    title_popup_, MB_ICONINFORMATION);
         }
         return out;
     }
@@ -1720,6 +1740,20 @@ public:
 
 private:
     enum State { STATE_NEW, STATE_READY, STATE_LOGIN, STATE_EXPIRED };
+
+    // 从 init 下发的 software.name 派生所有提示框标题；为空时回退到 site_name
+    void deriveTitles() {
+        std::string sw = last_init_.software_name.empty()
+            ? last_init_.site_name : last_init_.software_name;
+        if (sw.empty()) return;
+        const std::wstring w = toWide(sw);
+        title_version_   = w + L" 版本更新";
+        title_maintain_  = w + L" 公告";
+        title_kick_      = w + L" 下线通知";
+        title_integrity_ = w + L" 安全校验";
+        title_flash_     = w + L" 公告";
+        title_popup_     = w + L" 公告";
+    }
 
     static bool isWhitelist(const std::string& action) {
         return action == "init" || action == "notice" || action == "version" || action == "online";
@@ -1855,7 +1889,7 @@ private:
                     if (noticeIsRead(reads, n.id)) continue;
                     uiAlert("flash",
                             n.title + (n.content.empty() ? std::string() : ("\n\n" + n.content)),
-                            L"Nebula 公告", MB_ICONINFORMATION);
+                            title_flash_, MB_ICONINFORMATION);
                     markNoticeRead(n.id);
                 }
             }
@@ -2044,6 +2078,12 @@ private:
     // 内置提示：最近一次 init 结果 + 可选的自定义 UI 处理器（setUiHandler）
     InitResult last_init_;
     UiHandler  ui_;
+    std::wstring title_version_   = L"Nebula 版本更新";
+    std::wstring title_maintain_  = L"Nebula 公告";
+    std::wstring title_kick_      = L"Nebula 下线通知";
+    std::wstring title_integrity_ = L"Nebula 安全校验";
+    std::wstring title_flash_     = L"Nebula 公告";
+    std::wstring title_popup_     = L"Nebula 公告";
 
     // 心跳自动弹立即公告（默认开启，见 setAutoFlash）
     bool auto_flash_ = true;
