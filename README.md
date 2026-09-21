@@ -170,9 +170,6 @@ yanzheng/
 │   ├── migrate_online_stats.php 升级脚本：数据大屏在线快照表 nb_online_stats（可重复执行）
 │   ├── clear_logs.php      日志清理工具（--dry-run 预演 / --yes 执行）
 │   └── nginx.conf.example  Nginx 部署配置示例
-├── examples/
-│   ├── client_demo.cpp     C++ 客户端完整示例（手写协议版，依赖 OpenSSL + libcurl）
-│   └── nebula_client.py    Python 客户端完整示例（依赖 requests + pycryptodome）
 ├── sdk/                    开箱即用的 C++ 接入 SDK（header-only，零第三方依赖）
 │   ├── nebula_sdk.hpp      主头文件（include 即用，无需编译）
 │   ├── nebula_protect.hpp  可选加固组件（壳标记/混淆/反调试，默认全关，见 SDK_PROTECTION.md）
@@ -481,13 +478,10 @@ c.logout(lr.token);
 
 ### 方式二：手写协议
 
-参考 `examples/client_demo.cpp`（C++）或 `examples/nebula_client.py`（Python），均包含完整的：
-
-- AES-256-CBC 加解密
-- HMAC-SHA256 签名
-- Base64 编解码
-- 会话级签名密钥管理（init 下发后自动换盐）
-- 登录 / 心跳 / 激活 / 解绑 / 版本校验的业务封装
+手动实现以下加密流程：
+- AES-256-CBC 加解密（`NEBULA_AES_KEY`，AES_KEY 派生：SHA256 取前 32 字节，IV 取 MD5 前 16 字节）
+- HMAC-SHA256 签名（`NEBULA_SIGN_SALT`；init 后使用会话级盐 `session.s` 替换主盐）
+- 信封字段结构：`{ data, sign, t, n }`，业务接口附加 `k = session.k`
 
 ### 对接要点
 
