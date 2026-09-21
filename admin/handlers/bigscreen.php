@@ -108,12 +108,14 @@ $onlineCurve = Cache::remember('bigscreen:online:' . $hours, 30, static function
         // 未执行迁移时优雅降级：大屏显示"暂无数据"而不是报错
         return [];
     }
-    return array_map(function ($r) { return [
-        't'       => (int; }) $r['bucket'],
-        'label'   => date('H:i', (int) $r['bucket']),
-        'online'  => (int) $r['online'],
-        'devices' => (int) $r['devices'],
-    ], $rows);
+    return array_map(function ($r) {
+        return [
+            't'       => (int) $r['bucket'],
+            'label'   => date('H:i', (int) $r['bucket']),
+            'online'  => (int) $r['online'],
+            'devices' => (int) $r['devices'],
+        ];
+    }, $rows);
 });
 
 // ------------------------------------------------------------------
@@ -185,14 +187,16 @@ $agentRank = Cache::remember('bigscreen:agents:' . $days, 30, static function ()
          ORDER BY gen_count DESC LIMIT 10',
         [$from]
     );
-    return array_map(function ($r) { return [
-        'agent_id'  => (int; }) $r['agent_id'],
-        'name'      => $r['nickname'] ?: ($r['username'] ?: ('代理#' . $r['agent_id'])),
-        'generated' => (int) $r['gen_count'],
-        'used'      => (int) $r['used_count'],
-        'unused'    => (int) $r['unused_count'],
-        'voided'    => (int) $r['void_count'],
-    ], $rows);
+    return array_map(function ($r) {
+        return [
+            'agent_id'  => (int) $r['agent_id'],
+            'name'      => $r['nickname'] ?: ($r['username'] ?: ('代理#' . $r['agent_id'])),
+            'generated' => (int) $r['gen_count'],
+            'used'      => (int) $r['used_count'],
+            'unused'    => (int) $r['unused_count'],
+            'voided'    => (int) $r['void_count'],
+        ];
+    }, $rows);
 });
 
 // ------------------------------------------------------------------
@@ -205,12 +209,14 @@ $typeDist = Cache::remember('bigscreen:types', 30, static function () {
                 SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS used
          FROM ' . Database::t('cards') . ' GROUP BY type ORDER BY total DESC'
     );
-    return array_map(function ($r) { return [
-        'type'  => (int; }) $r['type'],
-        'name'  => Card::typeName((int) $r['type']),
-        'total' => (int) $r['total'],
-        'used'  => (int) $r['used'],
-    ], $rows);
+    return array_map(function ($r) {
+        return [
+            'type'  => (int) $r['type'],
+            'name'  => Card::typeName((int) $r['type']),
+            'total' => (int) $r['total'],
+            'used'  => (int) $r['used'],
+        ];
+    }, $rows);
 });
 
 // ------------------------------------------------------------------

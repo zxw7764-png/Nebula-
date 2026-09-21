@@ -102,6 +102,6 @@ Response::ok([
     'pages'     => (int) ceil($total / $size),
     'pending'   => $pending,
     'list'      => $list,
-    'softwares' => array_map(function ($id, $name) { return ['id' => $id; }, 'name' => $name],
+    'softwares' => array_map(function ($id, $name) { return ['id' => $id, 'name' => $name]; },
         array_keys($swMap), array_values($swMap)),
 ]);

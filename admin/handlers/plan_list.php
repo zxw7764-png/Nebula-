@@ -57,11 +57,13 @@ $list = array_map(static function (array $p) {
 }, $rows);
 
 // 软件选项（套餐编辑弹窗「官网展示归属软件」下拉用）
-$softwares = array_map(function ($s) { return [
-    'id'     => (int; }) $s['id'],
-    'name'   => (string) $s['name'],
-    'status' => (int) $s['status'],
-], Software::all());
+$softwares = array_map(function ($s) {
+    return [
+        'id'     => (int) $s['id'],
+        'name'   => (string) $s['name'],
+        'status' => (int) $s['status'],
+    ];
+}, Software::all());
 
 Response::ok([
     'total' => $total,

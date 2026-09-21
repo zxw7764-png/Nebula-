@@ -302,12 +302,14 @@ switch ($action) {
              ORDER BY used_at DESC LIMIT 50",
             [$uid]
         );
-        $activated = array_map(function (array $c) { return [
-            'code'     => (string; }) $c['code'],
-            'type'     => (int) $c['type'],
-            'duration' => (int) $c['duration'],
-            'used_at'  => date('Y-m-d H:i', (int) $c['used_at']),
-        ], $activated);
+        $activated = array_map(function (array $c) {
+            return [
+                'code'     => (string) $c['code'],
+                'type'     => (int) $c['type'],
+                'duration' => (int) $c['duration'],
+                'used_at'  => date('Y-m-d H:i', (int) $c['used_at']),
+            ];
+        }, $activated);
         Response::ok(['user' => $me, 'orders' => $out, 'activated' => $activated]);
         break;
 
@@ -482,11 +484,13 @@ switch ($action) {
              WHERE game = ? ORDER BY score DESC, id ASC LIMIT ' . $topN,
             [$g]
         );
-        Response::ok(['list' => array_map(function (array $r) { return [
-            'name'       => (string; }) $r['name'],
-            'score'      => (int) $r['score'],
-            'created_at' => (int) $r['created_at'],
-        ], $rows)]);
+        Response::ok(['list' => array_map(function (array $r) {
+            return [
+                'name'       => (string) $r['name'],
+                'score'      => (int) $r['score'],
+                'created_at' => (int) $r['created_at'],
+            ];
+        }, $rows)]);
         break;
 
     case 'game_score_save':

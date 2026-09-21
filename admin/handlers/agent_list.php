@@ -19,10 +19,7 @@ if (Util::int($input, 'all', 0) === 1) {
     Response::ok([
         'options'    => $options,
         'modes'      => Agent::allModes(),
-        'card_types' => array_map(
-            function ($t) { return ['type' => $t; }, 'name' => Card::typeName($t)],
-            Card::TYPE_LIST
-        ),
+        'card_types' => array_map(function ($t) { return ['type' => $t, 'name' => Card::typeName($t)]; }, Card::TYPE_LIST),
     ]);
 }
 

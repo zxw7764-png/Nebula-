@@ -11,14 +11,19 @@
 
 $force = !empty($input['force']);
 
+// 当前系统版本
+$currentVersion = (string) (defined('NB_VERSION') ? NB_VERSION : Config::get('system_version', '1.0.0'));
+
 // 版本更新服务地址（从配置读取，默认空）
 $updateServer = Config::get('update_server', '');
 if ($updateServer === '') {
-    Response::error(1001, '未配置版本更新服务地址');
+    // 未配置更新服务器，静默返回（不阻断后台）
+    Response::ok([
+        'current_version' => $currentVersion,
+        'latest'          => null,
+        'configured'      => false,
+    ]);
 }
-
-// 当前系统版本
-$currentVersion = (string) (defined('NB_VERSION') ? NB_VERSION : Config::get('system_version', '1.0.0'));
 
 // 构造请求参数（与 update-system api/version.php 的参数一致）
 $params = http_build_query([

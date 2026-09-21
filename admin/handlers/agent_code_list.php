@@ -71,8 +71,5 @@ Response::ok([
     'list'    => $list,
     'modes'   => Agent::allModes(),
     // 卡类型选项（唯一来源：Card::typeName），前端表单据此渲染
-    'card_types' => array_map(
-        function ($t) { return ['type' => $t; }, 'name' => Card::typeName($t)],
-        Card::TYPE_LIST
-    ),
+    'card_types' => array_map(function ($t) { return ['type' => $t, 'name' => Card::typeName($t)]; }, Card::TYPE_LIST),
 ]);

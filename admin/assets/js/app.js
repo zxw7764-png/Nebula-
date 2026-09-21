@@ -105,10 +105,6 @@ async function enterApp() {
 
     try {
         const res = await api('system_update_check', { force: 1 }, true);
-        if (res.code === 1001) {
-            showSystemCheckError('系统更新组件缺失，后台无法启动');
-            return;
-        }
         if (res.code === 0 && res.data && res.data.latest && res.data.latest.force_update) {
             const cur = res.data.current_version || '';
             const latest = res.data.latest.latest_version || '';

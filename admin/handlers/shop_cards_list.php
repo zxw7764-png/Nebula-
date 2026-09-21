@@ -42,10 +42,12 @@ try {
                  ORDER BY id ASC LIMIT 5000",
                 [$planId]
             );
-            Response::ok($head + ['list' => array_map(function (array $r) { return [
-                'id'      => (int; }) $r['id'],
-                'content' => (string) $r['content'],
-            ], $rows)]);
+            Response::ok($head + ['list' => array_map(function (array $r) {
+                return [
+                    'id'      => (int) $r['id'],
+                    'content' => (string) $r['content'],
+                ];
+            }, $rows)]);
         }
 
         $rows = Database::all(
@@ -76,12 +78,14 @@ try {
          GROUP BY p.id, p.name
          ORDER BY p.id ASC"
     );
-    Response::ok(['list' => array_map(function (array $r) { return [
-        'plan_id'   => (int; }) $r['plan_id'],
-        'plan_name' => (string) $r['plan_name'],
-        'unsold'    => (int) $r['unsold'],
-        'sold'      => (int) $r['sold'],
-    ], $rows)]);
+    Response::ok(['list' => array_map(function (array $r) {
+        return [
+            'plan_id'   => (int) $r['plan_id'],
+            'plan_name' => (string) $r['plan_name'],
+            'unsold'    => (int) $r['unsold'],
+            'sold'      => (int) $r['sold'],
+        ];
+    }, $rows)]);
 } catch (Throwable $e) {
     // 未跑迁移：缺表/缺列时降级为空
     Response::ok(['list' => []]);
