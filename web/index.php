@@ -72,7 +72,7 @@ $tplSfx  = $uiTpl !== '' ? UiTemplate::interactRel('web', $uiTpl) : null; // 模
 //   站内路径必须放行：上传功能存的就是 /uploads/web/...，外链图床不稳定时它是可靠兜底。
 //   界面模板（farm/mario/ink/space）自带整套装饰背景，激活模板时背景图不生效。
 $bgUrl   = trim(webSetting('web_bg_url', ''));
-$bgUrlOk = $uiTpl === '' && $bgUrl !== '' && preg_match('#^(https?://|/)#i', $bgUrl);
+$bgUrlOk = $bgUrl !== '' && preg_match('#^(https?://|/)#i', $bgUrl);
 
 // 总站白页（严格分软件官网模式）：由后台「系统设置 → 站点 → 总站白页」开关控制。
 // 开启后多软件场景下只有 URL 显式携带有效 ?app= 才渲染对应软件官网；
