@@ -67,6 +67,13 @@ body.ui-gta5 {
     color: var(--text);
 }
 
+/* 后台背景图：完整显示不裁切（contain），居中，避免 cover 将大图放大裁边 */
+body.ui-gta5 .bg .photo {
+    background-size: contain;
+    background-position: center center;
+    background-repeat: no-repeat;
+}
+
 /* ===================== 字体（游戏 HUD 粗斜感） ===================== */
 body.ui-gta5,
 body.ui-gta5 .btn,
