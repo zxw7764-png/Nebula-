@@ -16,10 +16,23 @@ POST http://<域名>/api/index.php?action=<接口名>
 > ```cpp
 > #include "nebula_sdk.hpp"
 >
-> nebula::Client c("http://你的服务器/api/index.php", AES_KEY, SIGN_SALT, "machine_id");
-> c.init();
-> auto lr = c.login("用户名", "密码");
-> c.startHeartbeat(lr.token, /* 心跳回调 */, 60000);
+> // 构造参数：(api_url, aes_key, sign_salt, app_key, machine_id, os_info, client_ver)
+> // app_key 必填（后台软件管理获取），machine_id 留空则 SDK 自动采集
+> nebula::Client c("http://你的服务器/api/index.php", AES_KEY, SIGN_SALT, "SW你的软件标识");
+>
+> auto ir = c.init();                        // 初始化：下发会话密钥、心跳间隔、登录方式、版本策略
+> if (!c.enforceSelfIntegrity()) return 1;   // 完整性自校验：exe 被篡改 → 弹窗，退出
+> if (!c.versionAlert())       return 1;     // 版本过期提示（强制更新中止 / 可选更新提醒）
+> c.maintainAlert();                         // 维护模式提示（全部内置弹窗，也可 setUiHandler 自定义）
+>
+> auto lr = c.login("用户名", "密码");        // 登录（按服务器登录方式自动组装）
+> c.startHeartbeat(lr.token, [](int code, const std::string& msg,
+>                               const nebula::HeartbeatInfo& hb) {
+>     if (hb.kick || hb.need_relogin) c.kickAlert(msg);  // 被踢/顶号 → SDK 弹窗
+> }, 0);                                       // 0 = 用 init 下发的心跳间隔
+>
+> c.stopHeartbeat();
+> c.logout(lr.token);
 > ```
 >
 > 本文档描述的是**协议层**细节，适合需要自行实现客户端（其他语言 / 特殊需求）的场景。  
