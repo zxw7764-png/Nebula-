@@ -475,7 +475,7 @@ function web_site_info(): array
     if (!$messageOn) {
         $navList = array_values(array_filter(
             $navList,
-            static fn ($nl) => (string) $nl['href'] !== '#board'
+            function ($nl) { return (string; }) $nl['href'] !== '#board'
         ));
     } else {
         foreach ($navList as &$nl) {
@@ -547,8 +547,8 @@ function web_site_info(): array
             'name'    => (string) $sw['name'],
             'app_key' => (string) $sw['app_key'],
         ] : null,
-        'softwares'       => array_map(static fn($s) => [
-            'id'      => (int) $s['id'],
+        'softwares'       => array_map(function ($s) { return [
+            'id'      => (int; }) $s['id'],
             'name'    => (string) $s['name'],
             'app_key' => (string) $s['app_key'],
         ], Software::all(true)),

@@ -259,7 +259,7 @@ try {
                 break;
             }
             // CIDR 段匹配（如 1.2.3.0/24、2030:1130::/32）
-            if (str_contains($nbLine, '/') && $nbClientBin !== false) {
+            if (strpos($nbLine, '/') !== false && $nbClientBin !== false) {
                 [$nbNet, $nbBits] = explode('/', $nbLine, 2);
                 $nbNetBin = @inet_pton(trim($nbNet));
                 $nbBits   = (int) $nbBits;

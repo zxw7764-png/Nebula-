@@ -190,21 +190,27 @@ class Shop
     public static function contactModeLabel(string $mode = ''): array
     {
         $mode = $mode !== '' ? $mode : self::contactMode();
-        return match ($mode) {
-            'email'  => ['label' => '邮箱', 'placeholder' => '用于查询订单，如 you@example.com'],
-            'custom' => ['label' => '联系凭证', 'placeholder' => '自定义内容（账号/昵称等），用于查询订单'],
-            default  => ['label' => '手机号', 'placeholder' => '用于查询订单，如 13800000000'],
-        };
+        switch ($mode) {
+            case 'email':
+                return ['label' => '邮箱', 'placeholder' => '用于查询订单，如 you@example.com'];
+            case 'custom':
+                return ['label' => '联系凭证', 'placeholder' => '自定义内容（账号/昵称等），用于查询订单'];
+            default:
+                return ['label' => '手机号', 'placeholder' => '用于查询订单，如 13800000000'];
+        }
     }
 
     /** 凭证格式校验：合法返回 true */
     public static function contactValid(string $mode, string $contact): bool
     {
-        return match ($mode) {
-            'email' => (bool) filter_var($contact, FILTER_VALIDATE_EMAIL) && strlen($contact) <= 100,
-            'phone' => (bool) preg_match('/^1[3-9][0-9]{9}$/', $contact),
-            default => mb_strlen($contact, 'UTF-8') >= 2 && mb_strlen($contact, 'UTF-8') <= 50,
-        };
+        switch ($mode) {
+            case 'email':
+                return (bool) filter_var($contact, FILTER_VALIDATE_EMAIL) && strlen($contact) <= 100;
+            case 'phone':
+                return (bool) preg_match('/^1[3-9][0-9]{9}$/', $contact);
+            default:
+                return mb_strlen($contact, 'UTF-8') >= 2 && mb_strlen($contact, 'UTF-8') <= 50;
+        }
     }
 
     /**
@@ -583,8 +589,7 @@ class Shop
             }
             $points = array_values(array_filter(
                 array_map('trim', preg_split('/\r\n|\r|\n/', (string) $p['desc'])),
-                static fn ($s) => $s !== ''
-            ));
+                function ($s) { return $s !== ''; }));
 
             $shopName = trim((string) ($p['shop_name'] ?? ''));
             $out[] = [

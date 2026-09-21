@@ -57,6 +57,6 @@ Response::ok([
     'size'      => $size,
     'pages'     => (int) ceil($total / $size),
     'list'      => $list,
-    'softwares' => array_map(static fn($id, $name) => ['id' => $id, 'name' => $name],
+    'softwares' => array_map(function ($id, $name) { return ['id' => $id; }, 'name' => $name],
         array_keys($swMap), array_values($swMap)),
 ]);

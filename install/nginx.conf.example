@@ -36,13 +36,20 @@ server {
     #     · clear_logs.php 可清空审计日志
     #   脚本层还有 install/_cli_guard.php 做服务器无关的兜底拦截。
     # ------------------------------------------------------------
-    location ~ ^/(config|lib|logs)/ {
+    location ~ ^/(config|lib|logs|data)/ {
+        deny all;
+        return 404;
+    }
+
+    # 禁止 uploads 目录执行 PHP（防止上传 WebShell）
+    location ~ ^/uploads/.*\.php$ {
         deny all;
         return 404;
     }
 
     # install/ 下的安装向导放行，其余一律拒绝
-    location ~ ^/install/(?!install\.php$).*\.php$ {
+    location = /install/install.php { }
+    location ~ ^/install/.*\.php$ {
         deny all;
         return 404;
     }

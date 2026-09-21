@@ -47,7 +47,7 @@ class FileGuard
     public static function safePath(string $rel): string
     {
         $rel = str_replace('\\', '/', trim($rel));
-        if ($rel === '' || str_contains($rel, '..') || str_contains($rel, "\0")) {
+        if ($rel === '' || strpos($rel, '..') !== false || strpos($rel, "\0") !== false) {
             return '';
         }
         $rel = ltrim($rel, '/');
@@ -57,7 +57,7 @@ class FileGuard
             return '';
         }
         $root = realpath(NB_ROOT);
-        if ($root === false || !str_starts_with($rp, $root . DIRECTORY_SEPARATOR)) {
+        if ($root === false || substr($rp, 0, strlen($root . DIRECTORY_SEPARATOR)) !== $root . DIRECTORY_SEPARATOR) {
             return '';
         }
         $ext = strtolower(pathinfo($rp, PATHINFO_EXTENSION));

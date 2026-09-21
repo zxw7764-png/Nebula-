@@ -35,7 +35,9 @@ DirectoryIndex index.php index.html
 
     # 2) install/ 只放行安装向导本身
     #    migrate_*.php 会在 Web 上真实执行 DDL，clear_logs.php 能清空审计日志
-    RewriteRule ^install/(?!install\.php$).*\.php$ - [F,L]
+    #    先显式放行 install.php，再拦截 install/ 下其他所有 .php
+    RewriteRule ^install/install\.php$ - [L]
+    RewriteRule ^install/.*\.php$ - [F,L]
 
     # 3) 后台 / 代理的 handlers 目录不可直接访问
     #    这些 PHP 依赖入口注入的 $input/$admin/$agent 变量，单独访问无意义且可能泄露信息
@@ -46,4 +48,7 @@ DirectoryIndex index.php index.html
 
     # 5) 服务器配置副本与版本库不要被下载
     RewriteRule ^(?:nginx\.htaccess|nginx\.conf\.example|\.gitignore|\.git/.*)$ - [F,L]
+
+    # 6) 禁止 uploads 目录执行 PHP（防止上传 WebShell）
+    RewriteRule ^uploads/.*\.php$ - [F,L]
 </IfModule>

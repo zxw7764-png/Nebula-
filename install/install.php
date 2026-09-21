@@ -299,15 +299,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $config = (string) file_get_contents($configFile);
-                $config = preg_replace_callback("/'host'\s*=>\s*'[^']*'/",     static fn($m) => "'host'    => '" . $nbQ($db['host']) . "'", $config);
-                $config = preg_replace_callback("/'port'\s*=>\s*\d+/",         static fn($m) => "'port'    => " . (int) $db['port'], $config);
-                $config = preg_replace_callback("/'name'\s*=>\s*'[^']*'/",     static fn($m) => "'name'    => '" . $nbQ($db['name']) . "'", $config);
-                $config = preg_replace_callback("/'user'\s*=>\s*'[^']*'/",     static fn($m) => "'user'    => '" . $nbQ($db['user']) . "'", $config);
-                $config = preg_replace_callback("/'pass'\s*=>\s*'[^']*'/",     static fn($m) => "'pass'    => '" . $nbQ($db['pass']) . "'", $config);
-                $config = preg_replace_callback("/'aes_key'\s*=>\s*'[^']*'/",  static fn($m) => "'aes_key'  => '" . $nbQ($aesKey) . "'", $config);
-                $config = preg_replace_callback("/'sign_salt'\s*=>\s*'[^']*'/", static fn($m) => "'sign_salt' => '" . $nbQ($signSalt) . "'", $config);
-                $config = preg_replace_callback("/'entry_key'\s*=>\s*'[^']*'/", static fn($m) => "'entry_key' => '" . $nbQ($entryToken) . "'", $config);
-                $config = preg_replace_callback("/'path'\s*=>\s*'admin'/",      static fn($m) => "'path'     => '" . $nbQ($adminPath) . "'", $config);
+                $config = preg_replace_callback("/'host'\s*=>\s*'[^']*'/",     function ($m) use ($nbQ, $db) { return "'host'    => '" . $nbQ($db['host']) . "'"; }, $config);
+                $config = preg_replace_callback("/'port'\s*=>\s*\d+/",         function ($m) use ($db) { return "'port'    => " . (int) $db['port']; }, $config);
+                $config = preg_replace_callback("/'name'\s*=>\s*'[^']*'/",     function ($m) use ($nbQ, $db) { return "'name'    => '" . $nbQ($db['name']) . "'"; }, $config);
+                $config = preg_replace_callback("/'user'\s*=>\s*'[^']*'/",     function ($m) use ($nbQ, $db) { return "'user'    => '" . $nbQ($db['user']) . "'"; }, $config);
+                $config = preg_replace_callback("/'pass'\s*=>\s*'[^']*'/",     function ($m) use ($nbQ, $db) { return "'pass'    => '" . $nbQ($db['pass']) . "'"; }, $config);
+                $config = preg_replace_callback("/'aes_key'\s*=>\s*'[^']*'/",  function ($m) use ($nbQ, $aesKey) { return "'aes_key'  => '" . $nbQ($aesKey) . "'"; }, $config);
+                $config = preg_replace_callback("/'sign_salt'\s*=>\s*'[^']*'/", function ($m) use ($nbQ, $signSalt) { return "'sign_salt' => '" . $nbQ($signSalt) . "'"; }, $config);
+                $config = preg_replace_callback("/'entry_key'\s*=>\s*'[^']*'/", function ($m) use ($nbQ, $entryToken) { return "'entry_key' => '" . $nbQ($entryToken) . "'"; }, $config);
+                $config = preg_replace_callback("/'path'\s*=>\s*'admin'/",      function ($m) use ($nbQ, $adminPath) { return "'path'     => '" . $nbQ($adminPath) . "'"; }, $config);
 
                 file_put_contents($configFile, $config);
 
@@ -458,7 +458,7 @@ h3 { font-size: 15px; margin-bottom: 12px; color: #f1f5f9; }
             <h3>环境检测</h3>
             <?php
             $checks = [
-                'PHP 版本 >= 7.4'   => version_compare(PHP_VERSION, '7.4.0', '>='),
+                'PHP 版本 >= 7.3'   => version_compare(PHP_VERSION, '7.3.0', '>='),
                 'PDO MySQL 扩展'    => extension_loaded('pdo_mysql'),
                 'OpenSSL 扩展'      => extension_loaded('openssl'),
                 'JSON 扩展'         => extension_loaded('json'),

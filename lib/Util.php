@@ -83,7 +83,7 @@ class Util
             }
 
             // 网段写法 a.b.c.d/n  或  IPv6/n
-            if (str_contains($item, '/')) {
+            if (strpos($item, '/') !== false) {
                 [$net, $bits] = explode('/', $item, 2);
                 $bits = (int) $bits;
                 $netBin = @inet_pton(trim($net));
@@ -373,7 +373,7 @@ class Util
         if ($ip === '') {
             return '';
         }
-        if (str_contains($ip, ':')) {
+        if (strpos($ip, ':') !== false) {
             $pos = strrpos($ip, ':');
             return substr($ip, 0, $pos) . ':*';
         }

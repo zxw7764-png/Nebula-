@@ -212,7 +212,7 @@ class Grace
      */
     public static function verify(string $ticket, ?string $publicKey = null): array
     {
-        $fail = static fn(string $m): array => ['ok' => false, 'msg' => $m, 'payload' => null];
+        $fail = function (string $m): array { return ['ok' => false, 'msg' => $m, 'payload' => null]; };
 
         $parts = explode('.', $ticket);
         if (count($parts) !== 3) {

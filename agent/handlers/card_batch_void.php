@@ -22,7 +22,7 @@ if (!is_array($ids) || count($ids) === 0) {
 }
 
 // 限制单次批量数量，防止超大批次
-$ids = array_slice(array_filter(array_map('intval', $ids), static fn($x) => $x > 0), 0, 500);
+$ids = array_slice(array_filter(array_map('intval', $ids), function ($x) { return $x > 0; }), 0, 500);
 if (count($ids) === 0) {
     Response::error(1001, '请选择要作废的卡密');
 }

@@ -996,7 +996,7 @@ class Agent
             // 按卡类型的额度与单价（计费唯一来源）
             'types'            => self::typeList($agent),
             'quota_left_total' => self::quotaLeftTotal($id),
-            'type_count'       => count(array_filter($rows, static fn($r) => (int) $r['enabled'] === 1)),
+            'type_count'       => count(array_filter($rows, function ($r) { return (int) $r['enabled'] === 1; })),
             'reg_code'         => (string) ($agent['reg_code'] ?? ''),
             // 历史字段：agents 表上的统一额度/单价，v1.1 起不再参与计费，仅供追溯
             'quota_total'      => (int) $agent['quota_total'],

@@ -508,7 +508,7 @@ class AdminAuth
             return ['ok' => false, 'msg' => '动态验证码不正确，请确认手机时间是否准确'];
         }
         $codes  = Totp::recoveryCodes(8);
-        $hashes = array_map(static fn(string $c): string => hash('sha256', $c), $codes);
+        $hashes = array_map(function (string $c): string { return hash('sha256', $c); }, $codes);
         Database::exec(
             'UPDATE ' . Database::t('admins') . ' SET totp_enabled = 1, totp_recovery = ? WHERE id = ?',
             [json_encode($hashes), $adminId]

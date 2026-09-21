@@ -33,7 +33,7 @@ if ($action === '' && !empty($_SERVER['PATH_INFO'])) {
 if ($action === '') {
     $uri  = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?? '';
     $base = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/\\');
-    if ($base && str_starts_with($uri, $base)) {
+    if ($base && substr($uri, 0, strlen($base)) === $base) {
         $action = trim(substr($uri, strlen($base)), '/');
     }
 }

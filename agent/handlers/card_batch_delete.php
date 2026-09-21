@@ -17,7 +17,7 @@ if (!is_array($ids) || count($ids) === 0) {
     Response::error(1001, '请选择要删除的卡密');
 }
 
-$ids = array_slice(array_filter(array_map('intval', $ids), static fn($x) => $x > 0), 0, 500);
+$ids = array_slice(array_filter(array_map('intval', $ids), function ($x) { return $x > 0; }), 0, 500);
 if (count($ids) === 0) {
     Response::error(1001, '请选择要删除的卡密');
 }
@@ -48,8 +48,7 @@ try {
     // 批次计数同步
     $batchIds = array_values(array_unique(array_filter(
         array_map('intval', array_column($cards, 'batch_id')),
-        static fn($v) => $v > 0
-    )));
+        function ($v) { return $v > 0; })));
     foreach ($batchIds as $bid) {
         $cnt = (int) Database::value(
             'SELECT COUNT(*) FROM ' . Database::t('cards') . ' WHERE batch_id = ? AND agent_id = ?',

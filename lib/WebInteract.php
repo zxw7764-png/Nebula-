@@ -279,8 +279,7 @@ class WebInteract
             // desc 一行一条，前端拆成要点列表渲染
             $points = array_values(array_filter(
                 array_map('trim', preg_split('/\r\n|\r|\n/', (string) $p['desc'])),
-                static fn ($s) => $s !== ''
-            ));
+                function ($s) { return $s !== ''; }));
 
             return [
                 'id'        => (int) $p['id'],
@@ -345,8 +344,7 @@ class WebInteract
             // desc 一行一条，前端拆成要点列表渲染
             $points = array_values(array_filter(
                 array_map('trim', preg_split('/\r\n|\r|\n/', (string) $s['desc'])),
-                static fn ($x) => $x !== ''
-            ));
+                function ($x) { return $x !== ''; }));
 
             $out[] = [
                 'id'        => (int) $s['id'],

@@ -261,7 +261,7 @@ class Backup
                 'time_text' => $t > 0 ? date('Y-m-d H:i:s', $t) : '-',
             ];
         }
-        usort($out, static fn(array $a, array $b): int => $b['time'] <=> $a['time']);
+        usort($out, function (array $a, array $b): int { return $b['time'] <=> $a['time']; });
         return $out;
     }
 

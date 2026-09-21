@@ -36,7 +36,7 @@ foreach ($lines as $idx => $line) {
         continue;
     }
     // 跳过表头
-    if ($idx === 0 && (str_contains($line, '用户名') || stripos($line, 'username') !== false)) {
+    if ($idx === 0 && (strpos($line, '用户名') !== false || stripos($line, 'username') !== false)) {
         continue;
     }
 

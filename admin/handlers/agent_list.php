@@ -20,7 +20,7 @@ if (Util::int($input, 'all', 0) === 1) {
         'options'    => $options,
         'modes'      => Agent::allModes(),
         'card_types' => array_map(
-            static fn($t) => ['type' => $t, 'name' => Card::typeName($t)],
+            function ($t) { return ['type' => $t; }, 'name' => Card::typeName($t)],
             Card::TYPE_LIST
         ),
     ]);

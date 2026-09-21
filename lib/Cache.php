@@ -1026,7 +1026,7 @@ final class CacheRedis
     private function pfx(string $k): string
     {
         $p = (string) ($this->cfg['prefix'] ?? '');
-        return ($p !== '' && !str_starts_with($k, $p)) ? $p . $k : $k;
+        return ($p !== '' && substr($k, 0, strlen($p)) !== $p) ? $p . $k : $k;
     }
 
     /** 解析 RESP 回复 */

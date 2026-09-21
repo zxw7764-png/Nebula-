@@ -53,7 +53,7 @@ Response::ok([
     'kinds'   => AgentRecharge::kinds(),
     // 卡类型选项（唯一来源：Card::typeName），前端表单据此渲染
     'card_types' => array_map(
-        static fn($t) => ['type' => $t, 'name' => Card::typeName($t)],
+        function ($t) { return ['type' => $t; }, 'name' => Card::typeName($t)],
         Card::TYPE_LIST
     ),
 ]);

@@ -58,7 +58,7 @@ if ($op === 'batch') {
     if (!is_array($ids) || !$ids) {
         Response::error(1001, '请选择要操作的留言');
     }
-    $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn ($v) => $v > 0)));
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids), function ($v) { return $v > 0; })));
     if (!$ids) {
         Response::error(1001, '请选择要操作的留言');
     }

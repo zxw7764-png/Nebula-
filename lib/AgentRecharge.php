@@ -486,7 +486,7 @@ class AgentRecharge
             ];
         }
         $quotaTexts = array_map(
-            static fn(array $it) => self::quotaItemText($it['type'], $it['quota']),
+            function (array $it) { return self::quotaItemText($it['type'], $it['quota']); },
             $quotas
         );
 

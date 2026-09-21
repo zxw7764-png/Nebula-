@@ -20,8 +20,8 @@ $sha256      = trim((string)($input['sha256'] ?? ''));
 $targetVer   = trim((string)($input['version'] ?? ''));
 $targetBuild = (int)($input['build'] ?? 0);
 
-if ($downloadUrl === '' || !preg_match('#^https?://#i', $downloadUrl)) {
-    Response::error(1001, '下载地址不合法');
+if ($downloadUrl === '' || !preg_match('#^https://#i', $downloadUrl)) {
+    Response::error(1001, '下载地址不合法（仅允许 HTTPS）');
 }
 if ($sha256 === '' || strlen($sha256) !== 64) {
     Response::error(1001, 'SHA-256 校验值不合法');
@@ -72,6 +72,13 @@ try {
     // ----------------------------------------------------------------
     $downloadOk = false;
     $downloadErr = '';
+    // 域名白名单校验：只允许从配置的更新服务器下载
+    $allowedHost = parse_url(Config::get('update_server', ''), PHP_URL_HOST);
+    $dlHost = parse_url($downloadUrl, PHP_URL_HOST);
+    if (!$dlHost || ($allowedHost && $dlHost !== $allowedHost)) {
+        throw new RuntimeException('下载地址域名不在允许列表中，拒绝执行更新');
+    }
+
     if (function_exists('curl_init')) {
         $fp2 = @fopen($pkgPath, 'wb');
         if ($fp2 === false) {
@@ -81,8 +88,8 @@ try {
         curl_setopt_array($ch, [
             CURLOPT_FILE => $fp2,
             CURLOPT_TIMEOUT => 300,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => 0,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS => 3,
             CURLOPT_USERAGENT => 'Nebula-Updater/' . NB_VERSION,
@@ -100,7 +107,7 @@ try {
         }
     } else {
         // 回退到 file_get_contents
-        $ctx = stream_context_create(['http' => ['timeout' => 300], 'ssl' => ['verify_peer' => false, 'verify_peer_name' => false]]);
+        $ctx = stream_context_create(['http' => ['timeout' => 300], 'ssl' => ['verify_peer' => true, 'verify_peer_name' => true]]);
         $data = @file_get_contents($downloadUrl, false, $ctx);
         if ($data === false) {
             $downloadErr = '下载失败：无法连接更新服务器';
@@ -185,7 +192,7 @@ try {
         if (@copy($srcPath, $bakPath)) $filesBackedUp++;
     }
 
-    // 备份 bootstrap.php（NB_VERSION 定义）
+    // 备份 version.php（lib/bootstrap.php 中的 NB_VERSION 定义）
     $bootstrapFile = NB_ROOT . '/lib/bootstrap.php';
     if (is_file($bootstrapFile)) {
         @copy($bootstrapFile, $bakDir . '/bootstrap.php.bak');

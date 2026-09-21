@@ -1,0 +1,11 @@
+v2.64.4: 安全加固 + PHP 7.3 兼容
+
+- 删除内部部署工具（_upload_guard.py / _upload_reset.py / check_der.py / _git_*.bat）
+- system_update_check 改为从 Config::get('update_server') 读取，不再硬编码域名
+- system_update_do 开启 TLS 验证 + 域名白名单 + 仅允许 HTTPS download_url
+- PHP 7.3 兼容：str_contains/str_starts_with → strpos/substr
+- PHP 7.3 兼容：static fn 箭头函数 → function 闭包（27处）
+- PHP 7.3 兼容：match 表达式 → switch
+- install 环境检查 PHP >= 7.4 → 7.3
+- nginx + Apache 禁止 uploads/*.php 执行（防 WebShell）
+- nginx.conf.example / nginx.htaccess / .htaccess 加入 data/ 目录保护

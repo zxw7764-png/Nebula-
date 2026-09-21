@@ -57,7 +57,7 @@ $action = $_GET['action'] ?? '';
 if ($action === '') {
     $uri  = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?? '';
     $base = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/\\');
-    if ($base && str_starts_with($uri, $base)) {
+    if ($base && substr($uri, 0, strlen($base)) === $base) {
         $action = trim(substr($uri, strlen($base)), '/');
     }
 }
@@ -129,6 +129,8 @@ $csrfExempt = [
     'card_batch_list', 'card_detail', 'device_list', 'device_ban_list', 'session_list', 'log_list',
     'audit_list', 'audit_detail', 'notice_list', 'version_list', 'group_list',
     'setting_get', 'profile',
+    // 系统更新检查：只读
+    'system_update_check',
     // 软件管理：只读列表
     'software_list',
     // 官网互动功能：只读列表接口
@@ -137,8 +139,6 @@ $csrfExempt = [
     'shop_order_list',
     // 导出类：只读，不修改数据
     'user_export', 'card_export',
-    // 系统更新检查：只读接口
-    'system_update_check',
 ];
 if (!in_array($action, $csrfExempt, true)) {
     $csrf = $_SERVER['HTTP_X_CSRF'] ?? ($input['csrf'] ?? '');

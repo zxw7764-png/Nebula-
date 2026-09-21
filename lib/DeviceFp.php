@@ -286,7 +286,7 @@ class DeviceFp
             . trim((string) ($info['os_info'] ?? '')));
         if ($text !== '') {
             foreach (self::VM_KEYWORDS as $kw) {
-                if ($kw !== '' && str_contains($text, $kw)) {
+                if ($kw !== '' && strpos($text, $kw) !== false) {
                     $flags[] = 'vm';
                     break;
                 }
@@ -297,7 +297,7 @@ class DeviceFp
         $mac = $c['mac'] ?? '';
         if ($mac !== '' && strlen($mac) === 12) {
             foreach (self::VM_OUI as $oui) {
-                if (str_starts_with($mac, $oui)) {
+                if (substr($mac, 0, strlen($oui)) === $oui) {
                     $flags[] = 'vm';
                     break;
                 }
@@ -369,7 +369,7 @@ class DeviceFp
             // 裸 MAC 才判定 OUI，哈希串长度不为 12 天然不会命中
             if ($key === 'mac' && strlen($v) === 12) {
                 foreach (self::VM_OUI as $oui) {
-                    if (str_starts_with($v, $oui)) {
+                    if (substr($v, 0, strlen($oui)) === $oui) {
                         $row['vm_oui'] = true;
                         break;
                     }

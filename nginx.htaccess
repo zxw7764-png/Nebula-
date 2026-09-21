@@ -21,8 +21,9 @@ location ~ ^/(config|lib|logs|data)/ {
     return 404;
 }
 
-# 2) install/ 只放行安装向导本身
-location ~ ^/install/(?!install\.php$).*\.php$ {
+# 2) install/ 只放行安装向导本身（先放行 install.php，再拦截其余 .php）
+location = /install/install.php { }
+location ~ ^/install/.*\.php$ {
     deny all;
     return 404;
 }
@@ -45,5 +46,11 @@ location ~* ^/(nginx\.htaccess|nginx\.conf\.example|\.gitignore)$ {
     return 404;
 }
 
-# 6) 关闭目录列表
+# 6) 禁止 uploads 目录执行 PHP（防止上传 WebShell）
+location ~ ^/uploads/.*\.php$ {
+    deny all;
+    return 404;
+}
+
+# 7) 关闭目录列表
 autoindex off;

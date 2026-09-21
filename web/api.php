@@ -579,8 +579,8 @@ switch ($action) {
              WHERE game = ? ORDER BY score DESC, id ASC LIMIT ' . $topN,
             [$g]
         );
-        Response::ok(['list' => array_map(static fn (array $r) => [
-            'name'       => (string) $r['name'],
+        Response::ok(['list' => array_map(function (array $r) { return [
+            'name'       => (string; }) $r['name'],
             'score'      => (int) $r['score'],
             'created_at' => (int) $r['created_at'],
         ], $rows)]);

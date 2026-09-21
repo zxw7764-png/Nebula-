@@ -11,8 +11,11 @@
 
 $force = !empty($input['force']);
 
-// 版本更新服务地址
-$updateServer = 'https://mmbr.serv00.net';
+// 版本更新服务地址（从配置读取，默认空）
+$updateServer = Config::get('update_server', '');
+if ($updateServer === '') {
+    Response::error(1001, '未配置版本更新服务地址');
+}
 
 // 当前系统版本
 $currentVersion = (string) (defined('NB_VERSION') ? NB_VERSION : Config::get('system_version', '1.0.0'));

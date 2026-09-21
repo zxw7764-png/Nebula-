@@ -196,7 +196,7 @@ class Database
     public static function paginate(string $baseSql, array $params, int $page, int $size, string $orderBy = ''): array
     {
         $upper = strtoupper($baseSql);
-        $needSub = str_contains($upper, 'GROUP BY') || str_contains($upper, 'DISTINCT');
+        $needSub = strpos($upper, 'GROUP BY') !== false || strpos($upper, 'DISTINCT') !== false;
 
         if ($needSub) {
             $countSql = "SELECT COUNT(*) FROM ($baseSql) AS _cnt";

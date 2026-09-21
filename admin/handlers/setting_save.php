@@ -180,9 +180,9 @@ if (isset($normalized['ip_blacklist'])) {
             $errors[] = "IP 黑名单存在非法行：{$line}（需为 IP 或 IP/掩码位，如 1.2.3.4 或 1.2.3.0/24）";
             continue;
         }
-        if (str_contains($line, '/')) {
+        if (strpos($line, '/') !== false) {
             $bits = (int) explode('/', $line, 2)[1];
-            $max  = str_contains($ipPart, ':') ? 128 : 32;
+            $max  = (strpos($ipPart, ':') !== false) ? 128 : 32;
             if ($bits < 0 || $bits > $max) {
                 $errors[] = "IP 黑名单掩码位非法：{$line}（0-{$max}）";
                 continue;
