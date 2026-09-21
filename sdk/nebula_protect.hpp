@@ -1,4 +1,5 @@
 #pragma once
+// ============================================================================
 // Nebula SDK 客户端加固模块（可选组件 · header-only）
 // ----------------------------------------------------------------------------
 // 本文件提供三类能力，**默认全部关闭**，开启方式只需在工程里定义宏：
@@ -1067,8 +1068,7 @@ inline int  action()          { return actionRef().load(); }
 inline void setAction(int a)  { actionRef().store(a); }
 
 // 分级策略开关（默认宽松，避免误伤装加速器/跑在 VM 的正常用户）：
-//   strictPolicy() == false（宽松，默认）：
-//       只有「真实调试铁证」（debugged）才按 action>=2 处置；
+//   strictPolicy() == false（宽松，默认）：仅「真实调试铁证」按 action>=2 处置，
 //       hook/VM/沙箱等「疑似环境」仅回调记录、不退出、不降级。
 //   strictPolicy() == true（严格）：恢复原行为，任何异常都按 action 处置。
 inline std::atomic<bool>& strictRef() { static std::atomic<bool> v{false}; return v; }
