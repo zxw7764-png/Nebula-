@@ -1,5 +1,0 @@
-v2.64.5: 修复 system_update_check 未配置时阻断后台启动
-
-- system_update_check: update_server 为空时返回 ok + configured:false，不再返回 1001 错误
-- system_update_check: 修复 $currentVersion 变量在定义前使用的 bug
-- app.js: 移除 code===1001 拦截逻辑，未配置更新服务器时不阻止后台启动
