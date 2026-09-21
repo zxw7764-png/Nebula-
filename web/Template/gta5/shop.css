@@ -1,0 +1,207 @@
+/*
+Template Name: 洛圣都 GTA
+Description: GTA V 洛圣都黄昏 · 城市夜行
+Color: #f7a600
+Layout: notice, bounty, notes, goods
+ */
+
+/* ============================================================
+   模板 gta5 · 洛圣都 · 发卡网
+   —— GTA V 通缉令 / 差事列表质感
+   ============================================================ */
+
+/* ===================== 配色（GTA V 洛圣都） ===================== */
+body.ui-gta5 {
+    --bg:         #0a0e1a;
+    --bg-soft:    #101627;
+    --panel:      rgba(12, 18, 33, .92);
+    --panel-2:    rgba(22, 30, 50, .94);
+    --border:     #2a3655;
+    --border-2:   #55679a;
+    --text:       #dfe6ff;
+    --text-sub:   #aeb9d8;
+    --text-dim:   #7c87a8;
+    --text-strong:#ffffff;
+
+    --primary:    #f7a600;
+    --primary-2:  #b87700;
+    --primary-rgb:    247, 166, 0;
+    --primary-2-rgb:  184, 119, 0;
+
+    --accent:     #3ac9ff;
+    --accent-2:   #0f86b8;
+    --success:    #37c06b;
+    --warning:    #ffcf3f;
+    --danger:     #ff5a5f;
+
+    --radius:     0px;
+    --shadow:     0 8px 30px rgba(3, 6, 16, .7);
+    --nav-bg:     rgba(8, 12, 24, .95);
+    --mask:       rgba(8, 12, 24, .9);
+
+    --gta-orange: #f7a600;
+    --gta-orange-2:#b87700;
+    --gta-blue:   #3ac9ff;
+    --gta-blue-2: #0f86b8;
+    --gta-pink:   #ff3d8a;
+    --gta-night:  #0a0e1a;
+    --gta-night-2:#101627;
+}
+
+/* ===================== 背景：洛圣都黄昏天际线 ===================== */
+body.ui-gta5 {
+    background:
+        linear-gradient(180deg, #101627 0%, #0a0e1a 45%, #05070f 100%);
+    color: var(--text);
+}
+
+/* ===================== 字体 ===================== */
+body.ui-gta5,
+body.ui-gta5 .btn,
+body.ui-gta5 input,
+body.ui-gta5 textarea,
+body.ui-gta5 select {
+    font-family: 'Arial Black', 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
+    letter-spacing: .5px;
+}
+body.ui-gta5 :is(h1, h2, h3),
+body.ui-gta5 .sec-title {
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-strong);
+    text-shadow: 0 2px 0 rgba(0,0,0,.45);
+}
+
+/* ============================================================
+   自定义区块 · 悬赏 bounty（发卡网促销，通缉令质感）
+   ============================================================ */
+body.ui-gta5 .gta-bounty {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 16px 20px;
+    background:
+        radial-gradient(90% 140% at 8% 8%, rgba(255,61,138,.12), transparent 55%),
+        var(--panel);
+    border: 1px solid var(--border-2);
+    border-left: 4px solid var(--gta-pink);
+    box-shadow: var(--shadow);
+}
+body.ui-gta5 .gta-bounty-stars {
+    font-size: 15px;
+    letter-spacing: 2px;
+    color: var(--gta-orange);
+    text-shadow: 0 0 6px rgba(247,166,0,.6);
+}
+body.ui-gta5 .gta-bounty-main { flex: 1; min-width: 200px; }
+body.ui-gta5 .gta-bounty-main b {
+    display: block;
+    color: var(--text-strong);
+    font-size: 16px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+}
+body.ui-gta5 .gta-bounty-main p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-sub);
+}
+body.ui-gta5 .gta-bounty-code {
+    flex: none;
+    padding: 5px 12px;
+    background: var(--gta-orange);
+    color: #151000;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 2px;
+}
+
+/* ===================== 商品卡（差事卡） ===================== */
+body.ui-gta5 .goods-card,
+body.ui-gta5 .product-card,
+body.ui-gta5 .shop-item,
+body.ui-gta5 .card {
+    background: var(--panel);
+    border: 1px solid var(--border-2);
+    box-shadow: var(--shadow);
+}
+body.ui-gta5 .goods-card:hover,
+body.ui-gta5 .product-card:hover {
+    border-color: var(--gta-orange);
+    transform: translateY(-2px);
+}
+body.ui-gta5 .goods-card .price,
+body.ui-gta5 .product-card .price,
+body.ui-gta5 .cart-price,
+body.ui-gta5 .total {
+    color: var(--gta-orange);
+    font-weight: 900;
+    text-shadow: 0 1px 0 rgba(0,0,0,.4);
+}
+body.ui-gta5 .notice-bar {
+    background: var(--panel);
+    border: 1px solid var(--border-2);
+    border-left: 4px solid var(--gta-blue);
+}
+
+/* ===================== 按钮 ===================== */
+body.ui-gta5 .btn-primary {
+    background: linear-gradient(180deg, var(--gta-orange), var(--gta-orange-2));
+    border: 0;
+    color: #191000;
+    font-weight: 900;
+    letter-spacing: 1px;
+    box-shadow: 0 3px 0 var(--gta-orange-2);
+}
+body.ui-gta5 .btn-primary:hover { filter: brightness(1.08); }
+body.ui-gta5 .btn-primary:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 var(--gta-orange-2);
+}
+body.ui-gta5 .btn-ghost,
+body.ui-gta5 .btn-outline {
+    border-color: var(--gta-blue);
+    color: var(--gta-blue);
+    background: transparent;
+}
+body.ui-gta5 .btn-ghost:hover,
+body.ui-gta5 .btn-outline:hover {
+    background: rgba(58, 201, 255, .10);
+}
+
+/* ===================== 页签选中态 ===================== */
+body.ui-gta5 .tab.active,
+body.ui-gta5 .filter-item.active,
+body.ui-gta5 .tag.active {
+    background: var(--gta-blue);
+    color: #051225;
+    font-weight: 900;
+    text-shadow: none;
+}
+body.ui-gta5 .tabs .tab,
+body.ui-gta5 .filter-item {
+    border: 1px solid var(--border-2);
+    background: transparent;
+    color: var(--text-sub);
+}
+
+/* ===================== 通用字段 ===================== */
+body.ui-gta5 input,
+body.ui-gta5 textarea,
+body.ui-gta5 select {
+    background: rgba(10, 14, 26, .6);
+    border: 1px solid var(--border-2);
+    color: var(--text);
+}
+body.ui-gta5 input:focus,
+body.ui-gta5 textarea:focus,
+body.ui-gta5 select:focus {
+    border-color: var(--gta-blue);
+}
+
+@media (max-width: 640px) {
+    body.ui-gta5 .gta-bounty { flex-direction: column; align-items: flex-start; }
+}
