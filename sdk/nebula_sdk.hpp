@@ -252,12 +252,12 @@ namespace nebula {
     //  AES_KEY / SIGN_SALT / API 地址；未开启时等价于普通 std::string，零开销。
     // ============================================================
     namespace cfg {
-        inline const std::string kApiUrl = NEBULA_STR("https://yz.baige.fun/api/index.php");  // ← 改成你的 API 入口
+        inline const std::string kApiUrl = NEBULA_STR("https://xxxxxxxxx/api/index.php");  // ← 改成你的 API 入口
         // kAppKey 用 SecureString 存储：长度 ≤15 会被 std::string SSO 内联进 .data 静态区，
         // 直接放 std::string 会让明文在内存 dump 时一眼可见；SecureString 只在 str() 时临时解码。
-        inline const SecureString kAppKey = SecureString(NEBULA_STR("SWBFE6879E94DD"));                 // ← 改成你的软件 app_key
-        inline const std::string kAesKey = NEBULA_STR("eb32f8087805a06cf8e45e306e7a8d5f");      // ← 32位hex，后台软件管理复制
-        inline const std::string kSignSalt = NEBULA_STR("147ea3cc63530253a1617df4da45d7b0cc1a345f67fe2db3"); // ← 48位hex，后台软件管理复制
+        inline const SecureString kAppKey = SecureString(NEBULA_STR("SWBxxxxxxxx"));                 // ← 改成你的软件 app_key
+        inline const std::string kAesKey = NEBULA_STR("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");      // ← 32位hex，后台软件管理复制
+        inline const std::string kSignSalt = NEBULA_STR("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"); // ← 48位hex，后台软件管理复制
 
         // ★ 响应防伪造签名（必填 ）：
         //   把服务端 config/grace_keys.php 里的 public 字段（PEM）原样填到这里，
@@ -283,11 +283,7 @@ namespace nebula {
         //
         //   ✅ 必须保留 -----BEGIN/END PUBLIC KEY----- 头尾标记（SDK 靠它们定位密钥体，
         //      去掉后验签必败）；❌ 引号内不能有真实回车；空格/加号/等号原样保留。
-        inline const std::string kRespSignPubKey = NEBULA_STR(
-            "-----BEGIN PUBLIC KEY-----\n"
-            "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5eoEEPofNhvvXs39pnNgP6C48ypS\n"
-            "RtTZoHHTfsb1kqJK6EGc2sST5tuVGSxn628z2N7f+QNnAla3SCyA6+qzAg==\n"
-            "-----END PUBLIC KEY-----\n");
+        inline const std::string kRespSignPubKey = NEBULA_STR();
 
         // ★ TLS 证书指纹锁定（可选但强烈建议，防透明代理 / 中间人抓包）：
         //   填服务端 HTTPS 证书的 SHA256 指纹（64 位 hex，大小写均可、可带冒号）。
@@ -313,7 +309,7 @@ namespace nebula {
         //   · 服务器换证书（续期/更换 CA）后这里必须同步更新，否则所有客户端连不上；
         //   · 留空 = 不校验证书指纹（仍走系统标准 TLS 校验）。
         //   · 填写后 SDK 会同时拒绝 http:// 的 API 地址（明文传输 + 无法锁证书）。
-        inline const std::string kTlsCertSha256 = NEBULA_STR("f31dc7cd4dbed7b9b6034bae7577452a6e50102ff3121775e64698b76f08b80d");  // ← 服务端证书 SHA256 指纹，留空不锁定
+        inline const std::string kTlsCertSha256 = NEBULA_STR("");  // ← 服务端证书 SHA256 指纹，留空不锁定
 
         // ============================================================
         // ★ 疑似环境处置策略（false=宽松[默认]，true=严格）
