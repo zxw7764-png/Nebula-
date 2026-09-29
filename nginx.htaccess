@@ -11,7 +11,7 @@
 # 完整示例见 install/nginx.conf.example。
 # 若你的 vhost 里已经写过等价规则，可以忽略本文件。
 #
-# ⚠ 安装向导会把下面规则里的 /admin 自动改写成你的实际后台目录名。
+# 后台目录名允许在安装时自定义，所以下面的 handlers 规则用通配写法，改名后依然生效。
 # ============================================================
 
 # 1) 敏感目录整目录拒绝（config / lib / logs / data）
@@ -29,7 +29,8 @@ location ~ ^/install/.*\.php$ {
 }
 
 # 3) 后台 / 代理的 handlers 目录不可直接访问
-location ~ ^/(admin|agent)/handlers/ {
+#    用 [^/]+ 通配第一级目录名：安装时把 admin 改成别的名字后，这里无需再改
+location ~ ^/[^/]+/handlers/ {
     deny all;
     return 404;
 }

@@ -42,7 +42,7 @@ if ($downloadUrl === '' || !preg_match('#^https://#i', $downloadUrl)) {
 if ($sha256 === '' || strlen($sha256) !== 64) {
     Response::error(1001, 'SHA-256 校验值不合法');
 }
-if ($targetVer === '' || !preg_match('/^\d+\.\d+\.\d+/', $targetVer)) {
+if ($targetVer === '' || !preg_match('/^\d+\.\d+\.\d+$/', $targetVer)) {
     Response::error(1001, '版本号不合法');
 }
 
@@ -258,6 +258,19 @@ try {
     // ----------------------------------------------------------------
     // 4. 备份当前文件
     // ----------------------------------------------------------------
+    // 更新包里的后台目录在打包时固定为 admin/，这里按本站实际后台目录名重写。
+    // 否则改过名的站点会多出一份默认路径的后台，而真正的后台代码反而得不到更新。
+    $adminPath = trim((string) Config::get('admin.path', 'admin'), '/');
+    if (!preg_match('/^[A-Za-z][A-Za-z0-9_-]{2,31}$/', $adminPath)) {
+        $adminPath = 'admin';
+    }
+    $mapEntryPath = static function (string $path) use ($adminPath): string {
+        if ($path === 'admin' || strpos($path, 'admin/') === 0) {
+            return $adminPath . substr($path, 5);
+        }
+        return $path;
+    };
+
     $filesBackedUp = 0;
     for ($i = 0; $i < $zip->numFiles; $i++) {
         $entry = $zip->getNameIndex($i);
@@ -267,7 +280,7 @@ try {
         if ($entry === 'manifest.json') continue;
         // 跳过保护目录
         $skip = false;
-        $entryNorm = str_replace('\\', '/', $entry);
+        $entryNorm = $mapEntryPath(str_replace('\\', '/', $entry));
         foreach ($protectedDirs as $pdir) {
             if ($entryNorm === $pdir || substr($entryNorm, 0, strlen($pdir) + 1) === $pdir . '/') { $skip = true; break; }
         }
@@ -309,7 +322,7 @@ try {
         if (substr($entry, -1) === '/') continue;
         if ($entry === 'manifest.json') continue;
 
-        $entryNorm = str_replace('\\', '/', $entry);
+        $entryNorm = $mapEntryPath(str_replace('\\', '/', $entry));
         $skip = false;
         foreach ($protectedDirs as $pdir) {
             if ($entryNorm === $pdir || substr($entryNorm, 0, strlen($pdir) + 1) === $pdir . '/') { $skip = true; break; }
@@ -336,9 +349,14 @@ try {
         $content = file_get_contents($bootstrapFile);
         if ($content !== false) {
             // 替换 NB_VERSION 定义
-            $newContent = preg_replace(
+            // 必须用 preg_replace_callback：preg_replace 的替换串会被二次解析，
+            // \1、$1、\\ 都是特殊语法，单引号未转义时还能截断字符串字面量注入 PHP 代码。
+            // 回调只返回纯字面量，不做二次解析。（与 install/install.php 的写法保持一致）
+            $newContent = preg_replace_callback(
                 "/define\('NB_VERSION',\s*'[^']*'\)/",
-                "define('NB_VERSION', '" . $targetVer . "')",
+                static function () use ($targetVer) {
+                    return "define('NB_VERSION', '" . $targetVer . "')";
+                },
                 $content
             );
             if ($newContent !== null && $newContent !== $content) {
