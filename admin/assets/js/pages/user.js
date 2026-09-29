@@ -423,6 +423,7 @@ async function userDetail(id) {
             <span class="k">会员到期</span><span class="v">${esc(u.vip_text)}</span>
             <span class="k">剩余点数</span><span class="v">${u.points}</span>
             <span class="k">设备上限</span><span class="v">${u.max_devices}</span>
+            <span class="k">激活卡密</span><span class="v mono" style="font-size:12px">${esc(u.card_code || '-')}${u.card_code ? ` <button class="btn ghost sm" data-act="copy-card" data-code="${esc(u.card_code)}">复制</button>` : ''}</span>
             <span class="k">注册 IP</span><span class="v">${esc(u.register_ip || '-')}</span>
             <span class="k">最后登录</span><span class="v">${esc(u.last_login)} (${esc(u.last_login_ip || '-')})</span>
             <span class="k">注册时间</span><span class="v">${esc(u.created_at)}</span>
@@ -474,6 +475,10 @@ async function userDetail(id) {
 
     document.querySelectorAll('[data-unbind]').forEach(b => {
         b.addEventListener('click', () => unbindDevice(parseInt(b.dataset.unbind, 10), id));
+    });
+
+    document.querySelectorAll('[data-act="copy-card"]').forEach(b => {
+        b.addEventListener('click', () => copyText(b.dataset.code));
     });
 }
 

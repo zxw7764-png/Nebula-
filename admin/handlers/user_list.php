@@ -22,10 +22,12 @@ $where  = ['1=1'];
 $params = [];
 
 if ($keyword !== '') {
-    $where[] = '(username LIKE :kw OR email LIKE :kw2 OR nickname LIKE :kw3)';
+    // 关键词同时匹配激活卡密快照 —— 卡被删了也能凭卡密找回账号
+    $where[] = '(username LIKE :kw OR email LIKE :kw2 OR nickname LIKE :kw3 OR card_code LIKE :kw4)';
     $params['kw']  = "%{$keyword}%";
     $params['kw2'] = "%{$keyword}%";
     $params['kw3'] = "%{$keyword}%";
+    $params['kw4'] = "%{$keyword}%";
 }
 if ($status !== '' && $status !== null) {
     $where[] = 'status = :st';

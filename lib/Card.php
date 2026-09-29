@@ -159,6 +159,9 @@ class Card
                 $updates['software_id'] = $cardSw;
             }
 
+            // 卡密快照：写进用户行，删卡后管理端仍能反查/找回账号
+            $updates['card_code'] = (string) $code;
+
             Database::update('users', $updates, 'id = :id', ['id' => $user['id']]);
 
             // 标记卡密已用

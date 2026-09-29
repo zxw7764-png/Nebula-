@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS `nb_users` (
   `ban_expire`      BIGINT       NOT NULL DEFAULT 0 COMMENT '封禁到期时间戳：status=0 时 >0 为限时封禁到期点，0=永久封禁',
   `group_id`        INT UNSIGNED NOT NULL DEFAULT 1 COMMENT '用户组ID',
   `software_id`     INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '归属软件ID，0=未绑定（激活时写入）',
+  `card_code`       VARCHAR(64)  DEFAULT NULL COMMENT '激活卡密快照（激活时写入，删卡后仍可反查/找回账号）',
   `vip_expire`      BIGINT       NOT NULL DEFAULT 0 COMMENT '会员到期时间戳：-1=永久，0=未激活',
   `points`          INT          NOT NULL DEFAULT 0 COMMENT '剩余点数',
   `max_devices`     TINYINT      NOT NULL DEFAULT 1 COMMENT '最大设备数',
