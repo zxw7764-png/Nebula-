@@ -6,8 +6,8 @@
 
 $run = (bool) Util::int($input, 'run', 0);
 
-// 最新一次巡检结果（实时跑，查询均降级安全）
-$report = SecReport::run();
+// 最新一次巡检结果（实时跑，仅查看：不写报告文件、不记日志，避免每次刷新重复追加）
+$report = SecReport::run(false);
 
 // 历史报告文件（logs/sec_report_*.txt，仅异常时写入），取最近 5 个的尾部
 $history = [];

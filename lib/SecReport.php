@@ -21,7 +21,7 @@ class SecReport
     /** 报告窗口（秒） */
     public const WINDOW = 86400;
 
-    public static function run(): array
+    public static function run(bool $persist = true): array
     {
         $since = time() - self::WINDOW;
         $findings = [];
@@ -102,8 +102,9 @@ class SecReport
             'findings' => $findings,
         ];
 
-        // 有异常：写报告文件 + 日志（每天最多一次由调用方节流）
-        if ($findings) {
+        // 有异常：写报告文件 + 日志（仅 cron 持久化路径；后台实时查看传 persist=false
+        // 只读不落盘，否则每次打开页面都会往报告文件追加一条重复记录）
+        if ($persist && $findings) {
             $file = NB_ROOT . '/logs/sec_report_' . date('Y-m-d') . '.txt';
             @file_put_contents(
                 $file,
