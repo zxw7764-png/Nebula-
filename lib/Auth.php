@@ -369,13 +369,16 @@ class Auth
         return self::userById((int) $user['id']) ?? $user;
     }
 
-    /** 依据卡密生成一个可用的用户名（确定性前缀 + 冲突退避） */
+    /**
+     * 为激活码直登生成随机用户名。
+     * 刻意不使用卡密原文 —— 避免把激活码明文暴露在用户名/排行/评论等
+     * 展示位（卡密就是登录凭证，泄露即被盗号）。格式：U + 7 位随机大写字母数字。
+     */
     private static function suggestUsername(string $code): string
     {
-        $base = 'card_' . strtolower(preg_replace('/[^A-Za-z0-9]/', '', $code));
-        $base = substr($base, 0, 24);
+        $base = 'U' . Util::random(7);
         if (strlen($base) < 6) {
-            $base = 'card_' . strtolower(Util::random(8));
+            $base = 'U' . Util::random(8);
         }
 
         $name = $base;
@@ -383,9 +386,9 @@ class Auth
             if (!self::userByUsername($name)) {
                 return $name;
             }
-            $name = substr($base, 0, 26) . $i;
+            $name = 'U' . Util::random(7) . ($i > 1 ? $i : '');
         }
-        return 'card_' . strtolower(Util::random(12));
+        return 'U' . Util::random(10);
     }
 
     private static function cardByCode(string $code): ?array
