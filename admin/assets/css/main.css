@@ -117,6 +117,43 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; outl
 .chk-group { display: flex; flex-wrap: wrap; gap: 8px 18px; }
 .chk-group .chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; cursor: pointer; color: var(--text); }
 .chk-group .chk input { width: auto; margin: 0; accent-color: var(--primary); }
+/* 管理员权限树（编辑弹窗：分组卡片 + 两列权限项）。
+   权限树位于 .field 内，必须用更高特异性的规则压过 .field input / .field label
+   这两条文本框全局样式，否则 checkbox 会被拉成带边框背景的「输入框」。 */
+.perm-tree { display: flex; flex-direction: column; gap: 10px; }
+.perm-tree .perm-group {
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; background: var(--input-bg);
+}
+.perm-tree .perm-group-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px; font-size: 13px; font-weight: 600; color: var(--text);
+}
+.perm-tree .perm-group-head label {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin: 0; font-size: 12px; font-weight: 500;
+    color: var(--text-sub); cursor: pointer;
+}
+.perm-tree .perm-group-head label input { width: 14px; height: 14px; margin: 0; padding: 0; accent-color: var(--primary); cursor: pointer; }
+.perm-tree .perm-items { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 16px; }
+.perm-tree .perm-item {
+    display: flex; align-items: flex-start; gap: 7px;
+    margin: 0; padding: 3px 0; font-size: 13px; font-weight: 500;
+    color: var(--text); cursor: pointer;
+}
+.perm-tree .perm-item input {
+    width: 15px; height: 15px; margin: 2px 0 0; padding: 0;
+    flex: none; accent-color: var(--primary); cursor: pointer;
+}
+.perm-tree .perm-name { line-height: 1.35; }
+.perm-tree .perm-key { display: block; font-size: 11px; font-weight: 400; color: var(--text-sub); }
+/* .field 内的行内勾选行（如「跟随角色默认权限」开关） */
+.field label.chk-inline {
+    display: inline-flex; align-items: center; gap: 7px;
+    margin-bottom: 6px; font-size: 13px; font-weight: 500;
+    color: var(--text); cursor: pointer;
+}
+.field label.chk-inline input { width: 15px; height: 15px; margin: 0; padding: 0; accent-color: var(--primary); cursor: pointer; }
 /* 挂卡类型多规格行（商品弹窗：每条 = 一种可购规格） */
 .card-spec-row {
     border: 1px solid var(--border); border-radius: 10px;

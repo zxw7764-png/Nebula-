@@ -10,7 +10,7 @@ const PAGES = [
     "card", "batch", "device", "device_ban", "session", "notice", "version", "client_notice",
     "group", "message", "feedback", "plan", "shop", "shop_setting", "shop_goods",
     "seller", "screenshot", "log", "files", "audit", "setting", "profile", "portal_web", "templates", "games",
-    "system_update",
+    "system_update", "admins",
 ];
 const pagesReady = Promise.all(
     PAGES.map(p => import(`./pages/${p}.js?v=${window.NB_V || ''}`).catch(() => {

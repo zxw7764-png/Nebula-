@@ -13,8 +13,12 @@
  *   1. role 1（超管）在 require() 里直接放行，不查矩阵。
  *      目的是「即使矩阵漏配了某个权限点，也不会把超管锁在门外」，
  *      保证向后兼容与可恢复性。
- *   2. role 2 / 3 走显式矩阵。命中「无权限」即拒绝。
- *   3. 入口（index.php）按 ACTION_PERM 表对每个 action 统一校验，
+ *   2. role 2 / 3 的权限来源（按优先级）：
+ *      ① nb_admins.permissions 自定义清单（超管逐项勾选，非 NULL 即生效）；
+ *      ② ROLE_MATRIX 角色默认矩阵（清单为 NULL 时，老账号行为不变）。
+ *   3. admin.manage（管理员账号与权限配置）为超管专属硬权限：
+ *      不在配置目录中，且即使出现在自定义清单里也不生效。
+ *   4. 入口（index.php）按 ACTION_PERM 表对每个 action 统一校验，
  *      handler 无需各自判断；未登记权限点的 action 一律拒绝（默认拒绝）。
  *
  * 权限点命名：<域>.<动作>，域/动作均小写，点号分隔。
@@ -172,6 +176,10 @@ final class AdminPermission
         'audit_list'            => self::AUDIT_READ,
         'audit_detail'          => self::AUDIT_READ,
 
+        // ---- 管理员账号管理（超管专属：admin.manage 即使进入自定义清单也不生效） ----
+        'admin_list'            => self::ADMIN_MANAGE,
+        'admin_save'            => self::ADMIN_MANAGE,
+
         // ---- 设置（入口只校验「有没有改设置的资格」，
         //      具体分档在 setting_save.php 内按档校验） ----
         'setting_get'           => self::SETTINGS_SITE,
@@ -249,6 +257,51 @@ final class AdminPermission
     private const ROLE_NAMES = [1 => '超级管理员', 2 => '操作员', 3 => '只读'];
 
     // ------------------------------------------------------------------
+    // 权限点目录（超管配置界面的分组与中文名）
+    // ------------------------------------------------------------------
+    /**
+     * admin.manage（管理员账号与权限配置）刻意不在此目录中：
+     * 它是超管专属硬权限 —— 即使被写进某账号的自定义清单也不生效
+     * （见 allows()），否则被授权的管理员就能自行改权限，权限体系失守。
+     */
+    private const PERM_CATALOG = [
+        '用户与设备' => [
+            self::USER_READ    => '查看用户与统计',
+            self::USER_EDIT    => '编辑用户 / 踢下线',
+            self::USER_IMPORT  => '批量导入用户',
+            self::USER_DELETE  => '删除用户',
+            self::DEVICE_READ  => '查看设备与会话',
+            self::DEVICE_MANAGE => '解绑 / 解封设备',
+            self::DEVICE_BAN   => '拉黑设备',
+            self::SESSION_KICK => '强制下线会话',
+        ],
+        '卡密与交易' => [
+            self::CARD_READ    => '查看卡密与订单',
+            self::CARD_GENERATE => '生成卡密',
+            self::CARD_VOID    => '作废卡密',
+            self::CARD_EXPORT  => '导出卡密',
+        ],
+        '代理' => [
+            self::AGENT_READ   => '查看代理与激活码',
+            self::AGENT_EDIT   => '编辑代理',
+            self::AGENT_GRANT  => '调整代理额度',
+            self::AGENT_RECHARGE_CODE => '生成代理充值卡',
+        ],
+        '内容运营' => [
+            self::CONTENT_MANAGE => '公告 / 版本 / 留言 / 反馈 / 商家等',
+        ],
+        '设置' => [
+            self::SETTINGS_SITE     => '站点展示设置',
+            self::SETTINGS_BUSINESS => '业务设置（软件管理 / 发卡 / 文件安全）',
+            self::SETTINGS_SECURITY => '安全设置',
+            self::SETTINGS_INFRA    => '系统维护与更新',
+        ],
+        '日志审计' => [
+            self::AUDIT_READ => '查看操作与审计日志',
+        ],
+    ];
+
+    // ------------------------------------------------------------------
     // 校验
     // ------------------------------------------------------------------
 
@@ -280,8 +333,54 @@ final class AdminPermission
         if ($permission === '' || $permission === null) {
             return true;
         }
+        // 硬规则：管理员账号与权限配置仅超管可操作。
+        // 即使被写进自定义权限清单也不放行，防止被授权者自行扩权。
+        if ($permission === self::ADMIN_MANAGE) {
+            return false;
+        }
 
+        // 自定义权限清单（超管逐项勾选）：非 NULL 时以它为准，
+        // 否则回退到角色默认矩阵（老账号 permissions=NULL 行为不变）
+        $custom = self::customPermissionsOf($admin);
+        if ($custom !== null) {
+            return in_array($permission, $custom, true);
+        }
         return in_array($permission, self::ROLE_MATRIX[$role] ?? [], true);
+    }
+
+    /**
+     * 该管理员的自定义权限清单（解析 nb_admins.permissions JSON 列）。
+     * 返回 null = 未配置（列 NULL / 漏跑迁移），走角色默认矩阵。
+     */
+    public static function customPermissionsOf(array $admin): ?array
+    {
+        $raw = $admin['permissions'] ?? null;
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+        $list = json_decode((string) $raw, true);
+        if (!is_array($list)) {
+            return null;   // 数据损坏按未配置处理，比锁死更安全
+        }
+        return array_values(array_map('strval', $list));
+    }
+
+    /** 权限点目录（分组 => [权限点 => 中文名]），供超管配置界面渲染 */
+    public static function catalog(): array
+    {
+        return self::PERM_CATALOG;
+    }
+
+    /** 目录中登记的全部权限点（校验保存的自定义清单用，防注入任意键） */
+    public static function catalogPermissions(): array
+    {
+        $out = [];
+        foreach (self::PERM_CATALOG as $perms) {
+            foreach ($perms as $p => $_) {
+                $out[] = $p;
+            }
+        }
+        return $out;
     }
 
     /**
@@ -322,12 +421,17 @@ final class AdminPermission
     /**
      * 当前管理员持有的全部权限点（供前端渲染菜单 / 隐藏按钮）
      * 超管返回 '*' 通配，前端据此显示全部入口。
+     * 自定义清单（超管逐项配置）原样下发；未配置则回退角色默认矩阵。
      */
     public static function permissionsOf(array $admin)
     {
         $role = (int) ($admin['role'] ?? 0);
         if ($role === 1) {
             return '*';
+        }
+        $custom = self::customPermissionsOf($admin);
+        if ($custom !== null) {
+            return $custom;
         }
         return self::ROLE_MATRIX[$role] ?? [];
     }

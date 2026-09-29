@@ -315,6 +315,7 @@ CREATE TABLE IF NOT EXISTS `nb_admins` (
   `password`    VARCHAR(255) NOT NULL COMMENT 'bcrypt',
   `nickname`    VARCHAR(64)  DEFAULT NULL,
   `role`        TINYINT      NOT NULL DEFAULT 1 COMMENT '1超级管理员 2操作员 3只读',
+  `permissions` TEXT         DEFAULT NULL COMMENT '自定义权限点 JSON 数组（NULL=按 role 默认矩阵；仅 role 2/3 生效，admin.manage 恒为超管专属）',
   `status`      TINYINT      NOT NULL DEFAULT 1,
   `last_login_ip`   VARCHAR(64)  DEFAULT NULL,
   `last_login_time` INT UNSIGNED NOT NULL DEFAULT 0,

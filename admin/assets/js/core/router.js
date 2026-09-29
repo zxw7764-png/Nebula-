@@ -36,6 +36,7 @@ export const MENUS = [
     { id: 'portal',       name: '内容运营',   icon: 'bi-globe', type: 'composite' },
 
     { group: '系统' },
+    { id: 'admins',     name: '管理员',     icon: 'bi-shield-lock', type: 'page', perm: 'admin.manage' },
     { id: 'templates',  name: '界面模板',   icon: 'bi-palette', type: 'page', perm: 'settings.site' },
     { id: 'logs',       name: '日志中心',   icon: 'bi-clock-history', type: 'composite' },
     { id: 'files',      name: '文件管理',   icon: 'bi-folder-check', type: 'composite' },
@@ -47,6 +48,7 @@ export const MENUS = [
 export const TITLES = {
     dashboard: '数据概览',
     stat_overview: 'API 统计',
+    admins:    '管理员',
     users:     '用户与设备',
     cards:     '卡密中心',
     agents:    '代理商',
