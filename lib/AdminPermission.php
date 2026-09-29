@@ -175,6 +175,7 @@ final class AdminPermission
         'log_list'              => self::AUDIT_READ,
         'audit_list'            => self::AUDIT_READ,
         'audit_detail'          => self::AUDIT_READ,
+        'sec_report'            => self::AUDIT_READ,
 
         // ---- 管理员账号管理（超管专属：admin.manage 即使进入自定义清单也不生效） ----
         'admin_list'            => self::ADMIN_MANAGE,
@@ -334,7 +335,7 @@ final class AdminPermission
         'notice_list', 'version_list', 'message_list', 'feedback_list',
         'plan_list', 'seller_list', 'screenshot_list', 'game_list',
         // 日志审计（查看）
-        'log_list', 'audit_list', 'audit_detail',
+        'log_list', 'audit_list', 'audit_detail', 'sec_report',
     ];
 
     // ------------------------------------------------------------------
