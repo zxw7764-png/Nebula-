@@ -72,8 +72,11 @@ $list = array_map(function ($u) use ($now, $swName) {
         'software_id'    => $uSwId,
         'software_name'  => $uSwId > 0 ? ($swName[$uSwId] ?? ('软件#' . $uSwId)) : '',
         'vip_expire'     => $expire,
-        'vip_text'       => $expire === -1 ? '永久' : ($expire > 0 ? Util::date($expire) : '未激活'),
-        'vip_valid'      => $expire === -1 || $expire > $now,
+        // 会员文案：永久 / 有到期时间 / 点数·次数卡（有余额） / 未激活
+        'vip_text'       => $expire === -1 ? '永久'
+            : ($expire > 0 ? Util::date($expire)
+            : ((int) $u['points'] > 0 ? '点数·次数卡' : '未激活')),
+        'vip_valid'      => $expire === -1 || $expire > $now || (int) $u['points'] > 0,
         'points'         => (int) $u['points'],
         'max_devices'    => (int) $u['max_devices'],
         'device_count'   => Device::activeCount((int) $u['id']),
