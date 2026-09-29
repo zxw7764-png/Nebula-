@@ -191,7 +191,31 @@ class Auth
     {
         $card = self::cardByCode($code);
         if (!$card) {
-            return self::fail(3001, '激活码不存在');
+            // 卡密已被管理端删除 → 回退到用户行的卡密快照（card_code），
+            // 让已激活过该卡的用户仍能凭原激活码登录（找回账号）。
+            // 快照由 Card::activate 在激活时写入，删卡不影响。
+            $snapUser = Database::one(
+                'SELECT * FROM ' . Database::t('users') . ' WHERE card_code = ? ORDER BY id ASC LIMIT 1',
+                [$code]
+            );
+            if (!$snapUser) {
+                return self::fail(3001, '激活码不存在');
+            }
+            // 多软件隔离：快照账号只在本软件可登录
+            $curSw = Software::currentId();
+            if ($curSw > 0 && (int) ($snapUser['software_id'] ?? 0) > 0
+                && (int) $snapUser['software_id'] !== $curSw) {
+                return self::fail(3008, '激活码不属于当前软件');
+            }
+            // 用户名+激活码方式：用户名对不上按绑定冲突处理（防借码接管）
+            if ($username !== '' && strcasecmp($username, (string) $snapUser['username']) !== 0) {
+                return self::fail(3006, '该激活码已绑定其他账号');
+            }
+            $err = self::accountStatusError($snapUser);
+            if ($err) {
+                return $err;
+            }
+            return self::ok(self::touchLogin($snapUser), false);
         }
 
         // 多软件隔离：激活码必须属于当前软件
