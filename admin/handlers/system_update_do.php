@@ -232,7 +232,7 @@ try {
             $zip->close();
             throw new RuntimeException('更新包带有签名，但服务器未配置内置公钥（NEBULA_UPDATE_PUBLIC_KEY），拒绝安装');
         }
-        // 与 pack.py 保持一致的签名输入格式
+        // 签名输入格式：按顺序拼接 manifest 的 5 个字段（与 pack.php 产出的字段一致）
         // （不绑定 zip 总哈希，因为带签名的 manifest 会改变 zip 哈希形成循环依赖；
         //   签名证明「该版本为官方私钥签名发布」，配合上面的 SHA-256 校验共同防篡改）
         $signInput = implode("\n", [
