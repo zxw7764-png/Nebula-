@@ -229,13 +229,14 @@
 #  define NEBULA_MARK_SCOPE_BEGIN()  NEBULA_SHELL_HOOK_VM_BEGIN()
 #  define NEBULA_MARK_SCOPE_END()    NEBULA_SHELL_HOOK_VM_END()
 #elif defined(NEBULA_SHELL_VMP) && NEBULA_SHELL_VMP
-#  define NEBULA_MARK_ULTRA_BEGIN()  VMProtectBeginUltra(__FILE__ ":" NEBULA_STR_LINE)
+#include <VMProtectSDK.h>
+#  define NEBULA_MARK_ULTRA_BEGIN()  VMProtectBeginUltra("nebula_ultra")
 #  define NEBULA_MARK_ULTRA_END()    VMProtectEnd()
-#  define NEBULA_MARK_VM_BEGIN()     VMProtectBeginVirtualization(__FILE__ ":" NEBULA_STR_LINE)
+#  define NEBULA_MARK_VM_BEGIN()     VMProtectBeginVirtualization("nebula_vm")
 #  define NEBULA_MARK_VM_END()       VMProtectEnd()
-#  define NEBULA_MARK_MUTATE_BEGIN() VMProtectBeginMutation(__FILE__ ":" NEBULA_STR_LINE)
+#  define NEBULA_MARK_MUTATE_BEGIN() VMProtectBeginMutation("nebula_mutate")
 #  define NEBULA_MARK_MUTATE_END()   VMProtectEnd()
-#  define NEBULA_MARK_SCOPE_BEGIN()  VMProtectBegin(__FILE__ ":" NEBULA_STR_LINE)
+#  define NEBULA_MARK_SCOPE_BEGIN()  VMProtectBegin("nebula_scope")
 #  define NEBULA_MARK_SCOPE_END()    VMProtectEnd()
 #elif defined(NEBULA_SHELL_THEMIDA) && NEBULA_SHELL_THEMIDA
 #  define NEBULA_MARK_ULTRA_BEGIN()  VM_START
