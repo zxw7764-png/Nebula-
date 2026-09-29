@@ -45,3 +45,5 @@ sdk/build/out/
 *.exp
 *.lib
 *.dll
+# 例外：随 SDK 分发的加固工具静态库
+!sdk/vmp/*.lib
