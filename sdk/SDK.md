@@ -324,7 +324,64 @@ if (gr.ok) {
 }
 ```
 
-## 11. 编译与常见问题
+## 11. 自动更新（可选 · 全自动下载 + 替换 + 重启）
+
+服务端「版本管理」发布新版本后，SDK 可**全自动**完成升级：检测 → 下载 → 校验 → 覆盖自身 exe → 重启。接入方只需在启动时调一行。
+
+```cpp
+auto ir = c.init();                       // 必须先 init（版本信息随 init 下发）
+if (!ir.ok) return 1;
+
+auto up = c.autoUpdate();                 // 检测 → 下载 → 校验 → 替换 → 本进程退出重启
+if (up.state == nebula::UpdateState::Applied) return 0;   // 即将重启，别再往下走
+if (up.state == nebula::UpdateState::Failed) { /* up.msg 是原因，可提示手动下载 */ }
+// 其余情况（NoUpdate / NeedConfirm）继续正常启动流程
+```
+
+### 更新策略
+
+| 服务端「版本管理」设置 | SDK 行为 |
+| --- | --- |
+| 强制更新（`force_update`） | 自动下载、替换、**免确认重启**（服务端本就不让旧版继续用） |
+| 可选更新 | 默认只弹提示（`NeedConfirm`）；想自动处理则设 `Options::auto_update_optional = true` |
+| 无新版本 | 直接返回 `NoUpdate`，零网络开销 |
+
+### 三步式 API（想自己控制时机时用）
+
+```cpp
+auto r = c.downloadUpdate();              // 只下载+校验，拿到本地路径
+if (r.state == nebula::UpdateState::Downloaded) {
+    // ...你的业务：等用户保存数据 / 等空闲时机...
+    std::string err = c.applyDownloadedUpdate(r);   // 替换并重启
+    if (!err.empty()) { /* 失败原因 */ }
+}
+```
+
+### 安全设计（重要）
+
+| 机制 | 说明 |
+| --- | --- |
+| **强制哈希校验** | 服务端未登记 `file_hash` 时**直接拒绝更新**——否则等于给中间人留了投毒通道 |
+| **替换前二次校验** | 下载到替换之间再验一次 hash，防 TOCTOU 掉包 |
+| **默认只接受 https** | 更新地址为 `http://` 时拒绝；本地/内网测试可开 `Options::allow_insecure_update` |
+| **同目录落盘** | 更新包与脚本都放在 exe 同目录，保证 `move` 不跨卷 |
+| **可选 TLS 指纹锁定** | 复用 `kTlsCertSha256`，与业务请求同一套校验 |
+
+> 校验不通过**绝不替换**，会删除临时文件并返回 `Failed`。
+
+### 为什么必须"退出后才替换"
+
+Windows 不允许覆盖正在运行的 exe（映像被占用，无法解除）。SDK 的做法是：
+生成一个 `nebula_upd_<随机>.bat` → 由它轮询等待本进程退出 → `move /Y` 覆盖 → `start` 启动新版 → 自删。
+脚本用 `SW_HIDE` 隐藏窗口启动，用户无感知。
+
+### 接入建议
+
+- **放在启动流程最前面**（`init` 之后、登录之前），避免用户登录完再被打断
+- 强制更新时 `autoUpdate()` 会直接结束进程，**返回值应视为"不会返回"的正常路径**
+- 编译期可整体关闭：工程预处理器加 `NEBULA_AUTO_UPDATE=0`（连代码都不编译进去）
+
+## 12. 编译与常见问题
 
 - **拷贝方式**：把 `nebula_sdk.hpp` + `nebula_protect.hpp` + `nebula/` 目录一起放进工程，`#include "nebula_sdk.hpp"` 即可，系统库自动链接（`winhttp` `bcrypt` `advapi32` `crypt32` `iphlpapi` `wbemuuid` `user32` `oleaut32`）
 - **中文乱码**：提示窗全部走宽字符 API；建议 MSVC 开 `/utf-8`
@@ -333,7 +390,7 @@ if (gr.ok) {
 - **心跳线程**：回调在 SDK 线程执行，不要在其中直接操作 SFML / 窗口句柄，先设标志位
 - **错误码**：业务码完整表见 `docs/API.md` 1.4（1001 参数 / 1004 软件无效 / 2001 密码 / 2002 封禁 / 3001-3008 卡密 / 4001-4005 设备 / 5001-5004 频率与签名 / 6001 版本过低 / 6002 维护中）
 
-## 12. 客户端加固（可选 · 默认全部关闭）
+## 13. 客户端加固（可选 · 默认全部关闭）
 
 加固实现位于 **`sdk/nebula/protect/`**（`shell.hpp` / `obfuscate.hpp` / `runtime.hpp`），由伞头自动包含，提供三类加固能力：
 
@@ -364,7 +421,7 @@ c->enableProtection(0, 5000);                  // 启动自检 + 每 5 秒后台
 > 完整操作手册（各等级查什么、权重与误报风险、加壳步骤与坑、误报收场办法）
 > 见 **[SDK_PROTECTION.md](SDK_PROTECTION.md)**。
 
-### 12.1 授权门卫（可选）：内置登录判定保护
+### 13.1 授权门卫（可选）：内置登录判定保护
 
 SDK 提供可选的**内置登录判定** `Client::loginAndGuard()`：把「发起登录 → 判定成功/失败」整段收进 SDK，并在壳虚拟化区路由回调，接入层不再暴露一眼可 patch 的裸 `if(jz/jnz)` 分支。**判定代码（`lr.ok`）真正实现在 SDK 内部。可用可不用，不改变任何协议与业务逻辑。**
 

@@ -16,6 +16,8 @@
 //        auto init   = client->init();
 //        if (!init.ok) return 1;
 //        if (!client->enforceSelfIntegrity()) return 1;
+//        if (!client->versionAlert()) return 1;            //    版本策略提示
+//        if (client->autoUpdate().state == nebula::UpdateState::Applied) return 0;  // 自动更新并重启
 //        auto login  = client->login(account, password);
 //        if (!login.ok) return 1;
 //        client->startHeartbeat(login.token, [](const nebula::HeartbeatInfo& hb) {
@@ -40,6 +42,7 @@
 //   nebula/client/notice_store.hpp 立即公告本地已读记录
 //   nebula/client/integrity.hpp    自身完整性自校验
 //   nebula/client/offline.hpp      离线宽限票据验签
+//   nebula/client/update.hpp       自动更新（下载 → 校验 → 自替换 → 重启）
 //   nebula/client/client.hpp       Client（流程与业务接口）
 //   nebula/client/guard.hpp        授权门卫（可选）
 //

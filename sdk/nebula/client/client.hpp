@@ -37,6 +37,7 @@
 #include "notice_store.hpp"
 #include "offline.hpp"
 #include "types.hpp"
+#include "update.hpp"
 #include "../core/http.hpp"
 #include "../protect/runtime.hpp"
 
@@ -65,6 +66,14 @@ public:
         int  connect_timeout_ms = 8000;
         int  receive_timeout_ms = 15000;
         bool use_system_proxy = false;
+
+        // ── 自动更新（见 nebula/client/update.hpp）────────────────────────
+        /// 是否允许下载更新包（false = 只检测并提示，不下载）
+        bool auto_update_enable = true;
+        /// 允许 http:// 的更新地址（默认只接受 https，防中间人投毒）
+        bool allow_insecure_update = false;
+        /// 可选更新（非强制）时是否也自动下载替换；false = 交给 versionAlert 提示用户
+        bool auto_update_optional = false;
     };
 
     /** 结果类型别名（保持 nebula::Client::XxxResult 写法可用） */
@@ -602,6 +611,159 @@ public:
                     L"Nebula 版本更新", MB_ICONINFORMATION);
         }
         return true;
+    }
+
+    // -----------------------------------------------------------------------
+    // 自动更新（检测 → 下载 → 校验 → 自替换 → 重启）
+    // 实现见 nebula/client/update.hpp；编译期可用 NEBULA_AUTO_UPDATE=0 整体关闭
+    // -----------------------------------------------------------------------
+
+    /**
+     * 只下载更新包（不替换、不退出），由接入方自行决定何时安装。
+     * 强制更新与可选更新都会下载（受 auto_update_enable 控制）。
+     *
+     * @return UpdateResult.state：
+     *   NoUpdate      已是最新，无需更新
+     *   Downloaded    下载并校验通过（new_file / verify_hash / verify_size 可用）
+     *   Failed        失败（msg 为中文原因）
+     */
+    NEBULA_MUST_CHECK UpdateResult downloadUpdate() {
+        UpdateResult r;
+#if !NEBULA_AUTO_UPDATE
+        r.state = UpdateState::Disabled;
+        r.msg   = "自动更新已在编译期关闭（NEBULA_AUTO_UPDATE=0）";
+        return r;
+#else
+        if (!options_.auto_update_enable) {
+            r.state = UpdateState::Disabled;
+            r.msg   = "自动更新未启用（Options::auto_update_enable = false）";
+            return r;
+        }
+
+        const InitResult init = lastInit();
+        r.version     = init.latest;
+        r.verify_hash = init.file_hash;
+        r.verify_size = init.file_size;
+        r.force       = init.force_update;
+
+        if (!init.need_update) {
+            r.state = UpdateState::NoUpdate;
+            r.msg   = "已是最新版本";
+            return r;
+        }
+        if (init.update_url.empty()) {
+            r.state = UpdateState::Failed;
+            r.msg   = "服务器未提供更新包下载地址，请到官网手动下载";
+            return r;
+        }
+        if (!options_.allow_insecure_update && !detail::isHttps(init.update_url)) {
+            r.state = UpdateState::Failed;
+            r.msg   = "更新地址不是 https，已拒绝下载（如需允许请在 Options 打开 allow_insecure_update）";
+            return r;
+        }
+
+        // 落到 exe 同目录，确保 move 不跨卷（跨卷 move 不是原子操作且更慢）
+        const std::string dir = detail::selfDir();
+        if (dir.empty()) {
+            r.state = UpdateState::Failed;
+            r.msg   = "无法定位程序所在目录，更新中止";
+            return r;
+        }
+        const std::string dest = dir + "\\nebula_upd_" + crypto::randomHex(6)
+                               + "_" + detail::fileNameFromUrl(init.update_url);
+
+        http::Options ho;
+        ho.connectTimeoutMs = options_.connect_timeout_ms;
+        ho.receiveTimeoutMs = options_.receive_timeout_ms;
+        ho.useSystemProxy   = options_.use_system_proxy;
+        ho.certSha256       = options_.tls_cert_sha256;
+
+        std::string err;
+        if (!detail::downloadToFile(init.update_url, dest, ho, err)) {
+            r.state = UpdateState::Failed;
+            r.msg   = err;
+            return r;
+        }
+        if (!detail::verifyDownloaded(dest, init.file_hash, init.file_size, err)) {
+            detail::removeFileQuiet(dest);
+            r.state = UpdateState::Failed;
+            r.msg   = err;
+            return r;
+        }
+
+        r.state    = UpdateState::Downloaded;
+        r.new_file = dest;
+        r.msg      = "更新包已下载并校验通过（版本 " + init.latest + "）";
+        return r;
+#endif
+    }
+
+    /**
+     * 全自动更新：检测 → 下载 → 校验 → 生成替换脚本 → **本进程退出并重启**。
+     *
+     * 建议在启动时（init 之后、登录之前）调用一次：
+     *
+     *     auto up = client->autoUpdate();
+     *     if (up.state == nebula::UpdateState::Applied) return 0;  // 即将重启
+     *     if (up.state == nebula::UpdateState::NeedConfirm) { ... } // 可选更新，已提示
+     *     // 其余情况继续正常启动流程
+     *
+     * 策略：
+     *   · 强制更新（force_update）→ 自动下载、替换并重启（服务端不让旧版继续用）
+     *   · 可选更新 → 默认只提示（NeedConfirm）；Options::auto_update_optional = true 时同样自动处理
+     *
+     * @param exitWhenApplied 完成替换后是否立即退出本进程（默认 true；
+     *                        测试时可传 false，此时只生成脚本并返回 Applied）
+     * @return UpdateResult（state = Applied 表示即将退出重启）
+     */
+    NEBULA_MUST_CHECK UpdateResult autoUpdate(bool exitWhenApplied = true) {
+        UpdateResult r = downloadUpdate();
+        if (r.state != UpdateState::Downloaded) return r;
+
+        if (!r.force && !options_.auto_update_optional) {
+            // 可选更新且未开启自动安装：保留已下载文件，提示用户确认
+            r.state = UpdateState::NeedConfirm;
+            uiAlert("update",
+                    "发现新版本 " + r.version + "，已下载完成，重启后生效。",
+                    L"Nebula 版本更新", MB_ICONINFORMATION);
+            return r;
+        }
+
+        std::string err;
+        const std::string file = r.new_file;
+        const std::string hash = r.verify_hash;
+        const long long   size = r.verify_size;
+        if (!applyUpdateAndRestartImpl(file, hash, size, exitWhenApplied, err)) {
+            r.state = UpdateState::Failed;
+            r.msg   = err;
+            return r;
+        }
+        r.state = UpdateState::Applied;
+        r.msg   = "更新已就绪，程序即将重启完成升级";
+        return r;
+    }
+
+    /**
+     * 手动对已下载的更新包执行替换并重启（配合 downloadUpdate 使用）。
+     * @return 失败原因；空串 = 成功（调用方随即会退出）
+     */
+    NEBULA_MUST_CHECK std::string applyDownloadedUpdate(const UpdateResult& r,
+                                                       bool exitWhenApplied = true) {
+        std::string err;
+        if (!applyUpdateAndRestartImpl(r.new_file, r.verify_hash, r.verify_size,
+                                       exitWhenApplied, err)) {
+            return err;
+        }
+        return {};
+    }
+
+    /** 自动更新是否可用（编译期开关 + 运行期开关） */
+    NEBULA_MUST_CHECK static bool autoUpdateSupported() {
+#if NEBULA_AUTO_UPDATE
+        return true;
+#else
+        return false;
+#endif
     }
 
     /** init 成功后调用：维护模式提示（登录仍由服务端 6002 兜底拦截） */
