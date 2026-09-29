@@ -246,6 +246,8 @@ class Agent
                 }
             }
 
+            // 软绑：记录一次后把会话 ip 同步为最新值，
+            // 使「同一会话同一 IP 只记一次」，避免每个请求重复写日志。
             $loginIp = (string) ($s['ip'] ?? '');
             $nowIp   = Util::ip();
             if ($loginIp !== '' && $nowIp !== '' && $loginIp !== $nowIp) {
@@ -260,6 +262,10 @@ class Agent
                     );
                     return null;
                 }
+                Database::exec(
+                    'UPDATE ' . Database::t('agent_sessions') . ' SET ip = ? WHERE id = ?',
+                    [$nowIp, (int) $s['id']]
+                );
             }
         }
 

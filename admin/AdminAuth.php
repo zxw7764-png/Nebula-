@@ -286,6 +286,8 @@ class AdminAuth
 
             // IP 绑定：默认软绑（只记录）。命中变化时写一条日志便于审计追踪，
             // 但不打断真实使用。strict_ip_bind=true 时才硬拦。
+            // 软绑路径下把会话的 ip 同步为最新值，使「同一会话同一 IP 只记一次」，
+            // 否则每个请求都会重复写同一条日志。
             $loginIp = (string) ($s['ip'] ?? '');
             $nowIp   = Util::ip();
             if ($loginIp !== '' && $nowIp !== '' && $loginIp !== $nowIp) {
@@ -304,6 +306,10 @@ class AdminAuth
                     ]);
                     return null;
                 }
+                Database::exec(
+                    'UPDATE ' . Database::t('admin_sessions') . ' SET ip = ? WHERE id = ?',
+                    [$nowIp, (int) $s['id']]
+                );
             }
         }
 
