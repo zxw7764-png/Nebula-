@@ -107,24 +107,15 @@ if (!$vip['valid']) {
     ]);
 }
 
-// 点数/次数卡扣点：每次成功登录扣 1 点（原子扣减，防并发透支）。
-// 扣到 0 后下次登录 checkVip 返回 2004，即「次数用完」。
+// 点数/次数卡扣点（模式可配：per_login 每次登录 / daily 每天首次 / online 心跳按在线时长）
 // 时长卡/永久卡 points=0，天然不受影响。
-if ($vip['points'] > 0) {
-    $ok = Database::exec(
-        'UPDATE ' . Database::t('users') . ' SET points = points - 1, updated_at = ?'
-        . ' WHERE id = ? AND points > 0',
-        [time(), (int) $user['id']]
-    );
-    if ($ok > 0) {
-        $vip['points'] = (int) $vip['points'] - 1;
-        $user['points'] = $vip['points'];
-        Logger::log('login', 0, '点数扣减 1（剩余 ' . $vip['points'] . '）', [
-            'user_id'  => (int) $user['id'],
-            'username' => $username,
-            'method'   => $method,
-        ]);
-    }
+if ($vip['points'] > 0 && Points::chargeOnLogin($user)) {
+    $vip['points'] = (int) $vip['points'] - 1;
+    Logger::log('login', 0, '点数扣减 1（剩余 ' . $vip['points'] . '）', [
+        'user_id'  => (int) $user['id'],
+        'username' => $username,
+        'method'   => $method,
+    ]);
 }
 
 // 设备校验（自动绑定）

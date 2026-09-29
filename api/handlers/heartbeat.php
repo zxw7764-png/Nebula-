@@ -53,6 +53,12 @@ if (!$vip['valid']) {
     Response::send($vip['code'], $vip['msg'], ['kick' => true, 'need_activate' => true]);
 }
 
+// online 扣点模式：按在线时长在心跳中扣点（每 N 分钟 1 点）
+// 扣到 0 后下一次心跳 checkVip 即返回 2004 踢下线
+if ($vip['points'] > 0 && Points::chargeOnHeartbeat($user)) {
+    Logger::log('heartbeat', 0, '在线扣点 1（剩余 ' . ((int) $user['points'] - 1) . '）', ['user_id' => $userId]);
+}
+
 // 刷新会话（单行按唯一索引更新，这条保留：踢人/封号必须实时生效）
 $ttl = (int) Config::get('policy.session_ttl', 3600);
 Session::touch($token, $ttl);

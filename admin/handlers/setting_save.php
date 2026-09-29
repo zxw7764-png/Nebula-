@@ -63,6 +63,8 @@ $tiers = [
         'register_gift_days', 'register_gift_points',
         'agent_enable', 'agent_register_enable', 'agent_unit_price',
         'agent_entry_key',
+        // 点数/次数卡扣点策略
+        'points_deduct_mode', 'points_deduct_minutes',
         // shop_* 已迁至独立 action shop_setting_save（运营分区 → 发卡网配置页），
         // 本 handler 不再受理，避免双入口
         'maintain_mode',

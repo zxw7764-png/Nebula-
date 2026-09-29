@@ -55,6 +55,8 @@ CREATE TABLE IF NOT EXISTS `nb_users` (
   `card_code`       VARCHAR(64)  DEFAULT NULL COMMENT '激活卡密快照（激活时写入，删卡后仍可反查/找回账号）',
   `vip_expire`      BIGINT       NOT NULL DEFAULT 0 COMMENT '会员到期时间戳：-1=永久，0=未激活',
   `points`          INT          NOT NULL DEFAULT 0 COMMENT '剩余点数',
+  `points_day`      INT          NOT NULL DEFAULT 0 COMMENT '最近「每日首次登录」扣点日序号（daily 扣点模式防重复）',
+  `points_at`       INT          NOT NULL DEFAULT 0 COMMENT '最近一次在线扣点/登录计时起点（online 扣点模式）',
   `max_devices`     TINYINT      NOT NULL DEFAULT 1 COMMENT '最大设备数',
   `register_ip`     VARCHAR(64)  DEFAULT NULL,
   `last_login_ip`   VARCHAR(64)  DEFAULT NULL,

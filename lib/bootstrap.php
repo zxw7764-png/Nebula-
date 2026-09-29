@@ -20,7 +20,7 @@ define('NB_START', microtime(true));
 
 // 后台前端静态资源版本号（用于缓存刷新，改前端后递增即可）
 if (!defined('NB_VERSION')) {
-    define('NB_VERSION', '2.65.7');
+    define('NB_VERSION', '2.65.8');
 }
 
 // ------------------------------------------------------------------
@@ -145,6 +145,7 @@ require_once NB_ROOT . '/lib/RateLimit.php';
 require_once NB_ROOT . '/lib/Guard.php';
 require_once NB_ROOT . '/lib/Captcha.php';
 require_once NB_ROOT . '/lib/Setting.php';
+require_once NB_ROOT . '/lib/Points.php';
 require_once NB_ROOT . '/lib/Software.php';
 require_once NB_ROOT . '/lib/Policy.php';
 require_once NB_ROOT . '/lib/Session.php';

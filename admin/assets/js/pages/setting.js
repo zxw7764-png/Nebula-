@@ -104,6 +104,7 @@ async function render() {
         web_act_max_min: '激活尝试频控',
         session_ttl: '登录态有效期',
         default_max_devices: '默认设备上限',
+        points_deduct_mode: '点数扣点模式',
     };
     const effBox = (eff) => {
         if (!eff) return '';
@@ -189,6 +190,21 @@ async function render() {
             <div class="field"><label>新用户注册赠送点数</label>
                 <input id="stRegPts" type="number" value="${esc(s.register_gift_points || '0')}"></div>
             <div class="field"></div>
+        </div>
+        <div class="card-head" style="padding-left:0"><h3 style="font-size:13px">点数/次数卡扣点</h3></div>
+        <div class="row2">
+            <div class="field"><label>扣点模式</label>
+                <select id="stPtsMode">
+                    <option value="per_login" ${s.points_deduct_mode !== 'daily' && s.points_deduct_mode !== 'online' ? 'selected' : ''}>每次登录扣 1</option>
+                    <option value="daily" ${s.points_deduct_mode === 'daily' ? 'selected' : ''}>每天首次登录扣 1</option>
+                    <option value="online" ${s.points_deduct_mode === 'online' ? 'selected' : ''}>按在线时长扣</option>
+                </select>
+                <div class="hint">时长卡/永久卡不受扣点影响；耗尽后登录/心跳被拒（提示「次数/点数已用完」）</div>
+            </div>
+            <div class="field"><label>在线每 N 分钟扣 1</label>
+                <input id="stPtsMin" type="number" value="${esc(s.points_deduct_minutes || '30')}" min="1">
+                <div class="hint">仅「按在线时长扣」模式生效；挂机也会消耗点数</div>
+            </div>
         </div>
         <div class="card-head" style="padding-left:0"><h3 style="font-size:13px">代理商</h3></div>
         <div class="row2">
@@ -574,6 +590,11 @@ async function saveBusiness() {
         toast('默认单价需为不小于 0 的数字', 'warn');
         return;
     }
+    const ptsMin = document.getElementById('stPtsMin').value;
+    if (isNaN(Number(ptsMin)) || Number(ptsMin) < 1) {
+        toast('在线扣点间隔需为不小于 1 的分钟数', 'warn');
+        return;
+    }
     const res = await api('setting_save', {
         settings: {
             default_max_devices: document.getElementById('stDefDev').value,
@@ -583,6 +604,8 @@ async function saveBusiness() {
             agent_register_enable: document.getElementById('stAgReg').value,
             agent_unit_price: price === '' ? '0' : price,
             agent_entry_key: document.getElementById('stAgEntry').value.trim(),
+            points_deduct_mode: document.getElementById('stPtsMode').value,
+            points_deduct_minutes: ptsMin,
         },
     });
     if (res.code === 0) toast('业务设置已保存');
