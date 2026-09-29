@@ -39,6 +39,7 @@
 #include "types.hpp"
 #include "update.hpp"
 #include "../core/http.hpp"
+#include "../protect/shell.hpp"    // NEBULA_MARK_* 壳标记宏（本文件直接使用，必须自包含）
 #include "../protect/runtime.hpp"
 
 namespace nebula {

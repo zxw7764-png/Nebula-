@@ -16,19 +16,24 @@
 
 #include "../config.hpp"
 
-namespace nebula {
-namespace protect {
-
 // ---------------------------------------------------------------------------
-// 壳 SDK 探测（仅在开启开关时）
+// 壳 SDK 探测与引入（仅在开启开关时）
+// ---------------------------------------------------------------------------
+// ★ 必须放在**全局作用域**：VMProtect / SecureEngine 的标记函数都是全局 C 函数，
+//   若在 namespace 内 include，符号会被裹进 nebula::protect::，
+//   宏在其他命名空间（如 nebula::client）展开时就找不到 → C3861。
 // ---------------------------------------------------------------------------
 #if NEBULA_SHELL_ENABLE
 #  if defined(__has_include)
 #    if __has_include("VMProtectSDK.h")
 #      define NEBULA_SHELL_VMP 1
+#    elif defined(NEBULA_SHELL_VMP) && NEBULA_SHELL_VMP
+#      error "已定义 NEBULA_SHELL_VMP=1，但在包含路径里找不到 VMProtectSDK.h。请把 sdk/vmp 加入「附加包含目录」。"
 #    endif
 #    if __has_include(<SecureEngineSDK.h>)
 #      define NEBULA_SHELL_THEMIDA 1
+#    elif defined(NEBULA_SHELL_THEMIDA) && NEBULA_SHELL_THEMIDA
+#      error "已定义 NEBULA_SHELL_THEMIDA=1，但在包含路径里找不到 SecureEngineSDK.h。请把 Themida/WinLicense SDK 目录加入「附加包含目录」。"
 #    endif
 #  endif
 #  if defined(NEBULA_SHELL_VMP) && NEBULA_SHELL_VMP
@@ -53,6 +58,9 @@ namespace protect {
 #  endif
 #endif
 
+namespace nebula {
+namespace protect {
+
 // ---------------------------------------------------------------------------
 // 自定义壳挂载点（Enigma / Obsidium / ASProtect 等无统一标记头时自行填）
 //   例：#define NEBULA_SHELL_HOOK_VM_BEGIN()  /* 你的壳的标记 */
@@ -74,8 +82,12 @@ namespace protect {
 } // namespace nebula
 
 // 行号字符串化（给壳标记生成唯一名称）
+// ★ 必须**两层函数式宏**转发：直接把 __LINE__ 交给 stringize 只会得到字面量
+//   "__LINE__"，导致所有标记点重名（加壳时无法区分）。
+//   NEBULA_STR_LINE_ 负责先把 __LINE__ 展开成数字，再交给 NEBULA_STR_LINE_HELPER_ 字符串化。
 #define NEBULA_STR_LINE_HELPER_(n) #n
-#define NEBULA_STR_LINE NEBULA_STR_LINE_HELPER_(__LINE__)
+#define NEBULA_STR_LINE_EXPAND_(n) NEBULA_STR_LINE_HELPER_(n)
+#define NEBULA_STR_LINE NEBULA_STR_LINE_EXPAND_(__LINE__)
 
 // ---------------------------------------------------------------------------
 // 统一标记宏（推荐一律使用这一套；必须成对，且在同一函数体内）

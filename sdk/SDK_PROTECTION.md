@@ -158,6 +158,28 @@ Enigma Protector 这类**只能靠 GUI 选函数**的壳：`NEBULA_SHELL_ENABLE`
 | **杀软误报** | 加壳 + 反调试组合极易被国产杀软报毒。发布前务必过一遍主流杀软与云端沙箱，否则用户装了就被删。 |
 | **标记段里尽量别放 `return`** | 个别壳版本对"标记区内提前返回"支持不好（虚化后行为异常）。若要严格，把 `BEGIN/END` 收紧到不含 `return` 的语句块。 |
 | **保留一个未加壳版本** | 用来排查线上崩溃（加壳后崩溃栈基本没意义）。 |
+| **不要把 `NEBULA_MARK_*` 用在 `return` 之后** | 标记必须成对且在同一函数体内，且 `BEGIN` 要能走到对应的 `END`（多个提前返回时，每个出口都要补 `END`）。SDK 内部已按此写；自己加标记时注意。 |
+
+### 1.6 报 C3861「找不到标识符 VMProtectBegin…/VMProtectEnd」怎么修
+
+这是**接入配置问题**，不是 SDK bug。逐条排查：
+
+| 症状 | 原因 | 修法 |
+| --- | --- | --- |
+| 报 `"VMProtectBeginVirtualization": 找不到标识符` | 开了 `NEBULA_SHELL_ENABLE=1` 但工程「附加包含目录」里没有 `VMProtectSDK.h` 所在目录 | 把 `sdk/vmp`（含 `VMProtectSDK.h` + `.lib`）加进 **附加包含目录**；链接器「附加库目录」也要指向它 |
+| 立刻 fatal：`无法打开包括文件 "VMProtectSDK.h"` | 同上，包含目录缺失 | 同上 |
+| LNK1104 `无法打开文件 VMProtectSDK64.lib` | 头文件找到了，但链接器找不到 `.lib` | 链接器 → 常规 → **附加库目录** 加 `sdk/vmp`；或定义 `NEBULA_SHELL_NO_AUTOLINK` 后自己手动加入该 `.lib` |
+| 报 `NEBULA_MARK_VM_BEGIN` 本身找不到 | 该文件用了标记宏但没有（直接/间接）包含 `protect/shell.hpp` | 只需 `#include "nebula_sdk.hpp"`，或至少 `#include "nebula/protect/shell.hpp"` |
+
+**SDK 2 个已知陷阱（v3.0.0 已修，旧版请升级）**：
+- `nebula/client/client.hpp` 用了标记宏却没自包含 `protect/shell.hpp` → 单独引用该头时报 `NEBULA_MARK_*` 未定义。
+- `protect/shell.hpp` 曾在 `namespace nebula::protect` **内部** include 壳 SDK 头，
+  导致 VMProtect 的全局 C 函数被裹进命名空间，宏在 `nebula::client` 里展开就找不到 →
+  已改为**全局作用域 include**。
+
+**自定义壳（Enigma / 魔改 Themida）**：如果宏名对不上，用 §1.4 的 `NEBULA_SHELL_FORCE_HOOK`
+接管即可，此时不需要 `VMProtectSDK.h`，也就不会遇到上述链接问题。
+
 
 ---
 
