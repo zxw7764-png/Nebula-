@@ -310,114 +310,127 @@ class Pay
     }
 
     /**
-     * v3 异步回调处理入口：解析请求头、平台证书验签、AES-256-GCM 解密
-     * @return array{0:bool,1:string,2:int}
+     * v3 异步通知处理（官方规范流程）：
+     *   1. 读外层通知 JSON（id/event_type/resource）与 Wechatpay-* 请求头
+     *   2. 平台证书验签（验签串 = "{ts}\n{nonce}\n{rawBody}\n"，先验签再解密）
+     *   3. 时间戳偏差 ±300s 防重放
+     *   4. 解密 resource：AEAD_AES_256_GCM，官方 SDK 规则 = base64(ciphertext) 末 16 字节为 tag，
+     *      nonce（12 字节）为 IV，associated_data 为 AAD，APIv3 密钥（32 字节）为 key
+     *   5. 校验解密后 transaction 的 trade_state / appid / mchid
+     * @return array{0:bool,1:string,2:int,3:string} [成功, 订单号, 金额(分), 微信交易号transaction_id]
      */
     private static function wechatVerifyNotify(array $params, array $cfg): array
     {
         // 平台证书目录：默认 {root}/certs/wechat/，由管理员部署
         $certDir = trim((string) (Setting::get('wechat_cert_dir', NB_ROOT . '/certs/wechat')));
-        $serial = trim((string) ($cfg['serial'] ?? ''));
-        $appid  = trim((string) ($cfg['appid'] ?? ''));
-        $mchid  = trim((string) ($cfg['mchid'] ?? ''));
-        $apiKey = trim((string) ($cfg['apiKey'] ?? ''));
+        $appid   = trim((string) ($cfg['appid'] ?? ''));
+        $mchid   = trim((string) ($cfg['mchid'] ?? ''));
+        $apiKey  = trim((string) ($cfg['apiKey'] ?? ''));
 
-        // 从 raw input 读 JSON 与签名头（v3 用自定义 HTTP 头）
-        $raw = file_get_contents('php://input');
-        $body = json_decode($raw, true);
-        if (!is_array($body)) {
-            return [false, '', -1];
-        }
-        // out_trade_no 在 body.out_trade_no 或 嵌套 body.out_trade_no
-        $orderNo = (string) ($body['out_trade_no'] ?? '');
-        if ($orderNo === '') {
-            return [false, '', -1];
-        }
-        // 金额：body.amount.total (分) 或 body.out_trade_no 无金额字段，用 total
-        $amountFen = (int) ($body['amount']['total'] ?? -1);
-        if ($amountFen <= 0) {
-            $amountFen = -1;
+        // APIv3 密钥必须为 32 字节，否则 GCM 解密必然失败
+        if (strlen($apiKey) !== 32) {
+            return [false, '', -1, ''];
         }
 
-        // 使用微信 v3 验签：Ciphertext 需 AES-256-GCM 解密（nonce: wechat 固定 16 字节）
-        $ciphertext = (string) ($body['ciphertext'] ?? '');
-        $nonce      = (string) ($body['nonce'] ?? '');
-        $associated = '';
-        if ($ciphertext !== '' && $nonce !== '') {
-            $dec = openssl_decrypt(
-                base64_decode($ciphertext),
-                'aes-256-gcm',
-                $apiKey,
-                OPENSSL_RAW_DATA,
-                $nonce,
-                ''
-            );
-            if ($dec !== false) {
-                $body = json_decode($dec, true);
-                if (is_array($body)) {
-                    $orderNo = (string) ($body['out_trade_no'] ?? $orderNo);
-                    $amountFen = (int) ($body['amount']['total'] ?? $amountFen);
-                }
-            }
+        // ---- 1. 外层通知结构：{id, event_type, resource:{algorithm, ciphertext, nonce, associated_data}} ----
+        $raw  = file_get_contents('php://input');
+        $body = json_decode((string) $raw, true);
+        if (!is_array($body) || !is_array($body['resource'] ?? null)) {
+            return [false, '', -1, ''];
         }
-        if ($orderNo === '') {
-            return [false, '', -1];
+        $resource = $body['resource'];
+        if ((string) ($resource['algorithm'] ?? '') !== 'AEAD_AES_256_GCM') {
+            return [false, '', -1, ''];
+        }
+        $ciphertext = (string) ($resource['ciphertext'] ?? '');
+        $nonce      = (string) ($resource['nonce'] ?? '');
+        if ($ciphertext === '' || $nonce === '') {
+            return [false, '', -1, ''];
         }
 
-        // v3 验签：读取请求头中的签名信息
-        $headers = self::wechatGetRequestHeaders();
-        $timestamp = (string) ($headers['timestamp'] ?? '');
-        $nonce     = (string) ($headers['nonce'] ?? '');
-        $signature = (string) ($headers['signature'] ?? '');
-        $serialHdr = (string) ($headers['serial'] ?? '');
-
-        if ($signature === '' || $timestamp === '' || $nonce === '') {
-            return [false, '', -1];
+        // ---- 2. 平台证书验签（先验签再解密：不信任未认证数据） ----
+        $headers   = self::wechatGetRequestHeaders();
+        $timestamp = (string) ($headers['wechatpay-timestamp'] ?? '');
+        $nonceHdr  = (string) ($headers['wechatpay-nonce'] ?? '');
+        $signature = (string) ($headers['wechatpay-signature'] ?? '');
+        $serialHdr = (string) ($headers['wechatpay-serial'] ?? '');
+        if ($signature === '' || $timestamp === '' || $nonceHdr === '') {
+            return [false, '', -1, ''];
         }
-        // 验签串
-        $signedString = "{$timestamp}\n{$nonce}\n{$raw}\n";
-        // 找最近有效平台证书
+        // 重放防护：时间戳偏差超过 5 分钟拒绝（官方建议值）
+        if (abs(time() - (int) $timestamp) > 300) {
+            return [false, '', -1, ''];
+        }
         $pubKey = self::wechatPlatformCert($certDir, $serialHdr);
         if ($pubKey === false) {
-            return [false, '', -1];
+            return [false, '', -1, ''];
         }
-        $ok = openssl_verify($signedString, base64_decode($signature), $pubKey, OPENSSL_ALGO_SHA256);
-        if ($ok !== 1) {
-            return [false, '', -1];
-        }
-
-        // 校验 appid/mchid 一致性
-        if ($appid !== '' && (string) ($body['appid'] ?? '') !== $appid) {
-            return [false, '', -1];
-        }
-        if ($mchid !== '' && (string) ($body['mchid'] ?? '') !== $mchid) {
-            return [false, '', -1];
+        $signedString = "{$timestamp}\n{$nonceHdr}\n{$raw}\n";
+        if (openssl_verify($signedString, base64_decode($signature), $pubKey, OPENSSL_ALGO_SHA256) !== 1) {
+            return [false, '', -1, ''];
         }
 
-        return [true, $orderNo, $amountFen > 0 ? $amountFen : -1];
+        // ---- 3. AEAD_AES_256_GCM 解密（ciphertext base64 解码后末 16 字节为 tag） ----
+        $cipherBin = base64_decode($ciphertext, true);
+        if ($cipherBin === false || strlen($cipherBin) <= 16) {
+            return [false, '', -1, ''];
+        }
+        $tag   = substr($cipherBin, -16);
+        $ctext = substr($cipherBin, 0, -16);
+        $aad   = (string) ($resource['associated_data'] ?? '');
+        $dec   = openssl_decrypt($ctext, 'aes-256-gcm', $apiKey, OPENSSL_RAW_DATA, $nonce, $tag, $aad);
+        if ($dec === false) {
+            return [false, '', -1, ''];
+        }
+        $txn = json_decode($dec, true);
+        if (!is_array($txn)) {
+            return [false, '', -1, ''];
+        }
+
+        // ---- 4. 业务字段校验（以解密后的 transaction 为准） ----
+        // 仅放行支付成功通知（退款通知无 trade_state，其他状态不发货）
+        if ((string) ($txn['trade_state'] ?? '') !== 'SUCCESS') {
+            return [false, '', -1, ''];
+        }
+        if ($appid !== '' && (string) ($txn['appid'] ?? '') !== $appid) {
+            return [false, '', -1, ''];
+        }
+        if ($mchid !== '' && (string) ($txn['mchid'] ?? '') !== $mchid) {
+            return [false, '', -1, ''];
+        }
+        $orderNo   = (string) ($txn['out_trade_no'] ?? '');
+        $amountFen = (int) ($txn['amount']['total'] ?? -1);
+        if ($orderNo === '' || $amountFen <= 0) {
+            return [false, '', -1, ''];
+        }
+        return [true, $orderNo, $amountFen, (string) ($txn['transaction_id'] ?? '')];
     }
 
-    /** 读取 PHP 请求头（兼容无 getallheaders 的环境） */
+    /** 读取 PHP 请求头（兼容无 getallheaders 的环境；键统一小写连字符，如 wechatpay-timestamp） */
     private static function wechatGetRequestHeaders(): array
     {
-        if (function_exists('getallheaders')) {
-            return getallheaders();
-        }
         $h = [];
+        if (function_exists('getallheaders')) {
+            foreach (getallheaders() as $k => $v) {
+                $h[strtolower((string) $k)] = $v;
+            }
+            return $h;
+        }
+        // HTTP_* 键里连字符在 CGI 规范下是下划线，需还原为连字符才能与真实头名对齐
         foreach ($_SERVER as $k => $v) {
             if (strncmp($k, 'HTTP_', 5) === 0) {
-                $h[strtolower(substr($k, 5))] = $v;
+                $h[str_replace('_', '-', strtolower(substr($k, 5)))] = $v;
             }
         }
         return $h;
     }
 
-    /** 构造 v3 签名 Authorization 头 */
+    /** 构造 v3 签名 Authorization 头（官方格式：WECHATPAY2-SHA256-RSA2048） */
     private static function wechatAuthHeader(string $appid, string $mchid, string $serial, string $timestamp, string $nonce, string $sig): string
     {
         return sprintf(
-            'HMAC-SHA256 hostname="api.mch.weixin.qq.com", mchid="%s", serial="%s", timestamp="%s", nonce="%s", signature="%s"',
-            $mchid, $serial, $timestamp, $nonce, $sig
+            'WECHATPAY2-SHA256-RSA2048 mchid="%s",nonce_str="%s",signature="%s",timestamp="%s",serial_no="%s"',
+            $mchid, $nonce, $sig, $timestamp, $serial
         );
     }
 
