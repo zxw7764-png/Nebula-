@@ -25,6 +25,16 @@ from ..client import Client, UpdateState
 from . import drawing, theme
 
 
+def _set_window_icon():
+    """设置窗口/任务栏图标（PyInstaller 打包后从 _MEIPASS 解包目录读取）"""
+    try:
+        base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+        icon = pygame.image.load(os.path.join(base, "nebula", "assets", "logo.png"))
+        pygame.display.set_icon(icon)
+    except Exception:
+        pass  # 图标缺失不影响启动
+
+
 # ── 错误码翻译表 ────────────────────────────────────────────────────────────
 _ERROR_TEXT = {
     -1: "网络连接失败，请检查网络",
@@ -317,6 +327,9 @@ class LoginWindow:
         # 导致输入框删除内容只能一个一个按）
         pygame.key.set_repeat(450, 35)
         pygame.display.set_caption("Nebula Login")
+        # 图标必须在 set_mode 之前设置：否则窗口先以 pygame 默认图标（蛇 logo）
+        # 创建，任务栏会先闪一下默认图标再变成我们的 logo
+        _set_window_icon()
         window = pygame.display.set_mode((theme.kLoginWidth, theme.kLoginHeight), pygame.NOFRAME)
         place_window(window, "login", theme.kLoginWidth, theme.kLoginHeight)
 

@@ -1,10 +1,10 @@
 # Nebula 网络验证
 
-一套基于 PHP + MySQL 的网络验证（授权）系统后端，提供客户端 API 与管理后台 API，适用于 C++ / C# / Python / 易语言等任意客户端对接。
+一套基于 PHP + MySQL 的网络验证（授权）系统后端，提供客户端 API 与管理后台 API。官方提供 **C++ 与 Python** 两套协议同规格的开箱即用 SDK，C# / 易语言等其他语言依据接口文档直接对接。
 
 ## 📚 文档中心
 
-全部功能文档统一放在 **`docs/`** 文件夹（C++ SDK 的接入与加固文档随 SDK 放在 **`sdk/`**），点标题跳转：
+全部功能文档统一放在 **`docs/`** 文件夹（C++ SDK 文档随 SDK 放在 **`sdk/`**，Python SDK 文档随 SDK 放在 **`sdk-py/`**），点标题跳转：
 
 | 文档 | 说明 |
 | --- | --- |
@@ -12,6 +12,7 @@
 | [docs/API_RAW_EXAMPLES.md](docs/API_RAW_EXAMPLES.md) | 请求 / 响应原始报文示例（手写协议对接逐字节参照） |
 | [sdk/SDK.md](sdk/SDK.md) | C++ SDK 接入文档（初始化 / 登录 / 心跳 / 内置提示 / 完整性自校验） |
 | [sdk/SDK_PROTECTION.md](sdk/SDK_PROTECTION.md) | C++ SDK 客户端加固指南（壳标记 / 代码混淆 / 反调试 / 反虚拟机，**默认关闭，按需开启**） |
+| [sdk-py/README.md](sdk-py/README.md) | Python SDK 接入文档（协议同规格 / 内置 Pygame 登录界面 / 完整性自校验 / 自动更新 / 功能密钥 NF1） |
 | [docs/TEMPLATE.md](docs/TEMPLATE.md) | 界面模板开发文档（目录规范 / 小游戏 / 交互音效 / 布局与自定义区块） |
 
 > 界面模板使用与后台可视化编辑（换肤 / 布局与自定义区块 / 小游戏参数）的操作入口在管理后台
@@ -44,6 +45,8 @@
 | 🛡️ IP 黑名单 | 单 IP / CIDR 段（IPv4/IPv6）黑名单，命中后全站所有页面与接口以自定义错误页拦截 |
 | 🗂️ 文件管理   | 文件完整性基准校验（sha256 全站比对）+ Webshell 特征挂马扫描 + 受保护文件查看/删除 |
 | 🔒 通信加密   | AES-256-CBC + HMAC-SHA256 签名 + 时间戳 + nonce 防重放 |
+| 📮 响应防伪造 | 服务端私钥对每条响应签名（ES256 / RS256 自动回落），客户端内置公钥验签，逆向出对称密钥也无法伪造响应 |
+| 🗝️ 功能密钥   | 软件级 Feature Key 仅登录成功响应下发；NF1 加密数据包（AES-256-CBC + HMAC，encrypt-then-MAC）随程序分发，patch 掉登录判定也解不开核心数据 |
 | 📦 在线更新   | 对接 update-system 版本服务器，后台一键自动下载、校验、备份并安装更新包；支持强制更新封锁 |
 
 ---
@@ -154,17 +157,10 @@ yanzheng/
 │   └── config.php          全局配置（数据库、密钥、策略、后台保护）
 ├── install/
 │   ├── install.php         网页安装向导
-│   ├── install.lock        安装锁（存在则禁止重装）
-│   ├── schema.sql          数据库结构（38 张表）
-│   ├── migrate_agent.php   升级脚本：新增代理商体系（可重复执行）
-│   ├── migrate_agent_types.php 升级脚本：代理商激活码 + 按卡类型计费（可重复执行）
-│   ├── migrate_type_groups.php 升级脚本：按卡类型指定激活用户组（可重复执行）
-│   ├── migrate_card_prefix.php 升级脚本：代理生成卡密的固定前缀（可重复执行）
-│   ├── migrate_init_balance.php 升级脚本：余额计费下激活码的注册初始余额（可重复执行）
-│   ├── migrate_agent_recharge.php 升级脚本：代理商充值卡密（余额/张数额度，可重复执行）
-│   ├── migrate_recharge_quota_map.php 升级脚本：充值卡密「张数额度」支持多卡类型（可重复执行）
-│   ├── migrate_device_fp.php 升级脚本：设备指纹（多硬件组件加权 + 模拟器/虚拟机识别，可重复执行）
-│   ├── migrate_online_stats.php 升级脚本：数据大屏在线快照表 nb_online_stats（可重复执行）
+│   ├── install.lock        安装锁（安装后生成，存在则禁止重装）
+│   ├── schema.sql          数据库结构（38 张表，全新安装一键建库）
+│   ├── migrate_feature_key.php 升级脚本：软件级功能密钥 Feature Key（老库升级用，可重复执行）
+│   ├── _cli_guard.php      CLI 守卫（install/ 下脚本仅限命令行执行）
 │   ├── clear_logs.php      日志清理工具（--dry-run 预演 / --yes 执行）
 │   └── nginx.conf.example  Nginx 部署配置示例
 ├── sdk/                    开箱即用的 C++ 接入 SDK（header-only，零第三方依赖）
@@ -172,6 +168,12 @@ yanzheng/
 │   ├── nebula_protect.hpp  可选加固组件（壳标记/混淆/反调试，默认全关，见 SDK_PROTECTION.md）
 │   ├── SDK.md              C++ SDK 接入文档（初始化 / 登录 / 心跳 / 内置提示 / 完整性自校验）
 │   └── SDK_PROTECTION.md   C++ SDK 客户端加固指南（默认关闭，按需开启）
+├── sdk-py/                 开箱即用的 Python 接入 SDK（协议与 C++ 同规格）
+│   ├── README.md           Python SDK 接入文档（环境 / 快速开始 / API / 功能密钥 / 打包）
+│   ├── main.py             示例入口（登录窗 → 主窗 循环）
+│   ├── nebula/             协议实现 + Pygame 登录界面（config.py 为唯一配置文件）
+│   ├── docs/               界面截图
+│   └── test_smoke.py       联调自测脚本
 ├── docs/
 │   ├── API.md              完整接口文档
 │   ├── API_RAW_EXAMPLES.md 请求/响应原始报文示例
