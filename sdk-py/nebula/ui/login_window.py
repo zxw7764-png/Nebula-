@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import configparser
 import os
+import sys
 import threading
+import time
 
 import pygame
 
@@ -69,6 +71,10 @@ def translate_login_error(code: int, server_msg: str) -> str:
 # ── 凭证持久化 ──────────────────────────────────────────────────────────────
 
 def _ini_path() -> str:
+    if getattr(sys, "frozen", False):
+        # 打包成 exe：凭证放 exe 同目录（单文件运行时的临时解压目录会被清空，不可用）
+        return os.path.join(os.path.dirname(os.path.abspath(sys.executable)),
+                            "credentials.ini")
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                         "credentials.ini")
 
@@ -95,27 +101,52 @@ def load_credentials():
 
 
 def _get_clipboard_text() -> str:
-    """剪贴板文本（Ctrl+V 用），失败返回空。"""
+    """剪贴板文本（Ctrl+V 用）：Win32 直读，失败返回空。
+
+    说明：不用 pygame.scrap——pygame 2.6.1 的 scrap 模块无 get_text 接口，
+    且 Windows 下读其他程序复制的文本不可靠。ctypes 调用必须显式声明
+    c_void_p 返回类型，否则 64 位下 HANDLE 被截断、GlobalLock 必然失败。"""
     try:
-        import pygame.scrap
-        if not pygame.scrap.get_init():
-            pygame.scrap.init()
-        text = pygame.scrap.get_text()
-        return text or ""
-    except Exception:
+        import ctypes
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        user32.OpenClipboard.argtypes = [ctypes.c_void_p]
+        user32.OpenClipboard.restype = ctypes.c_int
+        user32.CloseClipboard.restype = ctypes.c_int
+        user32.IsClipboardFormatAvailable.argtypes = [ctypes.c_uint]
+        user32.IsClipboardFormatAvailable.restype = ctypes.c_int
+        user32.GetClipboardData.argtypes = [ctypes.c_uint]
+        user32.GetClipboardData.restype = ctypes.c_void_p
+        kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+        kernel32.GlobalLock.restype = ctypes.c_void_p
+        kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+        kernel32.GlobalUnlock.restype = ctypes.c_int
+
+        CF_UNICODETEXT = 13
+        if not user32.IsClipboardFormatAvailable(CF_UNICODETEXT):
+            return ""                       # 剪贴板里不是文本（文件/图片等）
+        opened = False
+        for _ in range(8):                  # 剪贴板可能被其他程序短暂占用
+            if user32.OpenClipboard(None):
+                opened = True
+                break
+            time.sleep(0.02)
+        if not opened:
+            return ""
         try:
-            import ctypes
-            ctypes.windll.user32.OpenClipboard(0)
-            h = ctypes.windll.user32.GetClipboardData(13)  # CF_UNICODETEXT
-            if h:
-                p = ctypes.windll.kernel32.GlobalLock(h)
-                text = ctypes.wstring_at(p) if p else ""
-                ctypes.windll.kernel32.GlobalUnlock(h)
-                ctypes.windll.user32.CloseClipboard()
-                return text
-            ctypes.windll.user32.CloseClipboard()
-        except Exception:
-            pass
+            h = user32.GetClipboardData(CF_UNICODETEXT)
+            if not h:
+                return ""
+            p = kernel32.GlobalLock(h)
+            if not p:
+                return ""
+            try:
+                return ctypes.wstring_at(p) or ""
+            finally:
+                kernel32.GlobalUnlock(h)
+        finally:
+            user32.CloseClipboard()
+    except Exception:
         return ""
 
 

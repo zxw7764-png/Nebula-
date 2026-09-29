@@ -129,6 +129,21 @@ if ir.ok:
 `set_ui_handler` 后所有提示改走接入方回调,kind 取值:
 `popup / flash / version / update / maintain / kick / integrity`。
 
+## 打包成 exe(无控制台窗口)
+
+在与运行相同的环境装 PyInstaller 后一条命令构建:
+
+```bash
+python -m pip install pyinstaller
+python -m PyInstaller --noconfirm --clean --onefile --windowed --name Nebula main.py
+```
+
+产物 `dist/Nebula.exe`(单文件,双击无黑窗):
+
+- `credentials.ini` 自动生成在 **exe 同目录**(开发态在 `nebula/` 旁),升级覆盖 exe 不丢凭证
+- 完整性自校验与自动更新在打包态工作正常:校验/替换目标即 exe 本身
+- ⚠ 发版前记得在后台「版本管理」登记该 exe 的哈希与大小,否则自校验会拦自己
+
 ## 测试
 
 ```bash
