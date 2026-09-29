@@ -17,38 +17,6 @@ async function render() {
     if (res.code !== 0) return;
     const d = res.data;
 
-    // 安全巡检报告（页面加载即巡检一次，权限 audit.read）
-    const sec = { code: -1 };
-    try {
-        const s = await api('sec_report', { run: 0 });
-        if (s.code === 0) Object.assign(sec, s.data);
-    } catch (e) { /* 巡检失败不阻塞审计页 */ }
-    const secHtml = sec.code === 0 && sec.report ? `
-    <div class="card" style="margin-bottom:16px">
-        <div class="card-head">
-            <h3>🩺 安全巡检报告</h3>
-            <div class="toolbar">
-                ${tag(sec.report.summary, sec.report.level === 'warn' ? 'danger' : 'ok')}
-                <span style="color:#6b7280;font-size:12px">${esc(sec.report.date)}</span>
-            </div>
-        </div>
-        ${sec.report.findings && sec.report.findings.length ? `
-        <div class="table-wrap">
-            <table>
-                <thead><tr><th style="width:70px">级别</th><th style="width:180px">异常类型</th><th>明细（最多 5 条）</th></tr></thead>
-                <tbody>
-                ${sec.report.findings.map(f => `
-                    <tr>
-                        <td>${f.level === 'warn' ? tag('警告', 'danger') : tag('提示', 'purple')}</td>
-                        <td><b>${esc(f.name)}</b></td>
-                        <td class="mono" style="font-size:12px;white-space:pre-wrap">${esc(f.items.slice(0, 5).map(r => Object.entries(r).filter(([k]) => k !== 'level').map(([k, v]) => k + '=' + v).join('  ')).join('\n'))}</td>
-                    </tr>`).join('')}
-                </tbody>
-            </table>
-        </div>` : `<div style="padding:10px 16px;color:#6b7280;font-size:13px">近 24 小时各巡检项均无异常（暴力破解 / 撞库 / 密钥重置 / 代理卡密突增）。</div>`}
-        ${sec.history && sec.history.length ? `<details style="padding:8px 16px 14px"><summary style="cursor:pointer;font-size:13px;color:#6b7280">历史报告（${sec.history.length}）</summary>${sec.history.map(h => `<pre class="mono" style="font-size:12px;background:#0b0f19;color:#9ca3af;padding:10px;border-radius:8px;overflow:auto;white-space:pre-wrap">${esc(h.time)}\n${esc(h.text)}</pre>`).join('')}</details>` : ''}
-    </div>` : '';
-
     const rows = d.list.map(a => `
         <tr>
             <td>${a.id}</td>
@@ -67,7 +35,7 @@ async function render() {
     const adminOpts = (d.admins || []).map(a =>
         `<option value="${a.id}" ${st.admin_id == a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('');
 
-    c.innerHTML = secHtml + `
+    c.innerHTML = `
     <div class="card">
         <div class="card-head">
             <h3>审计日志</h3>

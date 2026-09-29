@@ -39,6 +39,7 @@ export const MENUS = [
     { id: 'admins',     name: '管理员',     icon: 'bi-shield-lock', type: 'page', perm: 'admin.manage' },
     { id: 'templates',  name: '界面模板',   icon: 'bi-palette', type: 'page', perm: 'settings.site' },
     { id: 'logs',       name: '日志中心',   icon: 'bi-clock-history', type: 'composite' },
+    { id: 'sec_report', name: '安全巡检',   icon: 'bi-heart-pulse', type: 'page', perm: 'audit.read' },
     { id: 'files',      name: '文件管理',   icon: 'bi-folder-check', type: 'composite' },
     { id: 'system_update', name: '系统更新', icon: 'bi-cloud-arrow-down', type: 'page', perm: 'settings.infra' },
     { id: 'setting',    name: '系统设置',   icon: 'bi-gear', type: 'page', perm: 'settings.site' },
@@ -76,6 +77,7 @@ export const TITLES = {
     shop_goods: '商品管理',
     shop_order_list: '订单管理',
     log_list: '操作日志',       audit_list: '审计日志',
+    sec_report: '安全巡检',
     files_integrity: '完整性校验', files_scan: '挂马扫描',
 };
 
