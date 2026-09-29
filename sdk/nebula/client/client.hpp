@@ -567,7 +567,7 @@ public:
     std::vector<Notice> flashNotices() {
         std::vector<Notice> list = fetchFlashNotices();
         for (const Notice& notice : list) {
-            uiAlert("flash", noticeText(notice), L"Nebula 公告", MB_ICONINFORMATION);
+            uiAlert("flash", noticeText(notice), alertTitle(L" 公告"), MB_ICONINFORMATION);
             markNoticeRead(notice.id);
         }
         return list;
@@ -582,7 +582,7 @@ public:
             if (notice.type == 2) out.push_back(std::move(notice));
         }
         for (const Notice& notice : out) {
-            uiAlert("popup", noticeText(notice), L"Nebula 公告", MB_ICONINFORMATION);
+            uiAlert("popup", noticeText(notice), alertTitle(L" 公告"), MB_ICONINFORMATION);
         }
         return out;
     }
@@ -590,6 +590,21 @@ public:
     // -----------------------------------------------------------------------
     // 内置提示（默认弹中文窗；设置过 setUiHandler 则改走回调）
     // -----------------------------------------------------------------------
+
+    /**
+     * 内置弹窗标题：优先用 init 下发的软件名（如「XXX菜单 - 公告」），
+     * 未取到（init 前弹窗 / 服务端未下发）时回退「Nebula<suffix>」。
+     * suffix 带前导空格，如 L" 公告"。
+     */
+    std::wstring alertTitle(const wchar_t* suffix) const {
+        std::wstring name = toWide(lastInit().software_name);
+        if (name.empty())
+            return suffix ? std::wstring(L"Nebula") + suffix : std::wstring(L"Nebula");
+        if (!suffix || !*suffix)
+            return name;
+        return name + L" - " + suffix;
+    }
+
     void uiAlert(const char* kind, const std::string& message, const std::wstring& title, UINT icon) const {
         if (ui_) { ui_(kind, message); return; }
         ::MessageBoxW(nullptr, toWide(message).c_str(), title.c_str(), icon);
@@ -604,12 +619,12 @@ public:
         if (init.force_update) {
             uiAlert("version",
                     "当前版本过低（" + options_.client_version + "），请升级到 " + init.latest + " 后使用。",
-                    L"Nebula 版本更新", MB_ICONWARNING);
+                    alertTitle(L" 版本更新"), MB_ICONWARNING);
             return false;
         }
         if (init.need_update) {
             uiAlert("version", "发现新版本 " + init.latest + "，建议尽快升级。",
-                    L"Nebula 版本更新", MB_ICONINFORMATION);
+                    alertTitle(L" 版本更新"), MB_ICONINFORMATION);
         }
         return true;
     }
@@ -683,7 +698,24 @@ public:
         ho.connectTimeoutMs = options_.connect_timeout_ms;
         ho.receiveTimeoutMs = options_.receive_timeout_ms;
         ho.useSystemProxy   = options_.use_system_proxy;
-        ho.certSha256       = options_.tls_cert_sha256;
+        // TLS 指纹锁定只对 API 服务器本身有意义；更新包常放在文件床/CDN（证书不同域），
+        // 误继承 API 指纹会让下载 100% 被指纹校验拦截。仅同 host 才继承；
+        // 跨 host 时仍有 WinHTTP 标准证书链校验 + 下载后强制 hash/大小校验兜底，安全不降级。
+        auto urlHost = [](const std::string& url) {
+            std::string s = toLowerAscii(url);
+            const size_t scheme = s.find("://");
+            if (scheme == std::string::npos) return std::string();
+            s = s.substr(scheme + 3);
+            const size_t path = s.find_first_of("/?#");
+            if (path != std::string::npos) s = s.substr(0, path);
+            const size_t at = s.rfind('@');
+            if (at != std::string::npos) s = s.substr(at + 1);
+            const size_t colon = s.find(':');
+            if (colon != std::string::npos) s = s.substr(0, colon);
+            return s;
+        };
+        ho.certSha256 = (urlHost(init.update_url) == urlHost(options_.api_url))
+                      ? options_.tls_cert_sha256 : std::string();
 
         std::string err;
         if (!detail::downloadToFile(init.update_url, dest, ho, err)) {
@@ -732,7 +764,7 @@ public:
             r.state = UpdateState::NeedConfirm;
             uiAlert("update",
                     "发现新版本 " + r.version + "，已下载完成，重启后生效。",
-                    L"Nebula 版本更新", MB_ICONINFORMATION);
+                    alertTitle(L" 版本更新"), MB_ICONINFORMATION);
             return r;
         }
 
@@ -775,13 +807,13 @@ public:
 
     /** init 成功后调用：维护模式提示（登录仍由服务端 6002 兜底拦截） */
     void maintainAlert() const {
-        uiAlert("maintain", "服务器维护中，请稍后再试。", L"Nebula 公告", MB_ICONWARNING);
+        uiAlert("maintain", "服务器维护中，请稍后再试。", alertTitle(L" 公告"), MB_ICONWARNING);
     }
 
     /** 被踢 / 顶号 / 需重新登录时调用（可在心跳回调线程内） */
     void kickAlert(const std::string& serverMsg) const {
         uiAlert("kick", serverMsg.empty() ? std::string("您的账号已下线，请重新登录。") : serverMsg,
-                L"Nebula 下线通知", MB_ICONWARNING);
+                alertTitle(L" 下线通知"), MB_ICONWARNING);
     }
 
     /**
@@ -804,7 +836,7 @@ public:
         const InitResult init = lastInit();
         const std::string reason = nebula::verifySelfIntegrity(init.self_file_hash, init.self_file_size);
         if (reason.empty()) return true;
-        uiAlert("integrity", reason, L"Nebula 安全校验", MB_ICONERROR);
+        uiAlert("integrity", reason, alertTitle(L" 安全校验"), MB_ICONERROR);
         return false;
     }
 
@@ -1002,7 +1034,7 @@ private:
                     loadNoticeReads(noticeReadStorePath(options_.app_key));
                 for (const Notice& notice : info.flash_notices) {
                     if (noticeIsRead(reads, notice.id)) continue;
-                    uiAlert("flash", noticeText(notice), L"Nebula 公告", MB_ICONINFORMATION);
+                    uiAlert("flash", noticeText(notice), alertTitle(L" 公告"), MB_ICONINFORMATION);
                     markNoticeRead(notice.id);
                 }
             }
