@@ -3,23 +3,24 @@
 > 📚 本文属 Nebula 文档中心，主索引见 [../README.md](../README.md)；
 > 相关文档：[SDK 加固指南](SDK_PROTECTION.md) · [API 接口](../docs/API.md) · [报文示例](../docs/API_RAW_EXAMPLES.md)
 
-> 适用对象：`sdk/nebula_sdk.hpp`（header-only，单头文件）  
+> 适用对象：`sdk/nebula_sdk.hpp`（header-only 伞头，内部按职责拆分为 `sdk/nebula/` 下 19 个子头）  
 > 协议版本：与 `docs/API.md` 严格对齐（NB_VERSION ≥ 2.63.34）
 
 ---
 
 ## 1. 概述
 
-Nebula C++ SDK 是 Nebula 网络验证系统的 Windows 客户端接入库，**单头文件、零第三方依赖**（仅 Windows 系统库）。内置：
+Nebula C++ SDK 是 Nebula 网络验证系统的 Windows 客户端接入库，**header-only、零第三方依赖**（仅 Windows 系统库）。内置：
 
 - **通信协议**：AES-256-CBC 加密 + HMAC-SHA256 签名的加密信封，自动管理会话密钥（init 下发、业务接口自动换盐）
+- **响应防伪造**：服务端用私钥对每条响应额外签名（**ES256**，环境不支持时自动回落 **RS256**），客户端用内置公钥验签——逆向出全部对称密钥也无法伪造响应
 - **完整流程**：init（初始化）→ login（登录，三种方式自动适配）→ heartbeat（心跳保活）→ logout（登出）
 - **业务接口**：激活、设备列表、设备解绑、用户信息、公告、版本检查、在线人数
 - **内置提示（开箱即用）**：版本过期 / 发现新版本 / 服务器维护 / 被踢下线 / 完整性校验失败，全部由 SDK 弹中文提示窗，接入方**零 UI 代码**
 - **可完全自定义**：一行 `setUiHandler` 接管所有提示，用你自己的 UI 呈现
 - **完整性自校验（防篡改）**：客户端启动时自动比对自身 exe 的哈希与大小，被修改即拒绝运行
 - **设备指纹**：自动采集真实电脑主机名（`GetComputerNameW`）与硬件指纹（主板/CPU/硬盘/BIOS/GPU 序列号 + 主网卡 MAC，WMI 实现），登录时自动上报，支持虚拟机识别与漂移容忍
-- **离线宽限**：断网时用服务端签发的票据本地 ES256 验签，宽限期内可继续使用
+- **离线宽限**：断网时用服务端签发的票据本地验签，宽限期内可继续使用
 
 ## 2. 环境要求
 
@@ -35,24 +36,32 @@ Nebula C++ SDK 是 Nebula 网络验证系统的 Windows 客户端接入库，**�
 
 ### 方式 A：内置配置区一行接入（推荐）
 
-打开 `nebula_sdk.hpp` 顶部 **「接入方配置区」**，把四个常量改成你自己软件的值（在后台「软件管理」行点「复制」获取）：
+打开 **`sdk/nebula/client/config.hpp`**（SDK 中★唯一需要修改的文件★）的顶部「接入方配置区」，把六项改成你自己软件的值（前四项在后台「软件管理」行点「复制」获取，第 ⑤ 项在「系统设置 → 系统 → 响应签名公钥 → 复制 C++ 代码」）：
 
 ```cpp
-namespace cfg {
-inline const char* kApiUrl   = "http://api.example.com/api/index.php"; // 服务端 API 入口
-inline const char* kAppKey   = "SWXXXXXXXX";                           // 软件标识
-inline const char* kAesKey   = "AES_KEY_32位hex";                       // 该软件的通信密钥
-inline const char* kSignSalt = "SIGN_SALT_48位hex";                     // 该软件的签名盐
-} // namespace cfg
+namespace nebula { namespace cfg {
+inline const std::string kApiUrl   = NEBULA_STR("http://your-domain.com/api/index.php"); // ① API 入口
+inline const SecureString kAppKey  { NEBULA_STR("SWXXXXXXXX") };                          // ② 软件标识
+inline const std::string kAesKey   = NEBULA_STR("AES_KEY_32位hex");                       // ③ 通信密钥
+inline const std::string kSignSalt = NEBULA_STR("SIGN_SALT_48位hex");                     // ④ 签名盐
+inline const std::string kRespSignPubKey = NEBULA_STR("-----BEGIN PUBLIC KEY-----\n...");  // ⑤ 响应验签公钥（必填）
+inline const std::string kTlsCertSha256  = NEBULA_STR("");                                 // ⑥ 证书指纹（可选）
+} }
 ```
+
+> **⑤ 是必填项**：留空则所有请求直接失败（故意设计，不给"不校验"留口子）。
+> **⑥ 只在 `https://` 生效**：填了它 SDK 会同时拒绝 `http://` 地址。
+> 所有值一律写在 `NEBULA_STR("...")` 里，开启混淆后编译期即被加密。
 
 之后入口处一行工厂调用即可：
 
 ```cpp
-#include "nebula_sdk.hpp"
+#include "nebula_sdk.hpp"   // 只需这一个入口（内部自动包含 nebula/ 下各子头）
 
 auto c = nebula::createDefaultClient(/*machine_id*/ "", /*os_info*/ "Windows", /*client_version*/ "1.0.1");
 ```
+
+> 子头分布在 `sdk/nebula/` 下，请**连同整个 `nebula/` 目录一起拷进工程**，不要只拷伞头。
 
 ### 方式 B：构造时手动传参
 
@@ -171,12 +180,9 @@ c.stopHeartbeat();
 | `online`        | 是否在线                 |
 | `kick`          | 被强制下线（后台踢出，status=3） |
 | `force_offline` | 顶号下线（他处登录，status=2）  |
-| `has_notice`    | 是否有新弹窗/立即公告         |
 | `need_relogin`  | 会话失效，需重新登录           |
 | `need_activate` | 账号过期待激活              |
 | `grace_ticket`  | 最新离线宽限票据（SDK 已自动缓存）  |
-| `grace_until`   | 离线宽限票据到期时间戳           |
-| `flash_notices` | 本轮心跳下发的立即公告列表（type=3） |
 
 收到 `kick / force_offline / need_relogin` 时应停止业务并回登录界面；提示可用 `c.kickAlert(msg)`（第 6 节）。
 
@@ -320,16 +326,16 @@ if (gr.ok) {
 
 ## 11. 编译与常见问题
 
-- **单头文件**：把 `nebula_sdk.hpp` 放进工程直接 `#include`，系统库自动链接
+- **拷贝方式**：把 `nebula_sdk.hpp` + `nebula_protect.hpp` + `nebula/` 目录一起放进工程，`#include "nebula_sdk.hpp"` 即可，系统库自动链接（`winhttp` `bcrypt` `advapi32` `crypt32` `iphlpapi` `wbemuuid` `user32` `oleaut32`）
 - **中文乱码**：提示窗全部走宽字符 API；建议 MSVC 开 `/utf-8`
 - **URL 形式**：支持 `<base>?action=xx` 与 `<base>/index.php?action=xx` 两种入口写法
-- **HTTP 超时**：`nebula::Http::setTimeout(连接毫秒, 接收毫秒)`，默认 8000 / 15000
+- **超时设置**：`c.setTimeouts(连接毫秒, 接收毫秒)`，默认 8000 / 15000
 - **心跳线程**：回调在 SDK 线程执行，不要在其中直接操作 SFML / 窗口句柄，先设标志位
 - **错误码**：业务码完整表见 `docs/API.md` 1.4（1001 参数 / 1004 软件无效 / 2001 密码 / 2002 封禁 / 3001-3008 卡密 / 4001-4005 设备 / 5001-5004 频率与签名 / 6001 版本过低 / 6002 维护中）
 
 ## 12. 客户端加固（可选 · 默认全部关闭）
 
-SDK 另带一个可选组件 **`sdk/nebula_protect.hpp`**（与 `nebula_sdk.hpp` 同目录，自动包含），提供三类加固能力：
+加固实现位于 **`sdk/nebula/protect/`**（`shell.hpp` / `obfuscate.hpp` / `runtime.hpp`），由伞头自动包含，提供三类加固能力：
 
 | 能力 | 开关宏（默认关闭） | 说明 |
 | --- | --- | --- |

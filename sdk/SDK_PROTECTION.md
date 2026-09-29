@@ -3,7 +3,7 @@
 > 📚 本文属 Nebula 文档中心，主索引见 [../README.md](../README.md)；
 > 配套文档：[C++ SDK 接入文档](SDK.md) · [API 接口](../docs/API.md)
 
-> **一句话结论：全部默认关闭。** 不定义任何宏时，`nebula_protect.hpp` 几乎不产生任何代码，
+> **一句话结论：全部默认关闭。** 不定义任何宏时，`nebula/protect/` 下的加固代码几乎不编译进目标文件，
 > 行为 / 协议 / 性能与**不加加固的版本完全一致**。想开启，只需在工程预处理器里加一行
 > `NEBULA_HARDEN=1`（或按需单独开某一项）。
 >
@@ -13,19 +13,20 @@
 
 ## 0. 30 秒上手
 
-### 0.1 三个开关
+### 0.1 开关一览
 
 | 开关宏 | 默认 | 作用 | 对应文件能力 |
 | --- | --- | --- | --- |
 | `NEBULA_PROTECT_LEVEL` | `0` | 运行时防护等级：`1` 基础 / `2` 标准 / `3` 严格 | 反调试、反虚拟机/沙箱、API 劫持、代码补丁自检 |
 | `NEBULA_OBF_STRINGS` | `0` | 核心代码混淆 | 字符串编译期加密、间接调用、不透明谓词 |
 | `NEBULA_SHELL_ENABLE` | `0` | 壳标记（VMProtect / Themida · WinLicense / 自定义） | 在核心函数里插入壳的标记，让加壳工具保护这段代码 |
+| `NEBULA_RUNTIME_DIVERSE` | `0` | 运行时多样性 | `SecureString` 每次启动随机密钥、不透明谓词每次启动随机形态（`=0` 时退化为固定密钥 + 固定谓词，零开销） |
 
 辅助宏：
 
 | 宏 | 默认 | 说明 |
 | --- | --- | --- |
-| `NEBULA_HARDEN` | `0` | **一键全开**：等于 `LEVEL=3` + 混淆 + 壳标记 |
+| `NEBULA_HARDEN` | `0` | **一键全开**：等于 `LEVEL=3` + 混淆 + 壳标记 + 运行时多样性 |
 | `NEBULA_PROTECT_ACTION` | `1` | 命中后的动作：`0` 只记录 / `1` 回调上报 / `2` 降级 / `3` 弹窗退出 |
 | `NEBULA_TIMING_THRESHOLD_MS` | `50.0` | 时序异常阈值（毫秒） |
 | `NEBULA_QUIET` | — | 定义后关闭"加固未启用"的编译期提醒 |
@@ -182,8 +183,8 @@ auto note = NEBULA_WSTR(L"Nebula 安全提示");
   想更彻底：把密钥换成运行时值（`nebula::obf::runtimeNoise()` 之类）或直接上壳的字符串加密
   （VMProtect 的 `VMProtectDecryptStringA`）。
 
-**接入方配置区已默认接好**：`nebula_sdk.hpp` 顶部 `namespace cfg` 的
-`kApiUrl / kAppKey / kAesKey / kSignSalt` 四个值本来就是 `NEBULA_STR("...")` 包着的，
+**接入方配置区已默认接好**：`nebula/client/config.hpp` 顶部 `namespace nebula::cfg` 的
+`kApiUrl / kAppKey / kAesKey / kSignSalt`（以及 `kRespSignPubKey / kTlsCertSha256`）本来就是 `NEBULA_STR("...")` 包着的，
 你只替换引号里的字符串即可 —— **不要把 `NEBULA_STR(...)` 拆掉**，
 拆了 AES_KEY / SIGN_SALT 就会以明文躺在 exe 里。
 
@@ -221,6 +222,37 @@ if (!NEBULA_OPAQUE_TRUE() && NEBULA_OPAQUE_TRUE()) {
 - **不要**用 `/Ob0`、不要开 `/RTC1`、不要用 `/ZI`（这些会把调试检查与调试信息留在包里）；
 - 发布包**不要带 `.pdb`**；
 - 更狠：Clang + Obfuscator-LLVM 编一遍，再叠壳。
+
+### 2.5 运行时多样性（`NEBULA_RUNTIME_DIVERSE`）
+
+> **一句话**：让敏感数据的**内存形态**和判定代码的**反汇编形态**随每次进程启动而改变，
+> 破解者无法用固定的字符串特征或固定的字节码特征做批量匹配 / 一键绕过。
+
+| 取值 | 行为 |
+| --- | --- |
+| `0`（默认） | `SecureString` 用固定编译期密钥（仍防 SSO 静态区明文），不透明谓词为固定恒真/恒假（零开销、可复现） |
+| `1` | `SecureString` 每次启动用 `runtimeRandByte()` 生成的随机密钥逐字节混淆；不透明谓词每次启动取不同随机操作数，但表达式恒等于 true/false |
+
+**它干什么**：
+
+1. **`SecureString` 随机密钥**：同一 exe 每次启动，`cfg` 静态区里 `kAppKey` 的密文形态都不同
+   （见 [`nebula/core/secure_string.hpp`](nebula/core/secure_string.hpp) 的 `SecureString`），拆包者无法用固定密文反查明文。
+2. **不透明谓词随机形态**：`obf::opaqueTrue/False` 每次启动装配不同形态的恒真/恒假表达式，
+   关闭时退化为固定 `return true; / return false;`。合并进 `if (!OBF_OPAQUE_TRUE() && ...)` 干扰分支。
+
+**怎么开**（三选一，等价）：
+
+```cpp
+#define NEBULA_HARDEN 1              // 方式 A：一键全开，自动带上多样性
+#define NEBULA_RUNTIME_DIVERSE 1     // 方式 B：只开多样性、别的不动
+#include "nebula_sdk.hpp"
+```
+
+**要不要开**：发布版建议开（成本只有每次启动多一次随机源初始化，量级可忽略）；开发 / 自测建议关，
+保持可复现、方便断点。关闭时多样性相关代码为**零开销**。
+
+> 说明：真随机源（`runtimeRandByte`）用「高分辨率性能计数器 + 进程 PID + 时钟纳秒」做种子，
+> 只依赖标准库 + Windows，不写可执行内存，不与壳 / DEP / 杀软冲突。
 
 ---
 
@@ -421,7 +453,7 @@ c->setProtectCallback([](const nebula::protect::Report& r) {
 | 不开启时有没有性能损耗？ | 没有。所有检测代码都在 `#if` 里，全关时几乎不编译进目标文件。 |
 | 需要什么编译环境？ | C++17（SDK 本来就要求），MSVC 2017+；**建议加 `/utf-8`**（本文件注释是中文）。 |
 | 需要额外头文件/库吗？ | 不开启加固时不需要。开启壳标记后需要壳自带的 SDK 头 + lib（会自动链接，可用 `NEBULA_SHELL_NO_AUTOLINK` 关掉自动链接）。 |
-| `nebula_protect.hpp` 必须放一起吗？ | 放在 `nebula_sdk.hpp` 同目录即可自动包含；不放也能编译（`NEBULA_HAS_PROTECT=0`），只是加固接口变成空操作。 |
+| 加固代码放哪？ | 加固实现位于 `sdk/nebula/protect/`（`shell.hpp` / `obfuscate.hpp` / `runtime.hpp`），由 `nebula_sdk.hpp` 自动包含。整个 `nebula/` 目录需随伞头一起拷进工程。 |
 | 只改一个文件行不行？ | 行。`NEBULA_HARDEN=1` 写在工程预处理器里，源码不用动。 |
 | 云端沙箱/VPS 用户怎么办？ | 见 3.7；建议对虚拟化类命中只上报不处置。 |
 | 加壳后登录一直失败？ | 90% 是壳保护了 IAT/导入表，或虚拟化了 `Client::post`。把范围收小、关掉导入表保护试试。 |
@@ -437,6 +469,7 @@ c->setProtectCallback([](const nebula::protect::Report& r) {
 // NEBULA_PROTECT_LEVEL=1|2|3      只要运行时防护
 // NEBULA_OBF_STRINGS=1            只要字符串混淆
 // NEBULA_SHELL_ENABLE=1           只要壳标记
+// NEBULA_RUNTIME_DIVERSE=1        只要运行时多样性（SecureString 随机密钥 + 谓词随机形态）
 // NEBULA_PROTECT_ACTION=0|1|2|3   命中后的动作（默认 1 = 只回调上报）
 
 // ============ 2. main() 里启动 ============
@@ -455,4 +488,3 @@ auto s = NEBULA_STR("敏感字符串");           // 混淆后的字面量
 
 ---
 
-*文档与 SDK 同步维护：改 SDK 必须同步更新本文档（项目 / WWW / 空白包三处）。*
