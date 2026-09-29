@@ -451,7 +451,9 @@ class Auth
             if ($trial > 0) {
                 return ['valid' => true, 'code' => 0, 'msg' => '试用中', 'expire_at' => 0, 'points' => 0];
             }
-            return ['valid' => false, 'code' => 2004, 'msg' => '账号未激活，请使用激活码', 'expire_at' => 0, 'points' => 0];
+            // 曾有卡密快照 = 点数/次数已用完；否则是真未激活
+            $usedUp = trim((string) ($user['card_code'] ?? '')) !== '';
+            return ['valid' => false, 'code' => 2004, 'msg' => $usedUp ? '次数/点数已用完，请重新充值' : '账号未激活，请使用激活码', 'expire_at' => 0, 'points' => 0];
         }
 
         // 永久卡（expire = -1 或极大值）
