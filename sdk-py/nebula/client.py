@@ -33,6 +33,7 @@ from typing import Callable, Dict, List, Optional
 
 from . import config
 from .crypto import NebulaError, random_hex
+from .device_fp import collect_fingerprint_json
 from .envelope import Envelope
 
 
@@ -811,6 +812,12 @@ class Client:
             "os_info": self.os_info,
             "client_ver": self.client_ver,
         })
+
+        # 设备指纹（多硬件组件）：服务端据此做加权校验/虚拟机识别；
+        # 无有效组件时为空串，不上报（与服务端「未上报跳过」语义一致）
+        fp = collect_fingerprint_json()
+        if fp:
+            payload["device_fp"] = fp
 
         try:
             data, _ = self._env.send("login", payload, use_session=True)
