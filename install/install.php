@@ -457,6 +457,14 @@ h3 { font-size: 15px; margin-bottom: 12px; color: #f1f5f9; }
         <?php if ($step === '1'): ?>
             <h3>环境检测</h3>
             <?php
+            // 2026-09-30 修复：logs 目录缺失时自动创建。
+            // 分发包曾漏带 logs/（打包排除规则 + 仓库未跟踪占位文件），
+            // is_writable 对不存在的目录恒为 false，直接卡死安装。
+            foreach (['logs', 'logs/cache', 'logs/nonce'] as $nbDir) {
+                if (!is_dir($root . '/' . $nbDir)) {
+                    @mkdir($root . '/' . $nbDir, 0775, true);
+                }
+            }
             $checks = [
                 'PHP 版本 >= 7.3'   => version_compare(PHP_VERSION, '7.3.0', '>='),
                 'PDO MySQL 扩展'    => extension_loaded('pdo_mysql'),

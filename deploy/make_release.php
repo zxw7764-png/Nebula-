@@ -25,12 +25,14 @@ if (PHP_SAPI !== 'cli') {
 }
 
 $EXCLUDE_DIRS = [
-    '.git', '.github', 'node_modules', 'logs', '__pycache__',
+    '.git', '.github', 'node_modules', '__pycache__',
     '.idea', '.vscode',
     // 开发站专用目录，不随空白包分发（README：发布工具仅开发站使用）
     'deploy', 'tests', 'update-system', '_pkg', 'releases',
     // 本机开发工具目录
     '.freebuff', '.catpaw', '.workbuddy',
+    // 注意：logs/ 不在此列 —— 安装器要检查 logs 可写，包内必须带目录骨架
+    // （.htaccess + cache/nonce 的 .gitkeep 占位，见下方前缀保留规则）
 ];
 $EXCLUDE_FILES = ['.gitignore', '.DS_Store', 'Thumbs.db'];
 $EXCLUDE_EXT   = ['.bak', '.log', '.zip'];
@@ -40,8 +42,9 @@ function excluded(string $rel): bool
     $rel = str_replace('\\', '/', $rel);
     foreach (['data/', 'logs/', 'uploads/', 'pack/'] as $pre) {
         if (str_starts_with($rel, $pre)) {
-            // data/ logs/ uploads/ pack/ 只保留 .gitkeep（运行时目录占位）
-            if (!str_ends_with($rel, '.gitkeep')) {
+            // 运行时目录：内容全部排除，仅保留骨架占位文件
+            // （.gitkeep 保 git 目录、.htaccess 保「禁止 Web 访问/禁止执行」规则）
+            if (!str_ends_with($rel, '.gitkeep') && !str_ends_with($rel, '.htaccess')) {
                 return true;
             }
         }

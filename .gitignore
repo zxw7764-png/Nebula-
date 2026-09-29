@@ -3,6 +3,8 @@ logs/*
 !logs/.htaccess
 !logs/cache/.gitkeep
 !logs/nonce/.gitkeep
+# 注意：logs/.htaccess、logs/cache/.gitkeep、logs/nonce/.gitkeep 必须真实提交，
+# 否则分发包没有 logs 目录骨架，安装器 is_writable 检查直接失败
 install/install.lock
 yanzheng_blank.zip
 

@@ -1,0 +1,8 @@
+# 禁止一切外部访问（日志目录：业务日志 / 文件缓存 / nonce 防重放 / cron 密钥 / 安全报告）
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
