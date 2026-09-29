@@ -19,6 +19,19 @@ class Points
         return in_array($m, ['per_login', 'daily', 'online'], true) ? $m : 'per_login';
     }
 
+    /**
+     * 该用户的实际扣点模式。
+     * 次数卡（type=3）固定「每次登录扣 1」——次数就是使用次数，不随全局模式；
+     * 点数卡（type=2）与其余用户走后台配置的模式。
+     */
+    public static function modeFor(array $user): string
+    {
+        if ((int) ($user['card_type'] ?? 0) === 3) {
+            return 'per_login';
+        }
+        return self::mode();
+    }
+
     /** online 模式：每 N 分钟扣 1 点 */
     public static function minutes(): int
     {
@@ -40,7 +53,7 @@ class Points
         $now = time();
         $id  = (int) $user['id'];
 
-        $mode = self::mode();
+        $mode = self::modeFor($user);
         if ($mode === 'per_login') {
             $n = Database::exec(
                 "UPDATE {$t} SET points = points - 1, points_at = ?, updated_at = ?"
@@ -76,7 +89,7 @@ class Points
      */
     public static function chargeOnHeartbeat(array $user): bool
     {
-        if (self::mode() !== 'online' || (int) $user['points'] <= 0) {
+        if (self::modeFor($user) !== 'online' || (int) $user['points'] <= 0) {
             return false;
         }
         $now       = time();

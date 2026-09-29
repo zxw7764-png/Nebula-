@@ -162,6 +162,11 @@ class Card
             // 卡密快照：写进用户行，删卡后管理端仍能反查/找回账号
             $updates['card_code'] = (string) $code;
 
+            // 记录最近激活的点数/次数卡类型（决定扣点语义：次数卡=每次登录，点数卡=按配置模式）
+            if (in_array((int) $card['type'], [self::TYPE_POINTS, self::TYPE_TIMES], true)) {
+                $updates['card_type'] = (int) $card['type'];
+            }
+
             Database::update('users', $updates, 'id = :id', ['id' => $user['id']]);
 
             // 标记卡密已用

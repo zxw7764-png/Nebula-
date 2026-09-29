@@ -199,7 +199,7 @@ async function render() {
                     <option value="daily" ${s.points_deduct_mode === 'daily' ? 'selected' : ''}>每天首次登录扣 1</option>
                     <option value="online" ${s.points_deduct_mode === 'online' ? 'selected' : ''}>按在线时长扣</option>
                 </select>
-                <div class="hint">时长卡/永久卡不受扣点影响；耗尽后登录/心跳被拒（提示「次数/点数已用完」）</div>
+                <div class="hint">点数卡按此模式扣；<b>次数卡固定每次登录扣 1</b>（不受此模式影响）；时长卡/永久卡不扣；耗尽后登录/心跳被拒</div>
             </div>
             <div class="field"><label>在线每 N 分钟扣 1</label>
                 <input id="stPtsMin" type="number" value="${esc(s.points_deduct_minutes || '30')}" min="1">
