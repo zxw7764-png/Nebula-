@@ -26,12 +26,14 @@ if (!$hasTypeCol) {
 }
 
 $plan = Database::one(
-    'SELECT id, name, card_source FROM ' . Database::t('shop_plans') . ' WHERE id = ?',
+    'SELECT id, name, card_source, software_id FROM ' . Database::t('shop_plans') . ' WHERE id = ?',
     [$planId]
 );
 if (!$plan) {
     Response::error(1004, '商品不存在');
 }
+// 租户隔离：检查该商品归属软件是否在管理员范围内
+Tenant::requireTouch($admin, (int) ($plan['software_id'] ?? 0));
 if ((int) ($plan['card_source'] ?? 0) !== 1) {
     Response::error(1001, '该商品不是外部卡密商品，无法导入（请先在发卡商品配置中把卡密来源切换为外部卡密）');
 }

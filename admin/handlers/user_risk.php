@@ -21,6 +21,10 @@ if ($force) {
 
 $r = RiskScore::evaluate($id);
 $th = (int) Config::get('security.risk_freeze_score', 80);
+if (Setting::isSet('risk_freeze_score')) {
+    $sv = trim((string) Setting::get('risk_freeze_score', ''));
+    if ($sv !== '') $th = (int) $sv;
+}
 
 Response::ok([
     'id'       => (int) $u['id'],

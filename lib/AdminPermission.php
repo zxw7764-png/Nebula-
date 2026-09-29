@@ -335,8 +335,9 @@ final class AdminPermission
         // 内容运营（查看）
         'notice_list', 'version_list', 'message_list', 'feedback_list',
         'plan_list', 'seller_list', 'screenshot_list', 'game_list',
-        // 日志审计（查看）
-        'log_list', 'audit_list', 'audit_detail', 'sec_report',
+        // 注意：log_list / audit_list / audit_detail / sec_report 故意不进白名单
+        // —— 它们声明 AUDIT_READ 权限点，操作员角色默认没有，必须按勾选放行。
+        // 放进 VIEW_ACTIONS 会绕过 AUDIT_READ（2026-09-30 审计发现的逻辑矛盾，已修）。
     ];
 
     // ------------------------------------------------------------------

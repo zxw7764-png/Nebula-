@@ -12,6 +12,7 @@ $kw     = Util::str($input, 'kw', '');
 $table = Database::t('shop_orders');
 $where = [];
 $args  = [];
+Tenant::applyPositional($where, $args, 'software_id');
 
 if ($status !== '' && in_array($status, ['0', '1', '2', '3'], true)) {
     $where[] = 'status = ?';

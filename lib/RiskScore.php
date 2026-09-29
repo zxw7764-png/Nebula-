@@ -52,6 +52,19 @@ class RiskScore
 
     // ------------------------------------------------------------------
 
+    /**
+     * 读取后台设置项，未配置/存空时回退出厂默认
+     * （config.php 里没有 risk_* 出厂值，不能用 intWithConfig 的 0 兜底）
+     */
+    private static function w(string $key, int $default): int
+    {
+        if (!Setting::isSet($key)) {
+            return $default;
+        }
+        $v = trim((string) Setting::get($key, ''));
+        return $v === '' ? $default : max(0, (int) $v);
+    }
+
     private static function compute(int $userId): array
     {
         $since = time() - 86400;
@@ -67,7 +80,7 @@ class RiskScore
 
         // 1) IP 异常：该用户最近登录 IP 的 24h 全局登录失败次数
         $ipTh = max(5, (int) Config::get('security.bruteforce_ip_threshold', 10));
-        $ipW  = max(0, (int) Config::get('security.risk_ip_weight', 30));
+        $ipW  = self::w('risk_ip_weight', 30);
         $ip   = (string) ($user['last_login_ip'] ?? '');
         if ($ip !== '') {
             $row = Database::one(
@@ -83,7 +96,7 @@ class RiskScore
 
         // 2) 账号失败：本账号 24h 失败次数 或 当前连续失败计数
         $uTh = max(5, (int) Config::get('security.bruteforce_user_threshold', 10));
-        $uW  = max(0, (int) Config::get('security.risk_user_weight', 20));
+        $uW  = self::w('risk_user_weight', 20);
         $row = Database::one(
             'SELECT COUNT(*) c FROM ' . Database::t('logs')
             . " WHERE action = 'login' AND result = 0 AND username = ? AND created_at >= ?",
@@ -96,7 +109,7 @@ class RiskScore
         }
 
         // 3) 设备异常：名下在用设备带 VM/模拟器标记或风险标记
-        $dW = max(0, (int) Config::get('security.risk_device_weight', 20));
+        $dW = self::w('risk_device_weight', 20);
         $row = Database::one(
             'SELECT COUNT(*) c FROM ' . Database::t('devices')
             . " WHERE user_id = ? AND status = 1 AND (vm_flag = 1 OR (risk_flags IS NOT NULL AND risk_flags <> ''))",
@@ -108,7 +121,7 @@ class RiskScore
         }
 
         // 4) 代理异常：激活卡密归属的代理商被锁 / 连续登录失败
-        $aW = max(0, (int) Config::get('security.risk_agent_weight', 30));
+        $aW = self::w('risk_agent_weight', 30);
         $cardCode = (string) ($user['card_code'] ?? '');
         if ($cardCode !== '') {
             $agentId = (int) (Database::one(
@@ -136,7 +149,7 @@ class RiskScore
     /** 达到冻结阈值且账号正常时自动冻结 */
     private static function maybeFreeze(int $userId, array $r): void
     {
-        $th = max(0, (int) Config::get('security.risk_freeze_score', 80));
+        $th = self::w('risk_freeze_score', 80);
         if ($th <= 0 || $r['score'] < $th || empty($r['breakdown'])) {
             return;
         }

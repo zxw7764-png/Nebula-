@@ -19,10 +19,12 @@ $tPlans = Database::t('shop_plans');
 
 try {
     if ($planId > 0) {
-        $plan = Database::one("SELECT id, name FROM {$tPlans} WHERE id = ? AND card_source = 1", [$planId]);
+        $plan = Database::one("SELECT id, name, software_id FROM {$tPlans} WHERE id = ? AND card_source = 1", [$planId]);
         if (!$plan) {
             Response::error(1004, '外部卡密商品不存在');
         }
+        // 租户隔离：检查商品归属软件
+        Tenant::requireTouch($admin, (int) ($plan['software_id'] ?? 0));
 
         $sum = Database::one(
             "SELECT COALESCE(SUM(status = 0), 0) AS unsold, COALESCE(SUM(status = 1), 0) AS sold
@@ -68,15 +70,18 @@ try {
         }, $rows)]);
     }
 
-    // 汇总：全部外部卡密商品
+    // 汇总：全部外部卡密商品（按软件范围过滤）
+    $where = ['p.card_source = 1'];
+    $args  = [];
+    Tenant::applyPositional($where, $args, 'software_id');
     $rows = Database::all(
         "SELECT p.id AS plan_id, p.name AS plan_name,
                 COALESCE(SUM(c.status = 0), 0) AS unsold, COALESCE(SUM(c.status = 1), 0) AS sold
          FROM {$tPlans} p
          LEFT JOIN {$tCards} c ON c.plan_id = p.id
-         WHERE p.card_source = 1
-         GROUP BY p.id, p.name
-         ORDER BY p.id ASC"
+         WHERE " . implode(' AND ', $where)
+         . " GROUP BY p.id, p.name ORDER BY p.id ASC",
+        $args
     );
     Response::ok(['list' => array_map(function (array $r) {
         return [

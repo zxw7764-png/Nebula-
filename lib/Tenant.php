@@ -95,4 +95,77 @@ class Tenant
             Response::error(4031, '无权操作该软件的数据');
         }
     }
+
+    // ------------------------------------------------------------------
+    // 2026-09-30 审计补强：所有单条/批量写路径统一从这里过授权，
+    // 不再依赖各 handler「记得调用」—— 用法见各方法注释。
+    // ------------------------------------------------------------------
+
+    /**
+     * 单条记录按表归属校验（表需含 software_id 列）。
+     * 典型：编辑卡密 / 公告 / 版本前先 $row = 读取，再 touchRow($admin, 'cards', $row)。
+     * 记录不存在时由调用方自行 404；这里只管「存在但越权」。
+     */
+    public static function touchRow(?array $admin, string $table, array $row, string $column = 'software_id'): void
+    {
+        if (self::softwareScope($admin) === null) {
+            return;
+        }
+        self::requireTouch($admin, (int) ($row[$column] ?? 0));
+    }
+
+    /**
+     * 批量记录归属校验：$ids 中任何一条落在租户范围之外即整单拒绝。
+     * $table 必须含 software_id 列（cards / card_batches / users / versions / notices...）。
+     * 幂等安全：传入前请先做 intval 清洗。
+     */
+    public static function requireTouchAll(?array $admin, string $table, array $ids, string $column = 'software_id'): void
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        if (!$ids || self::softwareScope($admin) === null) {
+            return;
+        }
+        $ph   = implode(',', array_fill(0, count($ids), '?'));
+        $rows = Database::all(
+            "SELECT id, {$column} sw FROM " . Database::t($table) . " WHERE id IN ($ph)",
+            $ids
+        );
+        $map = [];
+        foreach ($rows as $r) {
+            $map[(int) $r['id']] = (int) $r['sw'];
+        }
+        foreach ($ids as $id) {
+            // 查无此记录交给后续业务逻辑 404；存在但越权 → 拒绝
+            if (isset($map[$id])) {
+                self::requireTouch($admin, $map[$id]);
+            }
+        }
+    }
+
+    /** 用户链路授权（users.software_id） */
+    public static function requireTouchUser(?array $admin, int $userId): void
+    {
+        if (self::softwareScope($admin) === null) {
+            return;
+        }
+        $sw = (int) Database::value(
+            'SELECT software_id FROM ' . Database::t('users') . ' WHERE id = ?',
+            [$userId]
+        );
+        self::requireTouch($admin, $sw);
+    }
+
+    /** 设备链路授权：device → user → software_id（设备表无 software_id，走授权链推导） */
+    public static function requireTouchDevice(?array $admin, int $deviceId): void
+    {
+        if (self::softwareScope($admin) === null) {
+            return;
+        }
+        $sw = (int) Database::value(
+            'SELECT u.software_id FROM ' . Database::t('devices') . ' d'
+            . ' JOIN ' . Database::t('users') . ' u ON u.id = d.user_id WHERE d.id = ?',
+            [$deviceId]
+        );
+        self::requireTouch($admin, $sw);
+    }
 }

@@ -46,7 +46,7 @@ async function userRisk(id) {
             <thead><tr><th>维度</th><th>加分</th><th>命中详情</th></tr></thead>
             <tbody>${rows}</tbody>
         </table></div>`;
-    openModal(`风险评估 · ${r.username}`, body, [{ text: '关闭', class: 'btn' }], '');
+    openModal(`风险评估 · ${r.username}`, body, [{ text: '关闭', cls: 'btn', act: closeModal }], '');
 }
 
 async function render() {

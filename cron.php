@@ -10,16 +10,30 @@
  *   参数: D:\path\to\nebula\cron.php
  *   触发器: 每 1 分钟
  *
- * 也可用外部服务定时访问: https://你的域名/cron.php?key=你的密钥
+ * 也可用外部服务定时访问: https://你的域名/cron.php?key=你的独立cron密钥
+ * （HTTP 触发密钥取 security.cron_secret，首次自动生成到 logs/cron_secret.txt；
+ *   与客户端 sign_salt 完全独立，泄露 sign_salt 不会泄露 cron 权限）
  */
 
 require_once __DIR__ . '/lib/bootstrap.php';
 
 // 若通过 HTTP 触发，需带 key 校验
 if (PHP_SAPI !== 'cli') {
-    $key = $_GET['key'] ?? '';
-    $expect = Config::get('security.sign_salt');
-    if ($key === '' || !hash_equals((string) $expect, (string) $key)) {
+    // 2026-09-30 审计 P1：cron 密钥必须独立于客户端 sign_salt。
+    // sign_salt 是客户端 HMAC 共享密钥，能从合法客户端里提取出来；
+    // 若用它当 cron key，攻击者可随意频繁触发清理/备份/巡检等重任务。
+    // 优先级：security.cron_secret（后台可配）> 启动时自动生成落盘 logs/cron_secret.txt。
+    $key = (string) ($_GET['key'] ?? '');
+    $secret = (string) Config::get('security.cron_secret', '');
+    if ($secret === '') {
+        $sf = __DIR__ . '/logs/cron_secret.txt';
+        if (!is_file($sf)) {
+            @mkdir(__DIR__ . '/logs', 0775, true);
+            @file_put_contents($sf, bin2hex(random_bytes(24)), LOCK_EX);
+        }
+        $secret = (string) @file_get_contents($sf);
+    }
+    if ($key === '' || $secret === '' || !hash_equals($secret, $key)) {
         require_once __DIR__ . '/lib/error_page.php';
         nb_error_page(403);
     }

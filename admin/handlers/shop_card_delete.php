@@ -22,6 +22,22 @@ if (count($ids) > 2000) {
     Response::error(1001, '单次最多删除 2000 条');
 }
 
+// 租户隔离：先查出这些卡密所属的 software_id，再做范围校验
+$rows = Database::all(
+    "SELECT c.id, p.software_id FROM " . Database::t('shop_cards') . " c"
+    . " JOIN " . Database::t('shop_plans') . " p ON p.id = c.plan_id"
+    . " WHERE c.id IN (" . implode(',', $ids) . ")"
+);
+$planMap = [];
+foreach ($rows as $r) {
+    $planMap[(int) $r['id']] = (int) $r['software_id'];
+}
+foreach ($ids as $oid) {
+    if (isset($planMap[$oid])) {
+        Tenant::requireTouch($admin, $planMap[$oid]);
+    }
+}
+
 Deleter::confirmPassword($admin, $input, '删除外部卡密');
 
 $scope = Util::str($input, 'scope', 'all');

@@ -1,4 +1,3 @@
-<?php
 /**
  * admin action: shop_order_op
  * 发卡订单操作：确认并发卡 / 手动补发 / 关闭订单 / 批量发卡 / 批量关闭 / 批量删除
@@ -35,6 +34,7 @@ if ($id > 0) {
     if (!$order) {
         Response::error(1004, '订单不存在');
     }
+    Tenant::requireTouch($admin, (int) ($order['software_id'] ?? 0));
 }
 $orderNo = (string) ($order['order_no'] ?? '');
 
@@ -100,6 +100,8 @@ switch ($op) {
         if (count($ids) > 500) {
             Response::error(1001, '单次最多批量发卡 500 单');
         }
+        // 租户隔离：批量操作前校验所有订单归属
+        Tenant::requireTouchAll($admin, 'shop_orders', $ids);
         $ok   = 0;
         $fail = [];
         foreach ($ids as $oid) {
@@ -130,6 +132,7 @@ switch ($op) {
         if (count($ids) > 2000) {
             Response::error(1001, '单次最多操作 2000 单');
         }
+        Tenant::requireTouchAll($admin, 'shop_orders', $ids);
         $in = implode(',', $ids);
         $n  = Database::exec(
             'UPDATE ' . Database::t('shop_orders')
@@ -158,6 +161,7 @@ switch ($op) {
         if (count($ids) > 2000) {
             Response::error(1001, '单次最多操作 2000 单');
         }
+        Tenant::requireTouchAll($admin, 'shop_orders', $ids);
         $in   = implode(',', $ids);
         $snap = Database::all(
             'SELECT order_no, plan_name, amount, status, card_code, trade_no'

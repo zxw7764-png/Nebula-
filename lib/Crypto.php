@@ -168,13 +168,27 @@ class Crypto
 
     /**
      * 校验 nonce 是否已使用；未使用则登记
-     * 用「独占创建」实现原子去重：并发下的同一 nonce 只可能有一个请求创建成功。
+     * 用「独占占用」实现原子去重：并发下的同一 nonce 只可能有一个请求占用成功。
+     *
+     * 2026-09-30 审计 P1：多节点部署时，本地文件去重只在单机生效
+     * （A 机没见过、B 机也没见过 → 重放穿透）。改走 Cache::lock：
+     *   · Redis 驱动 → SET NX EX，全集群共享，真正的全局防重放；
+     *   · file 驱动 → 与原「独占创建文件」语义一致（单机部署行为不变）。
      */
     public static function checkNonce(string $nonce): bool
     {
         if ($nonce === '' || strlen($nonce) < 8) {
             return false;
         }
+        $ttl = max(60, self::$timeWindow * 2);
+        try {
+            if (Cache::available()) {
+                return Cache::lock('nonce:' . hash('sha256', $nonce), $ttl);
+            }
+        } catch (Throwable $e) {
+            // Redis 抖动时回落本地文件，不能因为缓存故障放行所有请求
+        }
+
         $file = self::$nonceDir . '/' . substr(hash('sha256', $nonce), 0, 32);
 
         // 'x' 模式：文件已存在时直接失败。这比「先 file_exists 再写」可靠 ——
@@ -203,6 +217,9 @@ class Crypto
         if ($nonce === '') {
             return;
         }
+        try {
+            Cache::del('nonce:' . hash('sha256', $nonce));
+        } catch (Throwable $e) { /* 忽略 */ }
         @unlink(self::$nonceDir . '/' . substr(hash('sha256', $nonce), 0, 32));
     }
 

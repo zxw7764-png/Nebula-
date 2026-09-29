@@ -3,11 +3,12 @@
  * 微信 V3 回调重写验证（wechatVerifyNotify）
  * 用 stream wrapper 模拟 php://input，自签证书模拟平台证书，进程内多用例。
  * 运行：php tests/wechat_v3_notify_test.php  （期望 13 PASS / 0 FAIL）
- * 平台测试证书 tests/_certs/platform.pem|key 由 openssl 预生成（仅测试用，非敏感）。
+ * 平台测试证书由 openssl 在运行时生成到 tests/_certs/（仅测试用，非敏感；分发包不含预置私钥）。
  */
 error_reporting(E_ALL & ~E_DEPRECATED);
 
-define('NB_ROOT', 'D:/phpstudy_pro/WWW/yanzheng');
+// NB_ROOT 按本文件位置推导（分发包/开发树均可运行，不写死开发机路径）
+define('NB_ROOT', dirname(__DIR__));
 $certDir = __DIR__ . '/_certs';
 if (!is_dir($certDir)) { @mkdir($certDir, 0777, true); }
 
@@ -45,12 +46,34 @@ class MockPhpStream {
 stream_wrapper_unregister('php');
 stream_wrapper_register('php', 'MockPhpStream');
 
-// ---- 读入「平台证书」（由 openssl 命令行预生成：platform.pem / platform.key）----
-$certPem = file_get_contents($certDir . '/platform.pem');
-$pkeyPem = file_get_contents($certDir . '/platform.key');
-$serial = strtoupper((string) openssl_x509_parse($certPem)['serialNumber']);
-if ($certPem === false || $pkeyPem === false || $serial === '') {
-    fwrite(STDERR, "FAIL: 测试证书缺失，先运行 openssl req -x509 生成 platform.pem/platform.key\n");
+// ---- 「平台证书」：运行时自签生成到 _certs/（分发包不携带预置私钥）----
+$cnfFile = null;
+foreach ([
+    'D:/phpstudy_pro/Extensions/php/php8.0.2nts/extras/ssl/openssl.cnf',
+    '/etc/ssl/openssl.cnf',
+    '/usr/local/etc/openssl/openssl.cnf',
+] as $c) { if (is_file($c)) { $cnfFile = $c; break; } }
+$genArgs = ['digest_alg' => 'sha256', 'private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048];
+if ($cnfFile) { $genArgs['config'] = $cnfFile; }
+$certPem = $pkeyPem = '';
+if (is_file($certDir . '/platform.pem') && is_file($certDir . '/platform.key')) {
+    // 已存在（上次运行生成）直接复用
+    $certPem = (string) file_get_contents($certDir . '/platform.pem');
+    $pkeyPem = (string) file_get_contents($certDir . '/platform.key');
+} else {
+    $pkey = @openssl_pkey_new($genArgs);
+    $csr  = $pkey ? @openssl_csr_new(['commonName' => 'nebula-test-platform'], $pkey, $genArgs) : false;
+    $cert = ($pkey && $csr) ? @openssl_csr_sign($csr, null, $pkey, 3650, $genArgs, (int) (microtime(true) % 100000)) : false;
+    if ($pkey && $cert) {
+        @openssl_x509_export($cert, $certPem);
+        @openssl_pkey_export($pkey, $pkeyPem, null, $cnfFile ? ['config' => $cnfFile] : []);
+        @file_put_contents($certDir . '/platform.pem', $certPem);
+        @file_put_contents($certDir . '/platform.key', $pkeyPem);
+    }
+}
+$serial = ($certPem !== '') ? strtoupper((string) openssl_x509_parse($certPem)['serialNumber']) : '';
+if ($certPem === '' || $pkeyPem === '' || $serial === '') {
+    fwrite(STDERR, "FAIL: 测试证书生成失败（检查 openssl 扩展与 openssl.cnf 配置）\n");
     exit(1);
 }
 
