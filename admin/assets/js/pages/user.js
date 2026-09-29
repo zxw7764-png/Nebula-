@@ -380,7 +380,10 @@ async function userDetail(id) {
 
     const cardRows = d.cards.map(x => `
         <tr>
-            <td class="mono">${esc(x.code_mask)}</td>
+            <td class="mono">
+                ${esc(x.code)}
+                <button class="btn ghost sm" data-act="copy-card" data-code="${esc(x.code)}" style="margin-left:6px">复制</button>
+            </td>
             <td>${esc(x.type_text)}</td>
             <td class="mono" style="font-size:12px">${esc(x.used_at_text)}</td>
             <td class="mono">${esc(x.used_ip || '-')}</td>
