@@ -133,6 +133,15 @@ if (!empty($parsed['plain'])) {
         && $sessionKid === null) {
         Response::error(5002, '缺少会话密钥(k)，请先调用 init 获取');
     }
+    // 会话密钥绑定校验：请求体内的 machine_id 必须与会话密钥绑定的 machine_id 一致，
+    // 防止一个会话密钥被多台机器复用（跨设备密钥共享）
+    $sessionMid = (string) ($parsed['session_mid'] ?? '');
+    if ($sessionMid !== '') {
+        $reqMid = Util::str($requestData, 'machine_id', '');
+        if ($reqMid !== '' && $reqMid !== $sessionMid) {
+            Response::error(5002, '会话密钥与设备不匹配，请重新初始化');
+        }
+    }
 }
 
 // ------------------------------------------------------------------
