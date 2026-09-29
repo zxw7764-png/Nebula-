@@ -111,7 +111,7 @@ if (!$vip['valid']) {
 // 时长卡/永久卡 points=0，天然不受影响。
 if ($vip['points'] > 0 && Points::chargeOnLogin($user)) {
     $vip['points'] = (int) $vip['points'] - 1;
-    Logger::log('login', 0, '点数扣减 1（剩余 ' . $vip['points'] . '）', [
+    Logger::log('login', 1, '点数扣减 1（剩余 ' . $vip['points'] . '）', [
         'user_id'  => (int) $user['id'],
         'username' => $username,
         'method'   => $method,
