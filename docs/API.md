@@ -1101,3 +1101,53 @@ else:  return_to_login()
       若自行改动缓存目录，务必同步补充 deny 规则。
     - 心跳缓冲 / 统计缓冲**不落业务数据**，即使缓存整体丢失，也只会造成少量在线时长统计偏差，  
       不影响登录、激活、计费等核心链路（每个请求的判定仍实时读库）。
+
+---
+
+## 四、支付回调（异步通知）
+
+发卡支付成功后，支付渠道服务器回调本系统完成入账。入口脚本位于 `shop/`：
+
+| 渠道 | 回调入口 | 协议 |
+|---|---|---|
+| 微信支付官方（Native / JSAPI） | `shop/wechat_notify.php` | 微信支付 **APIv3** |
+| 易支付（通用托管） | `shop/notify.php` | MD5 签名表单 |
+| 支付宝 | `shop/alipay_notify.php` | RSA2 表单 |
+
+### 4.1 微信支付 V3 回调（`shop/wechat_notify.php`）
+
+**配置**（后台 `shop_pay_cfg.wechat.*` / `wechatauth.*`）：`appid`、`mchid`（商户号）、
+`apiKey`（**APIv3 密钥**，32 字节）、`cert`（商户 API 证书私钥）、`serial`（商户证书序列号）；
+另需把微信支付平台证书放置于 `Setting::get('wechat_cert_dir')` 指定目录（默认 `certs/wechat/`）。
+
+**处理流程（与官方规范一致）：**
+
+1. 读取通知体外层 JSON（`id / event_type / resource_type / resource`）。
+2. **验签**：取请求头 `Wechatpay-Timestamp / Wechatpay-Nonce / Wechatpay-Signature / Wechatpay-Serial`，
+   构造验签串 `"{timestamp}\n{nonce}\n{原始请求体}\n"`，用 **Serial 对应的平台证书公钥** 验证
+   `Wechatpay-Signature`（SHA256 with RSA）。时间戳与服务器时差超过 ±300 秒视为重放，拒绝。
+3. **解密 resource**：`AEAD_AES_256_GCM`
+   - 密钥 = APIv3 密钥（32 字节）；IV = `resource.nonce`（12 字节）；
+   - 密文 = `base64_decode(resource.ciphertext)`，**末 16 字节为 GCM tag**；
+   - AAD = `resource.associated_data`；
+   - 解密得到 `transaction` 明文 JSON。
+4. **业务校验与入账**：`trade_state == SUCCESS`、`out_trade_no` 对应订单存在且金额一致
+   （`amount.total` 单位为分）、状态幂等；`transaction_id` 记入订单 `trade_no`。
+5. **应答**（微信以此判断是否重试）：
+   - 成功：`200` + `{"code":"SUCCESS","message":"成功"}`；
+   - 失败（验签失败 / 解密失败 / 订单异常）：**`5xx`** + `{"code":"FAIL","message":"原因"}`，
+     微信将按衰减节奏重试通知；**切勿**对失败返回 200（微信会认为应答成功、永不重试）。
+
+> 实现集中在 `lib/Pay.php::wechatVerifyNotify()`（验签 + 解密 + 校验）与
+> `wechatAuthHeader()`（商户侧调用 APIv3 的 Authorization 头构造）。
+> 回归测试见 `tests/wechat_v3_notify_test.php`。
+
+### 4.2 易支付 / 支付宝回调
+
+- 易支付：`GET/POST` 表单签名（MD5，按商户密钥排序拼接），验签通过且金额一致后入账，
+  返回纯文本 `success`；
+- 支付宝：RSA2 验签（支付宝公钥），异步通知按参数 `trade_status` 判定，
+  处理成功输出 `success`。
+
+所有渠道回调共同约束：**入账幂等**（重复通知不重复发货）、**金额以渠道通知为准**、
+**任何异常都不得返回成功应答**（让渠道重试，直至人工介入）。
