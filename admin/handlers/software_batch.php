@@ -29,6 +29,15 @@ if (!in_array($action, ['enable', 'disable', 'delete'], true)) {
     Response::error(1001, '未知操作类型');
 }
 
+// 租户隔离：RBAC 之外的第二道边界 —— 目标软件必须全部在自己范围内
+if (Tenant::isTenant($admin)) {
+    $scope = Tenant::softwareScope($admin);
+    $outsider = array_diff($ids, $scope ?: []);
+    if ($outsider) {
+        Response::error(4031, '无权操作该软件的数据（软件 #' . implode(', ', array_slice($outsider, 0, 5)) . '）');
+    }
+}
+
 // ---------------- 批量删除 ----------------
 if ($action === 'delete') {
     $ok = 0;

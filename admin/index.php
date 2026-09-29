@@ -98,6 +98,7 @@ if (!in_array($action, $publicActions, true)) {
     $sessionKey = is_string($sessionKey) ? $sessionKey : null;
 
     $admin = AdminAuth::check($token, $sessionKey ?: null);
+    $GLOBALS['nb_admin'] = $admin; // 供 Tenant 等静态工具类读取当前管理员上下文
     if (!$admin) {
         // 会话失效：把 Cookie 一并清掉，避免浏览器反复带着无效令牌
         SessionCookie::clear();

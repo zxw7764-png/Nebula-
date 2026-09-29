@@ -23,6 +23,9 @@ switch ($op) {
         }
         $in = implode(',', $ids);
 
+        // 租户隔离：目标卡密必须全部归属自己范围内的软件
+        Tenant::requireTouchAll($admin, 'cards', $ids);
+
         // 只作废未使用的
         $n = Database::exec(
             'UPDATE ' . Database::t('cards') . ' SET status = 2'
@@ -55,6 +58,9 @@ switch ($op) {
         }
         $in    = implode(',', $ids);
         $delta = $days * 86400;
+
+        // 租户隔离：目标卡密必须全部归属自己范围内的软件
+        Tenant::requireTouchAll($admin, 'cards', $ids);
 
         // expire_at = 0 表示永久有效，保持不变
         $n = Database::exec(
@@ -89,6 +95,9 @@ switch ($op) {
 
         Deleter::confirmPassword($admin, $input, '批量删除卡密');
 
+        // 租户隔离：删除目标必须全部归属自己范围内的软件
+        Tenant::requireTouchAll($admin, 'cards', $ids);
+
         $scope = Util::str($input, 'scope', 'all');
         if (!in_array($scope, ['all', 'unused', 'void'], true)) {
             $scope = 'all';
@@ -116,6 +125,8 @@ switch ($op) {
         if (!$batch) {
             Response::error(1001, '批次不存在');
         }
+        // 租户隔离：批次必须归属自己范围内的软件
+        Tenant::touchRow($admin, 'card_batches', $batch);
 
         Database::begin();
         try {
@@ -173,6 +184,9 @@ switch ($op) {
         }
 
         Deleter::confirmPassword($admin, $input, '批量删除批次');
+
+        // 租户隔离：批次必须全部归属自己范围内的软件
+        Tenant::requireTouchAll($admin, 'card_batches', $ids);
 
         // 按类型分组：外部导入批次(type=0)清理外部卡密池，系统卡批次走原删除逻辑
         $in  = implode(',', $ids);

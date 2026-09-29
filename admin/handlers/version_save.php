@@ -8,6 +8,8 @@ $op = Util::str($input, 'op', 'save');
 
 if ($op === 'delete') {
     $id = Util::int($input, 'id', 0);
+    // 租户隔离：版本归属软件必须在范围内
+    Tenant::requireTouchAll($admin, 'versions', [$id]);
     Database::exec('DELETE FROM ' . Database::t('versions') . ' WHERE id = ?', [$id]);
     Audit::log($admin, 'version_delete', "版本#{$id}", '删除版本记录');
     Response::ok(null, '版本已删除');
@@ -38,6 +40,12 @@ if (!in_array($channel, ['stable', 'beta'], true)) {
 $softwareId = Util::int($input, 'software_id', 0);
 if ($softwareId <= 0 || !Software::find($softwareId)) {
     $softwareId = (int) Database::value('SELECT id FROM ' . Database::t('softwares') . ' WHERE status = 1 ORDER BY id ASC LIMIT 1');
+}
+// 租户隔离：只能发布/编辑自己范围内软件的版本
+Tenant::requireTouch($admin, $softwareId);
+// 编辑已有版本时，旧版本归属同样要校验（防止把 A 软件的版本改挂到 B 软件名下）
+if ($id > 0) {
+    Tenant::requireTouchAll($admin, 'versions', [$id]);
 }
 
 $data = [

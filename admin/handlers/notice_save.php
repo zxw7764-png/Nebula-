@@ -12,6 +12,8 @@ if ($op === 'delete') {
         Response::error(1001, '缺少 id');
     }
     $old = Database::one('SELECT * FROM ' . Database::t('notices') . ' WHERE id = ?', [$id]);
+    // 租户隔离：公告归属软件（0=通用）必须在范围内才可删
+    Tenant::touchRow($admin, 'notices', $old ?: []);
     Database::exec('DELETE FROM ' . Database::t('notices') . ' WHERE id = ?', [$id]);
     Audit::log($admin, 'notice_delete', "公告#{$id}" . ($old ? ' ' . $old['title'] : ''),
         '删除公告', $old ? ['title' => $old['title'], 'type' => (int) $old['type']] : [], []);
@@ -50,11 +52,15 @@ if (array_key_exists('software_id', $input)) {
     if ($swId > 0 && !Database::value('SELECT id FROM ' . Database::t('softwares') . ' WHERE id = ?', [$swId])) {
         Response::error(1001, '所选软件不存在');
     }
+    // 租户隔离：公告只能挂到自己范围内的软件（0=通用不允许租户发布）
+    Tenant::requireTouch($admin, $swId);
     $data['software_id'] = $swId;
 }
 
 if ($id > 0) {
     $old = Database::one('SELECT * FROM ' . Database::t('notices') . ' WHERE id = ?', [$id]);
+    // 租户隔离：编辑已有公告同样校验原归属
+    Tenant::touchRow($admin, 'notices', $old ?: []);
     Database::update('notices', $data, 'id = :id', ['id' => $id]);
     Audit::log($admin, 'notice_save', "公告#{$id} {$title}", '编辑公告',
         $old ? Util::pick($old, ['title', 'content', 'type', 'status', 'sort', 'start_at', 'end_at']) : [],

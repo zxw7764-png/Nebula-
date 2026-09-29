@@ -16,6 +16,8 @@ switch ($op) {
         if (!$dev) {
             Response::error(1001, '设备不存在');
         }
+        // 租户隔离：device → user → software_id 授权链校验
+        Tenant::requireTouchDevice($admin, $deviceId);
         $ok = Device::forceUnbind($deviceId, '管理员解绑');
         // 同步踢掉该设备会话
         Database::exec(
@@ -42,7 +44,12 @@ switch ($op) {
 
         $in   = implode(',', $ids);
         $devs = Database::all(
-            'SELECT id, user_id, machine_id FROM ' . Database::t('devices') . " WHERE id IN ($in)"
+            'SELECT d.id, d.user_id, d.machine_id FROM ' . Database::t('devices') . ' d'
+            . ' JOIN ' . Database::t('users') . ' u ON u.id = d.user_id'
+            . ' WHERE d.id IN (' . $in . ')'
+            . (Tenant::isTenant($admin)
+                ? ' AND u.software_id IN (' . implode(',', array_map('intval', Tenant::softwareScope($admin) ?: [0])) . ')'
+                : '')
         );
         $n = 0;
         foreach ($devs as $dv) {
@@ -64,6 +71,8 @@ switch ($op) {
         if ($userId <= 0) {
             Response::error(1001, '缺少 user_id');
         }
+        // 租户隔离：目标用户的归属软件必须在范围内
+        Tenant::requireTouchUser($admin, $userId);
         $n = Device::unbindAll($userId, '管理员批量解绑');
         Session::kickUser($userId);
         Audit::log($admin, 'device_unbind', "用户#{$userId}", "解绑用户 #{$userId} 的 {$n} 台设备");
@@ -97,6 +106,16 @@ switch ($op) {
         }
 
         Deleter::confirmPassword($admin, $input, '批量删除设备记录');
+
+        // 租户隔离：目标设备经 user → software_id 授权链逐条校验
+        if (Tenant::isTenant($admin)) {
+            $devRows = Database::all(
+                'SELECT id FROM ' . Database::t('devices') . ' WHERE id IN (' . implode(',', $ids) . ')'
+            );
+            foreach ($devRows as $dr) {
+                Tenant::requireTouchDevice($admin, (int) $dr['id']);
+            }
+        }
 
         $r = Deleter::devices($ids);
 

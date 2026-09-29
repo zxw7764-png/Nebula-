@@ -16,6 +16,8 @@ if (!$card) {
 if ((int) $card['status'] !== 0) {
     Response::error(1001, '只能编辑未使用的卡密');
 }
+// 租户隔离：只能编辑归属软件在自己范围内的卡密
+Tenant::touchRow($admin, 'cards', $card);
 
 $old = [
     'duration'    => (int) $card['duration'],

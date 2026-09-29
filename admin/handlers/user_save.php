@@ -29,6 +29,8 @@ if ($op === 'create') {
     if (Database::value('SELECT id FROM ' . Database::t('users') . ' WHERE username = ?', [$username])) {
         Response::error(1001, '用户名已存在');
     }
+    // 租户隔离：新建用户归属的软件必须在授权范围内
+    Tenant::requireTouch($admin, max(0, Util::int($input, 'software_id', 0)));
 
     $uid = Database::insert('users', [
         'username'    => $username,
@@ -74,6 +76,8 @@ $user = Database::one('SELECT * FROM ' . Database::t('users') . ' WHERE id = ?',
 if (!$user) {
     Response::error(1001, '用户不存在');
 }
+// 租户隔离：只能编辑归属软件在自己范围内的用户
+Tenant::touchRow($admin, 'users', $user);
 
 $updates = ['updated_at' => $now];
 
@@ -105,7 +109,11 @@ if (array_key_exists('status', $input)) {
     }
 }
 if (array_key_exists('group_id', $input)) $updates['group_id'] = Util::int($input, 'group_id', 1);
-if (array_key_exists('software_id', $input)) $updates['software_id'] = max(0, Util::int($input, 'software_id', 0));
+if (array_key_exists('software_id', $input)) {
+    $updates['software_id'] = max(0, Util::int($input, 'software_id', 0));
+    // 租户隔离：改归属也不允许把用户挪到范围外的软件
+    Tenant::requireTouch($admin, (int) $updates['software_id']);
+}
 if (array_key_exists('vip_expire', $input)) $updates['vip_expire'] = Util::int($input, 'vip_expire', 0);
 if (array_key_exists('points', $input))   $updates['points']   = Util::int($input, 'points', 0);
 if (array_key_exists('max_devices', $input)) $updates['max_devices'] = Util::int($input, 'max_devices', 1);
