@@ -31,6 +31,11 @@
 ### 其他
 
 - .gitignore 增加 tests/_certs/（测试证书由测试脚本运行时自生成，勿入库）
+- 发布工具（deploy/make_release.php，仅开发站）修复打包规则：
+  新增排除开发站专用目录（deploy / tests / update-system / _pkg / releases）与本机工具目录（.freebuff 等）、
+  uploads / pack 运行时目录仅保留 .gitkeep、install/migrate_* 升级脚本不随空白包分发；
+  修复目录级剪枝顺序导致 data/ logs/ 等前缀目录下 .gitkeep 占位文件收集不到的问题；
+  修复 pack 默认源路径按旧布局硬编码的问题（现在可 --src 显式指定）
 
 ## [2.65.16] - 2026-09-30
 

@@ -26,7 +26,11 @@ if (PHP_SAPI !== 'cli') {
 
 $EXCLUDE_DIRS = [
     '.git', '.github', 'node_modules', 'logs', '__pycache__',
-    '.idea', '.vscode', 'data/backups',
+    '.idea', '.vscode',
+    // 开发站专用目录，不随空白包分发（README：发布工具仅开发站使用）
+    'deploy', 'tests', 'update-system', '_pkg', 'releases',
+    // 本机开发工具目录
+    '.freebuff', '.catpaw', '.workbuddy',
 ];
 $EXCLUDE_FILES = ['.gitignore', '.DS_Store', 'Thumbs.db'];
 $EXCLUDE_EXT   = ['.bak', '.log', '.zip'];
@@ -34,9 +38,9 @@ $EXCLUDE_EXT   = ['.bak', '.log', '.zip'];
 function excluded(string $rel): bool
 {
     $rel = str_replace('\\', '/', $rel);
-    foreach (['data/', 'logs/'] as $pre) {
+    foreach (['data/', 'logs/', 'uploads/', 'pack/'] as $pre) {
         if (str_starts_with($rel, $pre)) {
-            // data/ 与 logs/ 只保留 .gitkeep
+            // data/ logs/ uploads/ pack/ 只保留 .gitkeep（运行时目录占位）
             if (!str_ends_with($rel, '.gitkeep')) {
                 return true;
             }
@@ -57,6 +61,10 @@ function excluded(string $rel): bool
             return true;
         }
     }
+    // 升级脚本不随空白包分发（.gitignore 同款规则：老库升级另发）
+    if (preg_match('#^install/migrate_#', $rel)) {
+        return true;
+    }
     return false;
 }
 
@@ -70,13 +78,25 @@ function collect(string $root, string $sub = ''): array
             continue;
         }
         $rel = $sub === '' ? $item : $sub . '/' . $item;
-        if (excluded($rel)) {
-            continue;
-        }
         $abs = $root . '/' . $rel;
         if (is_dir($abs)) {
-            $out += collect($root, $rel);
+            // 目录级剪枝只看 EXCLUDE_DIRS（开发站/工具目录，整棵跳过）。
+            // 运行时前缀目录（data/ logs/ uploads/ pack/）必须照常下钻，
+            // 否则里面的 .gitkeep 占位文件永远收集不到（子树被目录级剪掉）。
+            $pruned = false;
+            foreach (explode('/', $rel) as $p) {
+                if (in_array($p, $GLOBALS['EXCLUDE_DIRS'], true)) {
+                    $pruned = true;
+                    break;
+                }
+            }
+            if (!$pruned) {
+                $out += collect($root, $rel);
+            }
         } elseif (is_file($abs)) {
+            if (excluded($rel)) {
+                continue;
+            }
             $out[$rel] = $abs;
         }
     }
