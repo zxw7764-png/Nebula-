@@ -199,6 +199,63 @@ def _get_clipboard_text() -> str:
         return ""
 
 
+def _set_clipboard_text(text: str) -> bool:
+    """写剪贴板文本（Ctrl+C/X 用）：Win32 直写，成功返回 True。
+
+    与读取同样的 ctypes 铁律：HANDLE 显式 c_void_p，GlobalAlloc/GlobalLock
+    声明完整 argtypes/restype，64 位下才可靠。"""
+    if not text:
+        return False
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        user32.OpenClipboard.argtypes = [ctypes.c_void_p]
+        user32.OpenClipboard.restype = ctypes.c_int
+        user32.EmptyClipboard.restype = ctypes.c_int
+        user32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
+        user32.SetClipboardData.restype = ctypes.c_void_p
+        user32.CloseClipboard.restype = ctypes.c_int
+        kernel32.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
+        kernel32.GlobalAlloc.restype = ctypes.c_void_p
+        kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+        kernel32.GlobalLock.restype = ctypes.c_void_p
+        kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+        kernel32.GlobalUnlock.restype = ctypes.c_int
+
+        CF_UNICODETEXT = 13
+        GMEM_MOVEABLE = 0x0002
+        buf = text.encode("utf-16-le") + b"\x00\x00"
+        h = kernel32.GlobalAlloc(GMEM_MOVEABLE, len(buf))
+        if not h:
+            return False
+        p = kernel32.GlobalLock(h)
+        if not p:
+            kernel32.GlobalFree(h)
+            return False
+        try:
+            ctypes.memmove(p, buf, len(buf))
+        finally:
+            kernel32.GlobalUnlock(h)
+        opened = False
+        for _ in range(8):
+            if user32.OpenClipboard(None):
+                opened = True
+                break
+            time.sleep(0.02)
+        if not opened:
+            kernel32.GlobalFree(h)
+            return False
+        try:
+            user32.EmptyClipboard()
+            # SetClipboardData 成功后系统接管 h，不得再 GlobalFree
+            return bool(user32.SetClipboardData(CF_UNICODETEXT, h))
+        finally:
+            user32.CloseClipboard()
+    except Exception:
+        return False
+
+
 class LoginWindow:
     """登录窗口（阻塞 Run，返回是否登录成功）。"""
 
@@ -256,6 +313,9 @@ class LoginWindow:
         # 否则 Windows 会按 DPI 比例整窗拉伸（窗口过大）且坐标错乱
         drawing.enable_windows_dpi_awareness()
         pygame.init()
+        # 开启按键重复：长按退格/字符键持续触发 KEYDOWN（pygame 默认不重复，
+        # 导致输入框删除内容只能一个一个按）
+        pygame.key.set_repeat(450, 35)
         pygame.display.set_caption("Nebula Login")
         window = pygame.display.set_mode((theme.kLoginWidth, theme.kLoginHeight), pygame.NOFRAME)
         place_window(window, "login", theme.kLoginWidth, theme.kLoginHeight)
@@ -514,7 +574,27 @@ class LoginWindow:
                 self.password_input = target
             return
 
-        if event.key == pygame.K_RETURN:
+        if ctrl and event.key == pygame.K_c:
+            # Ctrl+C：复制当前聚焦输入框内容
+            text = self.username_input if (self.code_only or self.user_focused) else self.password_input
+            if text:
+                _set_clipboard_text(text)
+            return
+
+        if ctrl and event.key == pygame.K_x:
+            # Ctrl+X：剪切当前聚焦输入框内容
+            text = self.username_input if (self.code_only or self.user_focused) else self.password_input
+            if text:
+                _set_clipboard_text(text)
+                if self.code_only or self.user_focused:
+                    self.username_input = ""
+                else:
+                    self.password_input = ""
+                self._set_status("", False)
+            return
+
+        if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            # 回车（含小键盘）提交登录
             self._submit()
             return
 
