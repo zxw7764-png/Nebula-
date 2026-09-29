@@ -89,6 +89,7 @@ final class AdminPermission
         // ---- 用户 ----
         'user_list'             => self::USER_READ,
         'user_detail'           => self::USER_READ,
+        'user_risk'             => self::USER_READ,
         'user_export'           => self::USER_READ,
         'user_save'             => self::USER_EDIT,
         'user_batch_op'         => self::USER_EDIT,
@@ -324,7 +325,7 @@ final class AdminPermission
         // 总览 / 统计
         'dashboard', 'bigscreen', 'analytics', 'stat_overview',
         // 用户与设备（查看）
-        'user_list', 'user_detail', 'group_list',
+        'user_list', 'user_detail', 'user_risk', 'group_list',
         'device_list', 'device_ban_list', 'session_list',
         // 卡密与交易（查看）
         'card_list', 'card_detail', 'card_batch_list',

@@ -458,6 +458,13 @@ class Auth
             $data['login_fail_cnt'] = 0;
         }
         Database::update('users', $data, 'id = :id', ['id' => $userId]);
+
+        // 风险评分：每次失败后重估，达到阈值自动冻结（异常不阻断登录流程）
+        try {
+            RiskScore::evaluate($userId, true);
+        } catch (Throwable $e) {
+            // 评分失败不影响原有锁定逻辑
+        }
     }
 
     /**
