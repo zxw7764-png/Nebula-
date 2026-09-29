@@ -193,6 +193,27 @@ try {
     $out[] = '健康巡检: 执行异常（' . $e->getMessage() . '）';
 }
 
+// ------------------------------------------------------------------
+// 11. 安全审计报告（每日一次，文件标记节流；--force-sec 立即执行）
+//     暴力破解 / 撞库 / 密钥重置 / 代理商卡密突增，详见 lib/SecReport.php
+// ------------------------------------------------------------------
+$secMarker = NB_ROOT . '/logs/.sec_report_last';
+$forceSec  = in_array('--force-sec', $argv ?? [], true);
+if ($forceSec || !is_file($secMarker) || filemtime($secMarker) < strtotime('today')) {
+    try {
+        $sec = SecReport::run();
+        @touch($secMarker, time());
+        $out[] = '安全审计: ' . $sec['summary'];
+        foreach ($sec['findings'] as $f) {
+            $out[] = '  · [' . $f['level'] . '] ' . $f['name'] . '（' . count($f['items']) . ' 项）';
+        }
+    } catch (Throwable $e) {
+        $out[] = '安全审计: 执行异常（' . $e->getMessage() . '）';
+    }
+} else {
+    $out[] = '安全审计: 今日已执行，跳过（--force-sec 可强制）';
+}
+
 $cost = round((microtime(true) - $start) * 1000, 2);
 $out[] = "耗时: {$cost} ms";
 $text = '[' . date('Y-m-d H:i:s') . "] cron 执行完成\n  - " . implode("\n  - ", $out) . "\n";

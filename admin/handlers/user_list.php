@@ -21,6 +21,9 @@ if (!in_array($sort, $allowSort, true)) {
 $where  = ['1=1'];
 $params = [];
 
+// 多租户：租户管理员仅见归属软件的用户
+Tenant::applyNamed($where, $params);
+
 if ($keyword !== '') {
     // 关键词同时匹配激活卡密快照 —— 卡被删了也能凭卡密找回账号
     $where[] = '(username LIKE :kw OR email LIKE :kw2 OR nickname LIKE :kw3 OR card_code LIKE :kw4)';

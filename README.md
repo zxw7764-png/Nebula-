@@ -47,6 +47,9 @@
 | 🔒 通信加密   | AES-256-CBC + HMAC-SHA256 签名 + 时间戳 + nonce 防重放 |
 | 📮 响应防伪造 | 服务端私钥对每条响应签名（ES256 / RS256 自动回落），客户端内置公钥验签，逆向出对称密钥也无法伪造响应 |
 | 🗝️ 功能密钥   | 软件级 Feature Key 仅登录成功响应下发；NF1 加密数据包（AES-256-CBC + HMAC，encrypt-then-MAC）随程序分发，patch 掉登录判定也解不开核心数据 |
+| 🔁 密钥轮换   | 通信密钥平滑轮换：宽限期双钥并行（默认 7 天），老客户端无感过渡，宽限期外旧钥自动失效；与「立即重置」（旧客户端即时失联）并存 |
+| 🏢 多租户    | 软件归属代理商（owner_agent_id），管理员可绑定为租户管理员（agent_id）——总后台仅可见归属软件及其用户/卡密/设备数据，越权写操作直接拒绝，默认拒绝式隔离 |
+| 🩺 安全审计   | 每日自动巡检（cron）：暴力破解嫌疑（同 IP）、撞库嫌疑（同账号）、密钥重置追踪、代理商卡密突增，异常写报告文件并记日志 |
 | 📦 在线更新   | 对接 update-system 版本服务器，后台一键自动下载、校验、备份并安装更新包；支持强制更新封锁 |
 
 ---
@@ -143,6 +146,8 @@ yanzheng/
 │   ├── Heartbeat.php       心跳聚合（缓冲 + 批量落库）
 │   ├── Grace.php           离线宽限票据（ECDSA ES256 签发/验签）
 │   ├── Audit.php           管理端审计日志（变更前后对比）
+│   ├── SecReport.php       每日安全审计报告（暴力破解 / 撞库 / 密钥重置 / 卡密突增巡检）
+│   ├── Tenant.php          多租户数据隔离（租户管理员仅见归属软件数据，默认拒绝）
 │   ├── RateLimit.php       限流器
 │   ├── Session.php         会话管理
 │   ├── Device.php          设备绑定
@@ -160,6 +165,8 @@ yanzheng/
 │   ├── install.lock        安装锁（安装后生成，存在则禁止重装）
 │   ├── schema.sql          数据库结构（38 张表，全新安装一键建库）
 │   ├── migrate_feature_key.php 升级脚本：软件级功能密钥 Feature Key（老库升级用，可重复执行）
+│   ├── migrate_key_rotation.php 升级脚本：密钥平滑轮换（softwares 表 3 列，老库升级用，可重复执行）
+│   ├── migrate_tenant.php  升级脚本：多租户（软件归属代理商 + 租户管理员，老库升级用，可重复执行）
 │   ├── _cli_guard.php      CLI 守卫（install/ 下脚本仅限命令行执行）
 │   ├── clear_logs.php      日志清理工具（--dry-run 预演 / --yes 执行）
 │   └── nginx.conf.example  Nginx 部署配置示例

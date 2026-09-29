@@ -13,6 +13,9 @@ $onlyOnline = (bool) Util::get($input, 'online', false);
 $where  = ['1=1'];
 $params = [];
 
+// 多租户：租户管理员仅见归属软件的设备
+Tenant::applyNamed($where, $params, 'd.software_id');
+
 if ($keyword !== '') {
     $where[] = '(d.machine_id LIKE :kw OR d.ip LIKE :kw2 OR d.device_name LIKE :kw3 OR u.username LIKE :kw4)';
     $params['kw']  = "%{$keyword}%";

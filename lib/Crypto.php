@@ -192,11 +192,24 @@ class Crypto
         return false;
     }
 
+    /**
+     * 回滚 nonce 占用（密钥轮换重试专用）。
+     * 场景：主钥验签通过但解密失败（decrypt_fail）时，nonce 已被登记；
+     * 若服务端存在轮换前的旧钥并需要用旧钥重试解析，必须先撤销本次
+     * nonce 占用，否则重试会被误判为重放。仅在受控的重试路径中调用。
+     */
+    public static function forgetNonce(string $nonce): void
+    {
+        if ($nonce === '') {
+            return;
+        }
+        @unlink(self::$nonceDir . '/' . substr(hash('sha256', $nonce), 0, 32));
+    }
+
     /** 独占创建 nonce 文件，成功返回 true */
     private static function claimNonceFile(string $file): bool
     {
-        $fh = @fopen($file, 'x');
-        if ($fh === false) {
+        $fh = @fopen($file, 'x');        if ($fh === false) {
             return false;
         }
         @fwrite($fh, (string) time());

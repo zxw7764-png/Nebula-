@@ -6,7 +6,11 @@
 
 $opts = [];
 $list = [];
+$scope = Tenant::softwareScope($admin); // 多租户：租户管理员仅见归属软件
 foreach (Software::all() as $sw) {
+    if ($scope !== null && !in_array((int) $sw['id'], $scope, true)) {
+        continue;
+    }
     $row = [
         'id'             => (int) $sw['id'],
         'name'           => (string) $sw['name'],

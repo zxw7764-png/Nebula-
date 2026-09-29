@@ -395,6 +395,71 @@ class Software
         ];
     }
 
+    /**
+     * 平滑轮换通信密钥（宽限期双钥并行）
+     * ------------------------------------------------------------------
+     * 与 resetKeys（硬重置，旧客户端立即失联）不同：
+     *   1. 旧钥存入 aes_key_prev / sign_salt_prev，新客户端用新钥、
+     *      未升级的老客户端在宽限期内仍可正常通信（服务端自动回落旧钥验签）；
+     *   2. 不删除会话 / 会话签名密钥 —— 在线用户无感知；
+     *   3. 宽限期（security.key_grace_days，默认 7 天）过后旧钥自动失效，
+     *      到期未升级的客户端需重新 init。
+     *
+     * 适用：例行密钥轮换、怀疑密钥泄露但希望平滑过渡。
+     * 被确认破解需立刻掐断时仍应使用 resetKeys。
+     */
+    public static function rotateKeysGraceful(int $id): array
+    {
+        $sw = self::find($id);
+        if (!$sw) {
+            return ['ok' => false, 'msg' => '软件不存在'];
+        }
+        if ((string) $sw['aes_key'] === '') {
+            return ['ok' => false, 'msg' => '该软件尚未配置通信密钥，请先在编辑中设置'];
+        }
+
+        Database::update('softwares', [
+            'aes_key_prev'    => (string) $sw['aes_key'],
+            'sign_salt_prev'  => (string) $sw['sign_salt'],
+            'keys_rotated_at' => time(),
+            'aes_key'         => self::genAesKey(),
+            'sign_salt'       => self::genSignSalt(),
+            'updated_at'      => time(),
+        ], 'id = :id', ['id' => $id]);
+
+        Logger::log('software', 1, '平滑轮换软件密钥 #' . $id . ' ' . $sw['name']
+            . '（宽限期 ' . (int) Config::get('security.key_grace_days', 7) . ' 天，老客户端无感知）');
+
+        $fresh = self::find($id);
+        return [
+            'ok'             => true,
+            'msg'            => '密钥已平滑轮换：新客户端请内置新钥发布；老客户端宽限期内不受影响',
+            'aes_key'        => $fresh['aes_key'],
+            'sign_salt'      => $fresh['sign_salt'],
+            'grace_days'     => (int) Config::get('security.key_grace_days', 7),
+            'rotated_at'     => (int) $fresh['keys_rotated_at'],
+        ];
+    }
+
+    /**
+     * 取该软件的轮换旧钥（宽限期内有效，过期返回 null）
+     * @return array|null {aes_key, sign_salt}
+     */
+    public static function prevKeys(array $sw): ?array
+    {
+        $aes = (string) ($sw['aes_key_prev'] ?? '');
+        $salt = (string) ($sw['sign_salt_prev'] ?? '');
+        if ($aes === '' && $salt === '') {
+            return null;
+        }
+        $rotatedAt = (int) ($sw['keys_rotated_at'] ?? 0);
+        $graceDays = max(0, (int) Config::get('security.key_grace_days', 7));
+        if ($graceDays === 0 || $rotatedAt <= 0 || (time() - $rotatedAt) > $graceDays * 86400) {
+            return null; // 宽限期已过（或配置为 0 = 不启用宽限）
+        }
+        return ['aes_key' => $aes, 'sign_salt' => $salt];
+    }
+
     public static function delete(int $id): array
     {
         $sw = self::find($id);

@@ -73,21 +73,6 @@ $enforce    = (bool) Config::get('security.enforce_crypto', true);
 $whitelist  = (array) Config::get('security.plain_whitelist', []);
 $allowPlain = !$enforce || in_array($action, $whitelist, true);
 
-// 日志脱敏：即使管理员误开 record_raw，也不让密码 / token / 密钥写进日志。
-$SENSITIVE_KEYS = [
-    'password', 'password2', 'confirm_pwd', 'old_password',
-    'token', 'session_key', 'skey', 'code', 'code_list',
-    'csrf', 'machine_id', 'aes_key', 'sign_salt',
-];
-$sanitizeLogInput = static function (array $raw) use ($SENSITIVE_KEYS): array {
-    foreach ($SENSITIVE_KEYS as $k) {
-        if (array_key_exists($k, $raw)) {
-            $raw[$k] = '[REDACTED]';
-        }
-    }
-    return $raw;
-};
-
 // ------------------------------------------------------------------
 // 多软件识别：外层明文字段 app_key 指认软件。
 // 命中后用该软件独立的 AES_KEY / SIGN_SALT 解密验签；
@@ -101,10 +86,29 @@ Software::setCurrent($nbSoftware);
 Crypto::useKeys((string) $nbSoftware['aes_key'], (string) $nbSoftware['sign_salt']);
 
 try {
-    $parsed      = Crypto::parseRequest($input, $allowPlain);
+    try {
+        $parsed      = Crypto::parseRequest($input, $allowPlain);
+    } catch (CryptoException $e) {
+        // 密钥平滑轮换回落：验签/解密失败且存在宽限期内的旧钥时，
+        // 用旧钥重试一次 —— 让「服务端已换钥、客户端未升级」的请求平滑过渡。
+        // 仅覆盖 bad_sign / decrypt_fail（time_expired/replay 与密钥无关；
+        // replay 在重试前需回滚 nonce 占用，避免被误判重放）。
+        $retryable = in_array($e->reason, ['bad_sign', 'decrypt_fail'], true)
+            && isset($input['data'], $input['sign'], $input['t'], $input['n']);
+        $prev = $retryable ? Software::prevKeys($nbSoftware) : null;
+        if ($prev === null) {
+            throw $e;
+        }
+        if ($e->reason === 'decrypt_fail') {
+            Crypto::forgetNonce((string) $input['n']); // 首次尝试已占用 nonce，撤销后重试
+        }
+        Crypto::useKeys((string) $prev['aes_key'], (string) $prev['sign_salt']);
+        $parsed      = Crypto::parseRequest($input, $allowPlain);
+        $requestData = $parsed['data'];
+    }
     $requestData = $parsed['data'];
 } catch (CryptoException $e) {
-    Logger::log($action ?: 'unknown', 0, 'crypto: ' . $e->getMessage(), ['raw' => $sanitizeLogInput($input)]);
+    Logger::log($action ?: 'unknown', 0, 'crypto: ' . $e->getMessage(), ['raw' => $input]);
     $codeMap = [
         'missing_field' => 1001,
         'time_expired'  => 5003,
@@ -174,7 +178,7 @@ if ($action !== '' && !in_array($action, $publicActions, true)) {
 // ------------------------------------------------------------------
 $limit = Policy::rateLimitPerMin();
 if ($action !== '' && !RateLimit::byIp($action, $limit)) {
-    Logger::log($action, 0, '请求过于频繁', ['raw' => $sanitizeLogInput($input)]);
+    Logger::log($action, 0, '请求过于频繁', ['raw' => $input]);
     Response::error(5001, '请求过于频繁，请稍后再试');
 }
 

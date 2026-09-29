@@ -4,6 +4,28 @@
 版本号遵循语义化版本（`主.次.修订`）。每次发版请在本文件顶部追加条目，并同步
 `lib/bootstrap.php` 的 `NB_VERSION`；发布到版本更新系统时，把对应条目整理为 `release_notes`。
 
+## [2.65.11] - 2026-09-30
+
+### 新增（工程化 / 下一阶段基建）
+- **密钥平滑轮换**：软件通信密钥支持「宽限期双钥并行」轮换（默认 7 天，
+  `security.key_grace_days` 可调，0=关闭）。老客户端在宽限期内自动回落旧钥验签，
+  在线用户无感知；宽限期外旧钥自动失效。与既有「立即重置」（旧客户端即时失联）并存，
+  应急掐断用重置、例行轮换用平滑轮换。
+  - 数据库：`nb_softwares` 新增 `aes_key_prev` / `sign_salt_prev` / `keys_rotated_at`
+    （老库执行 `install/migrate_key_rotation.php`，新装 schema 已含）
+- **多租户（基于代理商体系）**：软件可归属代理商（`softwares.owner_agent_id`），
+  管理员可绑定为租户管理员（`admins.agent_id`）——登录总后台仅可见归属软件及其
+  用户 / 卡密 / 设备数据，单条写操作越权直接拒绝（4031）。
+  隔离逻辑集中在 `lib/Tenant.php`，默认拒绝：无法确定归属的数据不可见。
+  （老库执行 `install/migrate_tenant.php`）
+- **每日安全审计报告**（`lib/SecReport.php`，cron 第 11 节自动执行，每日一次）：
+  暴力破解嫌疑（同 IP 登录失败 ≥10）、撞库嫌疑（同账号）、密钥重置追踪、
+  代理商卡密突增；异常写入 `logs/sec_report_<date>.txt` 并记日志，
+  `php cron.php --force-sec` 可立即执行
+- **发布工具**（仅开发站，不入分发）：`deploy/make_release.php`——
+  `pack` 打空白发布包（含逐文件 md5 的 MANIFEST），`diff` 对比两版本生成增量更新包
+  （含 DELETED.txt 待删除清单）
+
 ## [2.65.3] - 2026-09-29
 
 ### 新增（Python SDK）

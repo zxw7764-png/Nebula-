@@ -78,6 +78,8 @@ if ($agentId === 'ext') {
 $where  = ['1=1'];
 $params = [];
 
+// 多租户：租户管理员仅见归属软件的卡密
+Tenant::applyNamed($where, $params);
 if ($keyword !== '') {
     $where[] = 'code LIKE :kw';
     $params['kw'] = "%{$keyword}%";

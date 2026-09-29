@@ -20,7 +20,7 @@ define('NB_START', microtime(true));
 
 // 后台前端静态资源版本号（用于缓存刷新，改前端后递增即可）
 if (!defined('NB_VERSION')) {
-    define('NB_VERSION', '2.65.10');
+    define('NB_VERSION', '2.65.11');
 }
 
 // ------------------------------------------------------------------
@@ -171,6 +171,8 @@ require_once NB_ROOT . '/lib/SessionCookie.php';
 require_once NB_ROOT . '/lib/FileGuard.php';
 require_once NB_ROOT . '/lib/Backup.php';
 require_once NB_ROOT . '/lib/Health.php';
+require_once NB_ROOT . '/lib/SecReport.php';
+require_once NB_ROOT . '/lib/Tenant.php';
 require_once NB_ROOT . '/lib/Totp.php';
 
 // ------------------------------------------------------------------
