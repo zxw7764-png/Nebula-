@@ -1,9 +1,9 @@
 # Nebula C++ SDK 接入文档
 
 > 📚 本文属 Nebula 文档中心，主索引见 [../README.md](../README.md)；
-> 相关文档：[SDK 加固指南](SDK_PROTECTION.md) · [API 接口](../docs/API.md) · [报文示例](../docs/API_RAW_EXAMPLES.md)
+> 相关文档：[架构设计](../docs/ARCHITECTURE.md) · [SDK 加固指南](SDK_PROTECTION.md) · [API 接口](../docs/API.md) · [报文示例](../docs/API_RAW_EXAMPLES.md)
 
-> 适用对象：`sdk/nebula_sdk.hpp`（header-only 伞头，内部按职责拆分为 `sdk/nebula/` 下 19 个子头）  
+> 适用对象：`sdk/nebula_sdk.hpp`（header-only 伞头，内部按职责拆分为 `sdk/nebula/` 下 21 个子头）  
 > 协议版本：与 `docs/API.md` 严格对齐（NB_VERSION ≥ 2.63.34）
 
 ---

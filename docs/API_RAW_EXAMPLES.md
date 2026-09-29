@@ -1,5 +1,9 @@
 # 客户端 API 原始请求/响应 JSON（加密信封原样）
 
+> 📚 本文属 Nebula 文档中心，主索引见 [../README.md](../README.md)；
+> 其他文档：[架构设计](ARCHITECTURE.md) · [API 接口](API.md) · [界面模板](TEMPLATE.md) ·
+> [C++ SDK 接入](../sdk/SDK.md) · [Python SDK](../sdk-py/README.md)
+
 > 所有响应一律为加密信封 `{data, sign, t, n}`；`data` 是 base64(IV + AES-256-CBC 密文)，解密后才是业务 JSON。请求同样必须携带信封。
 
 ## action=init

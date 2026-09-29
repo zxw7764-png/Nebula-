@@ -8,6 +8,7 @@
 
 | 文档 | 说明 |
 | --- | --- |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 架构设计文档（分层架构 / 请求生命周期 / 关键链路时序图 / 安全设计对照） |
 | [docs/API.md](docs/API.md) | 客户端 API 完整接口文档（协议、加签、各接口字段、离线宽限协议） |
 | [docs/API_RAW_EXAMPLES.md](docs/API_RAW_EXAMPLES.md) | 请求 / 响应原始报文示例（手写协议对接逐字节参照） |
 | [sdk/SDK.md](sdk/SDK.md) | C++ SDK 接入文档（初始化 / 登录 / 心跳 / 内置提示 / 完整性自校验） |
@@ -72,6 +73,7 @@ yanzheng/
 │       ├── userinfo.php    用户信息
 │       ├── notice.php      公告
 │       ├── version.php     版本校验
+│       ├── online.php      在线人数（公开接口）
 │       └── logout.php      退出
 ├── admin/                  管理后台
 │   ├── home.php            页面入口（输出 HTML 骨架 + 注入运行时参数）
@@ -157,22 +159,27 @@ yanzheng/
 │   ├── LoginMethod.php     登录方式规格（客户端与官网同源）
 │   ├── Version.php         版本取值（init/version/官网下载同源）
 │   ├── Setting.php         系统设置
-│   └── Util.php            工具函数
+│   ├── AdminPermission.php RBAC 权限表（未登记即拒绝）
+│   ├── RiskScore.php       登录风险评分与自动冻结
+│   ├── Shop.php · ShopAuth.php  发卡商城与前台鉴权
+│   ├── Pay.php             支付渠道对接
+│   ├── Util.php            工具函数
+│   └── ……                   完整类库清单见 docs/ARCHITECTURE.md 第 10 节
 ├── config/
 │   └── config.php          全局配置（数据库、密钥、策略、后台保护）
 ├── install/
 │   ├── install.php         网页安装向导
 │   ├── install.lock        安装锁（安装后生成，存在则禁止重装）
 │   ├── schema.sql          数据库结构（38 张表，全新安装一键建库）
-│   ├── migrate_feature_key.php 升级脚本：软件级功能密钥 Feature Key（老库升级用，可重复执行）
-│   ├── migrate_key_rotation.php 升级脚本：密钥平滑轮换（softwares 表 3 列，老库升级用，可重复执行）
-│   ├── migrate_tenant.php  升级脚本：多租户（软件归属代理商 + 租户管理员，老库升级用，可重复执行）
+│   ├── migrate.php         统一迁移执行器（schema_version 版本登记，status / run / baseline）
 │   ├── _cli_guard.php      CLI 守卫（install/ 下脚本仅限命令行执行）
 │   ├── clear_logs.php      日志清理工具（--dry-run 预演 / --yes 执行）
 │   └── nginx.conf.example  Nginx 部署配置示例
 ├── sdk/                    开箱即用的 C++ 接入 SDK（header-only，零第三方依赖）
-│   ├── nebula_sdk.hpp      主头文件（include 即用，无需编译）
+│   ├── nebula_sdk.hpp      聚合入口头文件（include 即用，内含全部子模块）
 │   ├── nebula_protect.hpp  可选加固组件（壳标记/混淆/反调试，默认全关，见 SDK_PROTECTION.md）
+│   ├── nebula/             按职责拆分的子模块（config / core / protect / client）
+│   ├── vmp/ · themida/     加固壳配套（VMProtect 静态库 / Themida 说明）
 │   ├── SDK.md              C++ SDK 接入文档（初始化 / 登录 / 心跳 / 内置提示 / 完整性自校验）
 │   └── SDK_PROTECTION.md   C++ SDK 客户端加固指南（默认关闭，按需开启）
 ├── sdk-py/                 开箱即用的 Python 接入 SDK（协议与 C++ 同规格）
@@ -182,6 +189,7 @@ yanzheng/
 │   ├── docs/               界面截图
 │   └── test_smoke.py       联调自测脚本
 ├── docs/
+│   ├── ARCHITECTURE.md     架构设计文档（分层架构 / 关键链路时序图 / 安全设计对照）
 │   ├── API.md              完整接口文档
 │   ├── API_RAW_EXAMPLES.md 请求/响应原始报文示例
 │   └── TEMPLATE.md         界面模板开发文档
@@ -190,13 +198,16 @@ yanzheng/
 └── .htaccess               安全规则与路由重写
 ```
 
+> `install/migrate_*.php` 为按版本拆分的升级迁移脚本，**随「更新包」分发、不随「空白安装包」分发**；
+> 全新安装由 `schema.sql` 直接建库到基线版本，升级统一走 `php install/migrate.php run`。
+
 ---
 
 ## 环境要求
 
 | 项目      | 要求                                      |
 | ------- | --------------------------------------- |
-| PHP     | ≥ 7.4（推荐 8.0+）                          |
+| PHP     | ≥ 8.1（`str_contains` 需 8.0，`never` 返回类型需 8.1） |
 | 扩展      | `pdo_mysql`、`openssl`、`json`、`mbstring` |
 | 数据库     | MySQL 5.7+ / MariaDB 10.3+              |
 | 缓存（可选）  | Redis 5.0+（无 `redis` 扩展也能用，见「缓存与心跳聚合」）；不部署则自动走文件缓存 |
@@ -447,7 +458,7 @@ curl -X POST "http://127.0.0.1/admin/index.php?action=dashboard" \
 
 ### 方式一：用现成 SDK（推荐）
 
-`sdk/nebula_sdk.hpp` 提供 header-only 的 C++ SDK，**一个头文件拖进项目即可**。
+`sdk/nebula_sdk.hpp` 提供 header-only 的 C++ SDK，**把整个 `sdk/` 目录（聚合入口 `nebula_sdk.hpp` + `nebula/` 子模块）拖进项目即可**，无需预编译。
 📘 完整接入文档见 **[sdk/SDK.md](sdk/SDK.md)**（初始化/登录/心跳/内置提示/完整性自校验/离线宽限全说明）。
 🛡️ 需要防破解时再看 **[sdk/SDK_PROTECTION.md](sdk/SDK_PROTECTION.md)**：同目录的
 `sdk/nebula_protect.hpp` 提供壳标记（VMProtect/Themida）、代码混淆、反调试/反虚拟机检测，

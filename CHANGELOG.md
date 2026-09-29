@@ -37,6 +37,18 @@
   修复目录级剪枝顺序导致 data/ logs/ 等前缀目录下 .gitkeep 占位文件收集不到的问题；
   修复 pack 默认源路径按旧布局硬编码的问题（现在可 --src 显式指定）
 
+### 文档
+
+- 新增 `docs/ARCHITECTURE.md` 架构设计文档：分层架构、请求生命周期，
+  以及客户端 API 管线 / 管理端鉴权 / 密钥平滑轮换 / 离线宽限 / 响应防伪造 / 心跳与统计聚合 /
+  支付回调 / 在线更新 等关键链路时序图，附组件清单与安全设计对照表
+- 修正 README 与代码不一致处：PHP 最低版本 `7.4` → `8.1`（`str_contains` 需 8.0、`never` 返回类型需 8.1）；
+  `install/` 清单改为真实分发内容并说明迁移脚本随更新包分发、不随空白包分发；
+  `sdk/` 布局补充 `nebula/` 子模块与 `vmp/`、`themida/`；`api/handlers` 清单补充 `online`
+- 统一文档中心互链：`docs/API.md`、`docs/API_RAW_EXAMPLES.md`、`docs/TEMPLATE.md`、
+  `sdk/SDK.md`、`sdk/SDK_PROTECTION.md` 的导航加入架构文档；修正 `sdk/SDK.md` 子头数量（19 → 21）
+- 修正 `lib/Grace.php` 注释中指向不存在的 `docs/OFFLINE_GRACE.md` 的失效引用
+
 ## [2.65.16] - 2026-09-30
 
 ### 修复（风险评分）

@@ -1,7 +1,7 @@
 # Nebula SDK 客户端加固指南（壳标记 · 代码混淆 · 反调试 · 反虚拟机）
 
 > 📚 本文属 Nebula 文档中心，主索引见 [../README.md](../README.md)；
-> 配套文档：[C++ SDK 接入文档](SDK.md) · [API 接口](../docs/API.md)
+> 配套文档：[C++ SDK 接入文档](SDK.md) · [架构设计](../docs/ARCHITECTURE.md) · [API 接口](../docs/API.md)
 
 > **一句话结论：全部默认关闭。** 不定义任何宏时，`nebula/protect/` 下的加固代码几乎不编译进目标文件，
 > 行为 / 协议 / 性能与**不加加固的版本完全一致**。想开启，只需在工程预处理器里加一行
