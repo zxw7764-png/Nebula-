@@ -614,6 +614,12 @@ public:
         return true;
     }
 
+    /**
+     * 运行期调整选项（如自动更新策略 auto_update_optional 等）。
+     * 仅建议在 createDefaultClient 之后、init() 之前修改。
+     */
+    Options& options() { return options_; }
+
     // -----------------------------------------------------------------------
     // 自动更新（检测 → 下载 → 校验 → 自替换 → 重启）
     // 实现见 nebula/client/update.hpp；编译期可用 NEBULA_AUTO_UPDATE=0 整体关闭
