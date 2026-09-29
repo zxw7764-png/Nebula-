@@ -37,9 +37,32 @@ $cards = Database::all(
      WHERE used_by = ? ORDER BY used_at DESC LIMIT 50',
     [$userId]
 );
+
+// 卡密可能已被管理端删除 —— 用用户行 card_code 快照 + 独立保留的 card_logs 兜底，
+// 保证用户管理的卡密记录不随卡密中心删除而消失
+$snapCode = trim((string) ($user['card_code'] ?? ''));
+if ($snapCode !== '' && !in_array($snapCode, array_column($cards, 'code'), true)) {
+    // 从独立日志里取该用户对此激活码的激活/登录痕迹
+    $lg = Database::one(
+        'SELECT action, ip, created_at FROM ' . Database::t('card_logs') . '
+         WHERE user_id = ? AND code = ? ORDER BY id ASC LIMIT 1',
+        [$userId, $snapCode]
+    );
+    $cards[] = [
+        'code'           => $snapCode,
+        'type'           => (int) ($user['card_type'] ?? 0) ?: null,
+        'duration'       => 0,
+        'used_at'        => (int) ($lg['created_at'] ?? 0),
+        'used_ip'        => (string) ($lg['ip'] ?? ''),
+        '_from_snapshot' => true, // 标记：卡已删除，记录来自快照
+    ];
+}
+
 foreach ($cards as &$c) {
     $c['code_mask']  = Util::maskCard($c['code']);
-    $c['type_text']  = Card::typeName((int) $c['type']);
+    $c['type_text']  = !empty($c['_from_snapshot'])
+        ? trim('已删卡·' . ((int) $c['type'] ? Card::typeName((int) $c['type']) : ''))
+        : Card::typeName((int) $c['type']);
     $c['used_at_text'] = Util::date((int) $c['used_at']);
 }
 unset($c);

@@ -95,7 +95,7 @@ class Deleter
 
         Database::begin();
         try {
-            Database::exec('DELETE FROM ' . Database::t('card_logs') . " WHERE card_id IN ($realIn)", []);
+            // 卡密使用日志（card_logs）独立保留，不随卡删除 —— 用户详情/找回账号依赖这些痕迹
             Database::exec('DELETE FROM ' . Database::t('cards') . " WHERE id IN ($realIn)", []);
             // 批次计数同步（已被删除的卡密不再计入）
             $batchIds = array_values(array_unique(array_filter(
@@ -188,7 +188,7 @@ class Deleter
             $delCardIds = array_map('intval', array_column($delIds, 'id'));
             if ($delCardIds) {
                 $delIn = implode(',', $delCardIds);
-                Database::exec('DELETE FROM ' . Database::t('card_logs') . " WHERE card_id IN ($delIn)", []);
+                // 日志独立保留，只删卡本身
                 Database::exec('DELETE FROM ' . Database::t('cards') . " WHERE id IN ($delIn)", []);
             }
             // 已使用的卡密保留，仅解除批次关联
