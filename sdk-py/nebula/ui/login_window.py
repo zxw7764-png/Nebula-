@@ -80,10 +80,15 @@ def _ini_path() -> str:
 
 
 def save_credentials(account: str, secret: str, code_only: bool) -> None:
+    """保存登录凭证（读-改-写，保留 [window] 等其他节）。"""
     try:
         ini = configparser.ConfigParser()
-        ini["credentials"] = {"account": account, "secret": secret,
-                              "code_only": "1" if code_only else "0"}
+        ini.read(_ini_path(), encoding="utf-8")
+        if "credentials" not in ini:
+            ini.add_section("credentials")
+        ini.set("credentials", "account", account)
+        ini.set("credentials", "secret", secret)
+        ini.set("credentials", "code_only", "1" if code_only else "0")
         with open(_ini_path(), "w", encoding="utf-8") as f:
             ini.write(f)
     except Exception:
@@ -98,6 +103,50 @@ def load_credentials():
         return sec.get("account", ""), sec.get("secret", ""), sec.getint("code_only", 0) != 0
     except Exception:
         return "", "", False
+
+
+def load_window_pos(key: str):
+    """读取保存的窗口位置，返回 (x, y) 或 None（无记录/损坏）。"""
+    try:
+        ini = configparser.ConfigParser()
+        ini.read(_ini_path(), encoding="utf-8")
+        if ini.has_section("window") and ini.has_option("window", key) \
+                and ini.has_option("window", key + "_y"):
+            return int(ini.get("window", key)), int(ini.get("window", key + "_y"))
+    except Exception:
+        pass
+    return None
+
+
+def save_window_pos(key: str, x: int, y: int) -> None:
+    """保存窗口位置（读-改-写，保留 [credentials] 等其他节）。"""
+    try:
+        ini = configparser.ConfigParser()
+        ini.read(_ini_path(), encoding="utf-8")
+        if not ini.has_section("window"):
+            ini.add_section("window")
+        ini.set("window", key, str(int(x)))
+        ini.set("window", key + "_y", str(int(y)))
+        with open(_ini_path(), "w", encoding="utf-8") as f:
+            ini.write(f)
+    except Exception:
+        pass
+
+
+def place_window(window, ini_key: str, width: int, height: int) -> None:
+    """窗口定位：上次位置仍可见则恢复，否则在当前显示器工作区居中。"""
+    pos = load_window_pos(ini_key)
+    if pos and pos[0] > -20000 and drawing.point_on_screen(*pos):
+        drawing.move_window(*pos)
+    else:
+        drawing.center_on_screen(width, height)
+
+
+def keep_window_pos(ini_key: str) -> None:
+    """关窗前保存当前位置（最小化时坐标是 -32000 哨兵值，跳过）。"""
+    rect = drawing.get_window_rect()
+    if rect != (0, 0, 0, 0) and rect[0] > -20000:
+        save_window_pos(ini_key, rect[0], rect[1])
 
 
 def _get_clipboard_text() -> str:
@@ -203,10 +252,13 @@ class LoginWindow:
 
     # ── 主入口 ───────────────────────────────────────────────────────────────
     def Run(self) -> bool:
+        # 高 DPI 感知：必须在 pygame.init() 之前调用，
+        # 否则 Windows 会按 DPI 比例整窗拉伸（窗口过大）且坐标错乱
+        drawing.enable_windows_dpi_awareness()
         pygame.init()
         pygame.display.set_caption("Nebula Login")
         window = pygame.display.set_mode((theme.kLoginWidth, theme.kLoginHeight), pygame.NOFRAME)
-        drawing.center_on_screen(theme.kLoginWidth, theme.kLoginHeight)
+        place_window(window, "login", theme.kLoginWidth, theme.kLoginHeight)
 
         self._reset_state()
 
@@ -246,6 +298,7 @@ class LoginWindow:
             self._init_thread.join(timeout=5)
         if self._login_thread:
             self._login_thread.join(timeout=5)
+        keep_window_pos("login")     # 记住窗口位置（含更新/校验等所有退出路径）
         pygame.display.quit()
         return self.result
 
@@ -298,14 +351,16 @@ class LoginWindow:
 
         # ⑤ 公告：弹窗公告（type=2，每次登录提示）
         #    + 立即公告（type=3，看过即不再显示，已读记录存本地）
+        #    一次拉取共享给 popup/flash，避免重复网络请求
         try:
-            self.client.popup_notices()
+            notices = self.client.get_notices()
         except Exception:
-            pass
-        try:
-            self.client.flash_notices()
-        except Exception:
-            pass
+            notices = []
+        for step in (self.client.popup_notices, self.client.flash_notices):
+            try:
+                step(notices)
+            except Exception:
+                pass
 
         self._set_status("", False)
         self.init_ok = True

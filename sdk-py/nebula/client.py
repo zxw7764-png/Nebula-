@@ -637,19 +637,22 @@ class Client:
             return c
         return f"{t}\n\n{c}" if c else t
 
-    def popup_notices(self) -> List[Dict]:
-        """弹窗公告（type=2）：拉取并逐条提示（无已读机制，每次都会提示）。"""
-        out = [n for n in self.get_notices() if n["type"] == 2]
+    def popup_notices(self, notices: List[Dict] | None = None) -> List[Dict]:
+        """弹窗公告（type=2）：拉取并逐条提示（无已读机制，每次都会提示）。
+        notices 可传预取的公告列表（与 flash_notices 共享一次网络请求）。"""
+        src = self.get_notices() if notices is None else notices
+        out = [n for n in src if n["type"] == 2]
         for n in out:
             self.ui_alert("popup", self.notice_text(n),
                           self.alert_title(" 公告"), MB_ICONINFORMATION)
         return out
 
-    def fetch_flash_notices(self) -> List[Dict]:
+    def fetch_flash_notices(self, notices: List[Dict] | None = None) -> List[Dict]:
         """只拉取**未读**的立即公告（type=3，不弹窗、不标记）；
         自行展示后调 mark_notice_read(id)。"""
         reads = _load_notice_reads(_notice_read_path(config.kAppKey))
-        return [n for n in self.get_notices() if n["type"] == 3 and n["id"] not in reads]
+        src = self.get_notices() if notices is None else notices
+        return [n for n in src if n["type"] == 3 and n["id"] not in reads]
 
     def is_notice_read(self, notice_id: int) -> bool:
         return notice_id in _load_notice_reads(_notice_read_path(config.kAppKey))
@@ -662,9 +665,9 @@ class Client:
         """清空本地已读记录（全部立即公告会重新下发显示）。"""
         _remove_quiet(_notice_read_path(config.kAppKey))
 
-    def flash_notices(self) -> List[Dict]:
+    def flash_notices(self, notices: List[Dict] | None = None) -> List[Dict]:
         """一行内置：拉取未读立即公告 → 逐条提示（默认弹窗）→ 标记已读。"""
-        out = self.fetch_flash_notices()
+        out = self.fetch_flash_notices(notices)
         for n in out:
             self.ui_alert("flash", self.notice_text(n),
                           self.alert_title(" 公告"), MB_ICONINFORMATION)
@@ -854,6 +857,17 @@ class Client:
             }, use_session=True)
         except NebulaError as e:
             hb.code, hb.msg = e.code, e.msg
+            # 服务端把「会话失效」以业务错误码返回（后台踢出 status=3 / 顶号 /
+            # 过期 / 解绑等，见 Session::validate），响应顶层可能带
+            # need_relogin / kick 标记；再按码值兜底。否则心跳线程不会
+            # break，UI 永远感知不到已被踢下线。
+            ex = getattr(e, "extra", None) or {}
+            hb.kick = bool(ex.get("kick", False))
+            hb.force_offline = bool(ex.get("force_offline", False))
+            hb.need_relogin = bool(ex.get("need_relogin", False))
+            hb.need_activate = bool(ex.get("need_activate", False))
+            if e.code in (1002, 1003, 2002, 2004, 4002, 4005):
+                hb.need_relogin = True
             return hb
         hb.code = int(data.get("code", 0))
         hb.online = bool(data.get("online", True))

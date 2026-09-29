@@ -173,7 +173,37 @@ def draw_title_bar(target: pygame.Surface, title: str,
                        (255, 255, 255) if hover_close else theme.kMuted)
 
 
-# ── 窗口工具（无边框拖拽 / 最小化 / 居中）───────────────────────────────────
+# ── 窗口工具（DPI 感知 / 系统拖拽 / 最小化 / 定位）───────────────────────────
+
+def enable_windows_dpi_awareness() -> None:
+    """进程 Per-Monitor v2 DPI 感知（幂等，必须在创建第一个窗口前调用）。
+
+    不感知的进程在高缩放屏幕（125%/150% 等）上会被系统整窗拉伸——
+    窗口显得过大且坐标被虚拟化（居中计算错位）。感知后窗口按真实像素
+    创建、清晰渲染，窗口尺寸即代码里设定的物理像素。"""
+    try:
+        # SDL 原生途径（pygame 2.6 / SDL 2.28 支持，须在 pygame.init 前设置）
+        pygame.set_hint("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2")
+    except Exception:
+        pass
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        try:
+            # Win10 1703+：DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
+            if user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+                return
+        except Exception:
+            pass
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)   # Win 8.1+：Per-Monitor
+            return
+        except Exception:
+            pass
+        user32.SetProcessDPIAware()                          # Vista+：System Aware
+    except Exception:
+        pass
+
 
 def get_hwnd() -> int:
     """当前窗口句柄（Windows HWND）。"""
@@ -181,6 +211,65 @@ def get_hwnd() -> int:
         return pygame.display.get_wm_info().get("window", 0) or 0
     except Exception:
         return 0
+
+
+def _user32():
+    """user32 + 64 位安全的常用函数签名（HANDLE/HWND 参数必须显式声明，
+    否则默认按 32 位截断，静默失败）。"""
+    import ctypes
+    from ctypes import wintypes
+    u = ctypes.windll.user32
+    u.GetWindowRect.argtypes = [ctypes.c_void_p, ctypes.POINTER(wintypes.RECT)]
+    u.GetWindowRect.restype = ctypes.c_int
+    u.SetWindowPos.argtypes = [ctypes.c_void_p, ctypes.c_void_p,
+                               ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                               ctypes.c_uint]
+    u.SetWindowPos.restype = ctypes.c_int
+    u.MonitorFromWindow.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+    u.MonitorFromWindow.restype = ctypes.c_void_p
+    u.MonitorFromPoint.argtypes = [wintypes.POINT, ctypes.c_uint]
+    u.MonitorFromPoint.restype = ctypes.c_void_p
+    u.GetMonitorInfoW.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+    u.GetMonitorInfoW.restype = ctypes.c_int
+    u.IsProcessDPIAware.restype = ctypes.c_int
+    return u
+
+
+def get_window_rect() -> tuple:
+    """窗口当前屏幕矩形 (left, top, right, bottom)；失败返回 (0, 0, 0, 0)。"""
+    hwnd = get_hwnd()
+    if not hwnd:
+        return (0, 0, 0, 0)
+    try:
+        import ctypes
+        from ctypes import wintypes
+        rect = wintypes.RECT()
+        if _user32().GetWindowRect(hwnd, ctypes.byref(rect)):
+            return (rect.left, rect.top, rect.right, rect.bottom)
+    except Exception:
+        pass
+    return (0, 0, 0, 0)
+
+
+def move_window(x: int, y: int) -> None:
+    """移动窗口到指定位置（不改大小、不改层级）。"""
+    hwnd = get_hwnd()
+    if not hwnd:
+        return
+    try:
+        _user32().SetWindowPos(hwnd, None, int(x), int(y), 0, 0, 0x0001 | 0x0004)
+    except Exception:
+        pass
+
+
+def point_on_screen(x: int, y: int) -> bool:
+    """点是否落在某台显示器上（用于校验记忆的位置仍可见）。"""
+    try:
+        from ctypes import wintypes
+        pt = wintypes.POINT(int(x), int(y))
+        return bool(_user32().MonitorFromPoint(pt, 0))   # MONITOR_DEFAULTTONULL
+    except Exception:
+        return False
 
 
 def begin_system_drag() -> None:
@@ -208,19 +297,42 @@ def minimize_window() -> None:
 
 
 def center_on_screen(width: int, height: int) -> None:
-    """窗口居中。"""
+    """窗口在**当前所在显示器的工作区**居中（多显示器安全）。
+
+    之前用 pygame.display.Info() 的桌面尺寸计算且未声明 64 位参数类型，
+    高 DPI / 多屏下位置漂移。失败回落 pygame 桌面尺寸估算。"""
     hwnd = get_hwnd()
     if hwnd:
         try:
             import ctypes
-            info = pygame.display.Info()
-            ctypes.windll.user32.SetWindowPos(
-                hwnd, 0, (info.current_w - width) // 2, (info.current_h - height) // 2,
-                0, 0, 0x0001 | 0x0004)             # SWP_NOSIZE | SWP_NOZORDER
+            from ctypes import wintypes
+
+            # ⚠ ctypes.wintypes 没有 MONITORINFO，必须自定义，
+            # 否则这里抛 AttributeError 被 except 吞掉 → 永远走 pygame 回退
+            class MONITORINFO(ctypes.Structure):
+                _fields_ = [("cbSize", ctypes.c_uint),
+                            ("rcMonitor", wintypes.RECT),
+                            ("rcWork", wintypes.RECT),
+                            ("dwFlags", ctypes.c_uint)]
+
+            u = _user32()
+            rect = wintypes.RECT()
+            if not u.GetWindowRect(hwnd, ctypes.byref(rect)):
+                raise OSError("GetWindowRect failed")
+            mi = MONITORINFO()
+            mi.cbSize = ctypes.sizeof(MONITORINFO)
+            hmon = u.MonitorFromWindow(hwnd, 2)        # MONITOR_DEFAULTTONEAREST
+            if not hmon or not u.GetMonitorInfoW(hmon, ctypes.byref(mi)):
+                raise OSError("GetMonitorInfo failed")
+            wa = mi.rcWork
+            x = wa.left + ((wa.right - wa.left) - int(width)) // 2
+            y = wa.top + ((wa.bottom - wa.top) - int(height)) // 2
+            if not u.SetWindowPos(hwnd, None, x, y, 0, 0, 0x0001 | 0x0004):
+                raise OSError("SetWindowPos failed")
             return
         except Exception:
             pass
-    try:
+    try:                                                  # 非 Windows 回退
         from pygame._sdl2.video import Window
         info = pygame.display.Info()
         Window.from_display_module().set_position(

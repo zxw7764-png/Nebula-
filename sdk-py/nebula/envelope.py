@@ -120,8 +120,12 @@ class Envelope:
 
         data_b64 = envelope.get("data")
         if not isinstance(data_b64, str) or not data_b64:
-            # 明文错误响应（罕见）：直接透传
-            raise NebulaError(int(envelope.get("code", -2)), str(envelope.get("msg", "响应缺少 data")))
+            # 明文错误响应（罕见）：直接透传（extra 带上顶层业务标记）
+            extra = {k: v for k, v in envelope.items()
+                     if k not in ("code", "msg", "time", "data",
+                                  "sig", "t", "n", "sig_algo", "sig_kid")}
+            raise NebulaError(int(envelope.get("code", -2)),
+                              str(envelope.get("msg", "响应缺少 data")), extra)
 
         # 响应签名校验（防伪造服务器；未配置公钥则拒绝）
         pub = config.kRespSignPubKey.strip()
@@ -144,10 +148,14 @@ class Envelope:
         except Exception as e:
             raise NebulaError(-2, f"业务响应 JSON 解析失败: {e}") from e
 
-        # 业务错误码（code != 0 = 失败）：转 NebulaError 抛出
+        # 业务错误码（code != 0 = 失败）：转 NebulaError 抛出。
+        # extra = 顶层业务标记（need_relogin / kick / need_activate 等），
+        # 必须随异常带出，否则心跳无法感知会话失效（踢下线不生效的根因）。
         biz_code = int(parsed.get("code", 0))
         if biz_code != 0:
-            raise NebulaError(biz_code, str(parsed.get("msg", f"业务错误 {biz_code}")))
+            extra = {k: v for k, v in parsed.items()
+                     if k not in ("code", "msg", "time", "data")}
+            raise NebulaError(biz_code, str(parsed.get("msg", f"业务错误 {biz_code}")), extra)
 
         # （可选强化）HMAC 验签：响应 sign 与本地以同一盐重算比对
         expect_sign = sign_hex(data_b64, int(envelope.get("t", 0)), str(envelope.get("n", "")), salt)

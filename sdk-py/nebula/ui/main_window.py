@@ -14,6 +14,7 @@ import threading
 import pygame
 
 from . import drawing, theme
+from .login_window import place_window, keep_window_pos
 from ..client import kick_text
 
 EXIT_NORMAL = 0    # 用户主动关闭（已 stop_heartbeat + logout）
@@ -51,10 +52,13 @@ class MainWindow:
         if not self.client or not self.login or not self.login.token:
             return EXIT_KICKED            # 无有效会话，回登录界面
 
+        # 高 DPI 感知（幂等）：必须在 pygame.init() 之前，防止整窗被 DPI 拉伸
+        drawing.enable_windows_dpi_awareness()
         pygame.init()
         pygame.display.set_caption("Nebula - 主界面")
         window = pygame.display.set_mode((theme.kMainWidth, theme.kMainHeight), pygame.NOFRAME)
-        drawing.center_on_screen(theme.kMainWidth, theme.kMainHeight)
+        # 上次位置仍可见则恢复，否则在当前显示器工作区居中
+        place_window(window, "main", theme.kMainWidth, theme.kMainHeight)
 
         # 心跳保活：interval=0 → 使用 init 下发的 heartbeat_interval（默认 60 秒）。
         # 回调在 SDK 心跳线程执行，禁止触碰 pygame，只设置标志位。
@@ -79,6 +83,7 @@ class MainWindow:
 
         # 收尾：无论哪种退出都先停心跳
         self.client.stop_heartbeat()
+        keep_window_pos("main")      # 记住窗口位置
         pygame.display.quit()
 
         if self.kicked:

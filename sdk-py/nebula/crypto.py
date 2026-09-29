@@ -23,12 +23,16 @@ from cryptography.hazmat.primitives import padding as _cpadding
 
 
 class NebulaError(Exception):
-    """SDK 本地错误（网络 / 验签 / 解密失败等）。code < 0 为本地错误码。"""
+    """SDK 本地错误（网络 / 验签 / 解密失败等）。code < 0 为本地错误码。
 
-    def __init__(self, code: int, msg: str):
+    extra：服务端业务错误响应里除 code/msg/time/data 外的顶层标记
+    （如 need_relogin / kick / need_activate），供调用方按需读取。"""
+
+    def __init__(self, code: int, msg: str, extra: dict | None = None):
         super().__init__(msg)
         self.code = code
         self.msg = msg
+        self.extra: dict = dict(extra) if extra else {}
 
 
 def derive_key(aes_key: str) -> bytes:
