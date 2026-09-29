@@ -22,9 +22,13 @@ namespace nebula {
  *     nebula::guardAuth(ok,
  *         [&]{ StartMain(std::move(client)); },   // 成功 → 进主界面
  *         [&]{ ShowLoginFailed(); });             // 失败 → 提示
+ *
+ * ★ 必须 NEBULA_NOINLINE：本函数是 header-only inline 模板，若被编译器内联进
+ *   宿主函数（宿主自己也有壳标记时），下面的 VM 标记会嵌进宿主标记区域内部，
+ *   加壳时报「地址已由函数 XXX 使用」。保持独立函数体即无嵌套。
  */
 template <typename OnOk, typename OnFail>
-inline void guardAuth(bool ok, OnOk&& onOk, OnFail&& onFail) {
+NEBULA_NOINLINE inline void guardAuth(bool ok, OnOk&& onOk, OnFail&& onFail) {
     NEBULA_MARK_VM_BEGIN();
     if (ok) onOk();
     else    onFail();

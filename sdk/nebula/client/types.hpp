@@ -118,6 +118,7 @@ struct LoginResult {
     std::vector<std::string> device_risk;  ///< 服务端设备指纹风险标记（仅记录不拦截）
     std::string grace_ticket;              ///< 离线宽限票据（原样缓存）
     int64_t grace_until = 0;
+    std::string feature_key;               ///< 功能密钥（后台「软件管理」配置；仅登录成功后下发，空=未启用。配合 nebula::feature::open 解密核心数据包）
     bool need_relogin = false;
 };
 

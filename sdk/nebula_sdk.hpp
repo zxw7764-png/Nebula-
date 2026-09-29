@@ -42,6 +42,7 @@
 //   nebula/client/notice_store.hpp 立即公告本地已读记录
 //   nebula/client/integrity.hpp    自身完整性自校验
 //   nebula/client/offline.hpp      离线宽限票据验签
+//   nebula/client/feature.hpp      功能密钥数据包（seal / open）
 //   nebula/client/update.hpp       自动更新（下载 → 校验 → 自替换 → 重启）
 //   nebula/client/client.hpp       Client（流程与业务接口）
 //   nebula/client/guard.hpp        授权门卫（可选）
@@ -76,6 +77,7 @@
 #include "nebula/client/notice_store.hpp"
 #include "nebula/client/integrity.hpp"
 #include "nebula/client/offline.hpp"
+#include "nebula/client/feature.hpp"
 #include "nebula/client/client.hpp"
 #include "nebula/client/guard.hpp"
 

@@ -19,6 +19,7 @@ foreach (Software::all() as $sw) {
         'update_url'     => (string) ($sw['update_url'] ?? ''),
         'update_note'    => (string) ($sw['update_note'] ?? ''),
         'login_methods'  => (string) ($sw['login_methods'] ?? ''),
+        'feature_key'    => (string) ($sw['feature_key'] ?? ''),
         'policy'         => (is_string($sw['policy_json'] ?? null) && $sw['policy_json'] !== '')
             ? (json_decode($sw['policy_json'], true) ?: [])
             : [],

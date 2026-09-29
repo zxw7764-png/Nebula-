@@ -351,6 +351,10 @@ public:
             result.grace_until  = json::findInt64(grace, "until");
         }
 
+        // 功能密钥：仅 login 成功后下发（后台「软件管理」配置；空 = 未启用）。
+        // 用 nebula::feature::open(数据包, result.feature_key) 解开随程序分发的核心数据。
+        result.feature_key = json::findString(d, "feature_key");
+
         if (!result.token.empty()) {
             std::lock_guard<std::mutex> lock(state_mutex_);
             token_ = result.token;
@@ -367,9 +371,10 @@ public:
      * 内置登录判定（可选）：把「发起登录 → 判定成功/失败」整段收进 SDK，并在壳虚拟化区
      * 路由回调，接入层不再暴露一眼可 patch 的裸 if(jz/jnz) 分支。
      * 需要 NEBULA_SHELL_ENABLE=1 + 加壳才有实际保护效果；未开启时等价于普通 if。
+     * ★ NEBULA_NOINLINE：防止内联进宿主后 VM 标记嵌套（见 shell.hpp 说明）。
      */
     template <typename Ok, typename Fail>
-    void loginAndGuard(const std::string& account, const std::string& secret, Ok&& onOk, Fail&& onFail) {
+    NEBULA_NOINLINE void loginAndGuard(const std::string& account, const std::string& secret, Ok&& onOk, Fail&& onFail) {
         LoginResult result = login(account, secret);
         NEBULA_MARK_VM_BEGIN();
         if (result.ok) onOk(result);
@@ -921,8 +926,10 @@ private:
     /**
      * 加密信封请求：本地加密 → 签名 → HTTP → 验签（HMAC + 服务端非对称签名）→ 解密。
      * 协议实现全部在 envelope.hpp，这里只负责选盐、拼 URL 与错误映射。
+     * ★ NEBULA_NOINLINE：本函数带 MUTATE 标记，必须保持独立函数体，
+     *   防止被内联进宿主标记区域后加壳报「地址已由函数使用」。
      */
-    Response post(const std::string& action, const std::string& payloadJson) {
+    NEBULA_NOINLINE Response post(const std::string& action, const std::string& payloadJson) {
         Response result;
         result.local = Error::Config;
         result.code  = (int)Error::Config;

@@ -90,6 +90,23 @@ namespace protect {
 #define NEBULA_STR_LINE NEBULA_STR_LINE_EXPAND_(__LINE__)
 
 // ---------------------------------------------------------------------------
+// NEBULA_NOINLINE：含壳标记的函数必须保持独立函数体
+// ---------------------------------------------------------------------------
+// ★ 为什么需要：壳的 Begin/End 标记要求「一个函数体一对」，不允许嵌套/重叠。
+//   header-only inline 函数若被编译器内联进宿主函数，它体内的标记就会落进
+//   宿主标记区域的内部 → 加壳时报「地址已由函数 XXX 使用」。
+//   给所有含 NEBULA_MARK_* 的函数挂上 NEBULA_NOINLINE 即可杜绝这一类问题
+//   （未开壳时该宏同样生效，但只是不内联，无任何功能影响）。
+// ---------------------------------------------------------------------------
+#if defined(_MSC_VER)
+#  define NEBULA_NOINLINE __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+#  define NEBULA_NOINLINE __attribute__((noinline))
+#else
+#  define NEBULA_NOINLINE
+#endif
+
+// ---------------------------------------------------------------------------
 // 统一标记宏（推荐一律使用这一套；必须成对，且在同一函数体内）
 // ---------------------------------------------------------------------------
 #if NEBULA_SHELL_ENABLE && defined(NEBULA_SHELL_FORCE_HOOK) && NEBULA_SHELL_FORCE_HOOK

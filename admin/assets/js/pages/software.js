@@ -155,6 +155,14 @@ function swEdit(s) {
             <small class="muted">留空跟随「系统设置 → 安全」的全局登录方式</small>
         </div>
     </div>
+    <div class="field" style="margin-bottom:10px"><label>功能密钥（仅登录成功后下发给客户端）</label>
+        <div style="display:flex;gap:6px">
+            <input id="swFeatureKey" value="${esc(s.feature_key || '')}" placeholder="留空 = 未启用" style="flex:1">
+            <button type="button" class="btn ghost" style="padding:4px 14px;flex-shrink:0"
+                onclick="document.getElementById('swFeatureKey').value=[...crypto.getRandomValues(new Uint8Array(16))].map(b=>b.toString(16).padStart(2,'0')).join('')">生成随机</button>
+        </div>
+        <small class="muted">接入方用它加密核心数据包随程序分发（SDK nebula::feature::seal / open）；登录失败或被踢后数据保持密文</small>
+    </div>
     <div class="row2">
         <div class="field"><label>状态</label>
             <select id="swStatus">
@@ -231,6 +239,7 @@ function swEdit(s) {
                 app_key: document.getElementById('swAppKey').value.trim(),
                 min_version: document.getElementById('swMin').value.trim(),
                 login_methods: document.getElementById('swLogin').value,
+                feature_key: document.getElementById('swFeatureKey').value.trim(),
                 policy: {
                     register_enable: document.getElementById('swP_register_enable').value,
                     maintain_mode: document.getElementById('swP_maintain_mode').value,

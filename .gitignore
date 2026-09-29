@@ -36,6 +36,10 @@ Thumbs.db
 *.tmp
 *~
 
+# 打包工作目录与产物
+_pkg/
+*.zip
+
 # SDK 编译产物
 sdk/build/out/
 *.obj

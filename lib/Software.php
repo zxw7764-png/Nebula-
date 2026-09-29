@@ -136,6 +136,23 @@ class Software
         return isset(LoginMethod::all()[$m]) ? $m : '';
     }
 
+    /** 老库兼容：nb_softwares.feature_key 列是否存在（静态缓存） */
+    private static function hasFeatureCol(): bool
+    {
+        static $has = null;
+        if ($has === null) {
+            $has = (bool) Database::one("SHOW COLUMNS FROM " . self::table() . " LIKE 'feature_key'");
+        }
+        return $has;
+    }
+
+    /** 功能密钥入参规范化：去除首尾空白与控制字符，最长 128 字符（空 = 未启用） */
+    private static function normFeatureKey($v): string
+    {
+        $k = preg_replace('/[\x00-\x1f\x7f]/u', '', trim((string) $v)) ?? '';
+        return mb_substr($k, 0, 128);
+    }
+
     /** 老库兼容：nb_softwares.policy_json 列是否存在（静态缓存） */
     private static function hasPolicyCol(): bool
     {
@@ -231,6 +248,10 @@ class Software
         if (self::hasLoginCol()) {
             $row['login_methods'] = self::normLoginMethod($in['login_methods'] ?? '');
         }
+        // 功能密钥（老库无该列时跳过，默认空 = 未启用）
+        if (self::hasFeatureCol()) {
+            $row['feature_key'] = self::normFeatureKey($in['feature_key'] ?? '');
+        }
         // 分软件策略覆盖（老库无该列时跳过，默认 NULL = 全部跟随全局）
         if (self::hasPolicyCol()) {
             $row['policy_json'] = self::normPolicy($in['policy'] ?? null);
@@ -281,6 +302,10 @@ class Software
         // 分软件登录方式：传空串 = 清除单独设置（跟随全局）；老库无该列时跳过
         if (array_key_exists('login_methods', $in) && self::hasLoginCol()) {
             $data['login_methods'] = self::normLoginMethod($in['login_methods']);
+        }
+        // 功能密钥：传空串 = 未启用；老库无该列时跳过
+        if (array_key_exists('feature_key', $in) && self::hasFeatureCol()) {
+            $data['feature_key'] = self::normFeatureKey($in['feature_key']);
         }
         // 分软件策略覆盖：传 policy 对象整体保存（空值键 = 移除该覆盖项）；
         // 全部为空时落 NULL = 恢复全部跟随全局

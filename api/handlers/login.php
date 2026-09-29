@@ -12,7 +12,8 @@
  * 公共参数: machine_id(必填), device_name, os_info, client_ver
  */
 
-$method = LoginMethod::currentFor(Software::current());
+$sw     = Software::current();
+$method = LoginMethod::currentFor($sw);
 
 $machineId  = Util::str($requestData, 'machine_id', '');
 $deviceName = Util::str($requestData, 'device_name', '');
@@ -197,6 +198,10 @@ Response::ok([
     'expire_at'      => time() + $ttl,
     'ttl'            => $ttl,
     'login_method'   => $method,
+    // 功能密钥：仅 login 成功后下发（后台「软件管理」配置，空=未启用）。
+    // 接入方用它解密随程序分发的核心数据包 —— 登录失败 / 被踢 / 过期后数据保持密文。
+    // ★ 刻意不在 init 下发：init 是免验证接口，功能密钥必须以登录成功为前提。
+    'feature_key'    => (string) ($sw['feature_key'] ?? ''),
     'account_created'=> (bool) $r['created'],
     'user'           => Auth::publicInfo($user),
     'vip'            => $vip,

@@ -10,29 +10,17 @@ POST http://<域名>/api/index.php?action=<接口名>
 
 > ### 不想手写协议？
 >
-> `sdk/` 目录提供**零依赖的 C++ SDK**（header-only），把 `nebula_sdk.hpp` 拖进项目即可，  
+> `sdk/` 目录提供**零依赖的 C++ SDK**（header-only），把 `sdk/nebula/` 目录 + `nebula_sdk.hpp` 一起拖进项目即可，  
 > 无需 OpenSSL / libcurl（用系统自带的 `bcrypt.dll` / `winhttp.dll`，仅 Windows + MSVC）。
+> 配置只需改一个文件：`sdk/nebula/client/config.hpp`。
 >
 > ```cpp
 > #include "nebula_sdk.hpp"
 >
-> // 构造参数：(api_url, aes_key, sign_salt, app_key, machine_id, os_info, client_ver)
-> // app_key 必填（后台软件管理获取），machine_id 留空则 SDK 自动采集
-> nebula::Client c("http://你的服务器/api/index.php", AES_KEY, SIGN_SALT, "SW你的软件标识");
->
-> auto ir = c.init();                        // 初始化：下发会话密钥、心跳间隔、登录方式、版本策略
-> if (!c.enforceSelfIntegrity()) return 1;   // 完整性自校验：exe 被篡改 → 弹窗，退出
-> if (!c.versionAlert())       return 1;     // 版本过期提示（强制更新中止 / 可选更新提醒）
-> c.maintainAlert();                         // 维护模式提示（全部内置弹窗，也可 setUiHandler 自定义）
->
-> auto lr = c.login("用户名", "密码");        // 登录（按服务器登录方式自动组装）
-> c.startHeartbeat(lr.token, [](int code, const std::string& msg,
->                               const nebula::HeartbeatInfo& hb) {
->     if (hb.kick || hb.need_relogin) c.kickAlert(msg);  // 被踢/顶号 → SDK 弹窗
-> }, 0);                                       // 0 = 用 init 下发的心跳间隔
->
-> c.stopHeartbeat();
-> c.logout(lr.token);
+> auto c = nebula::createDefaultClient("machine_id", "Windows", "1.0.1");
+> c->init();
+> auto lr = c->login("用户名", "密码");
+> c->startHeartbeat(lr.token, /* 心跳回调 */, 60000);
 > ```
 >
 > 本文档描述的是**协议层**细节，适合需要自行实现客户端（其他语言 / 特殊需求）的场景。  
@@ -97,8 +85,8 @@ POST http://<域名>/api/index.php?action=<接口名>
    - 缺 `k`、`k` 无效或过期 → `5002`
 2. 服务端**响应用「验请求所用的同一把盐」签名**：init 响应用主盐，业务响应用会话盐
 3. 密钥管理：每次 `init` 重新下发（同一 `machine_id` 仅保留最新一把），7 天未续自动过期；init 时可携带旧 `k` 平滑轮换
-4. 安全效果：主盐只保 `init/notice/version/online` 四个只读接口可用；即使主盐被 dump，也无法伪造业务请求，且换一次 init 旧密钥即作废
-5. 服务端开关：代码中硬编码为 `true`，可通过 `config.php` → `security.session_key_required` 配置关闭（默认开启）
+4. 安全效果：主盐只保 `init/notice/version` 三个只读接口可用；即使主盐被 dump，也无法伪造业务请求，且换一次 init 旧密钥即作废
+5. 服务端开关：`config.php` → `security.session_key_required`（默认 `true`）
 
 ### 1.3 响应格式
 
@@ -110,9 +98,24 @@ POST http://<域名>/api/index.php?action=<接口名>
   "sign": "<hmac>",
   "t":    1726000000,
   "n":    "xxxx",
-  "code": 0
+  "code": 0,
+  "sig":      "<base64(非对称签名)>",
+  "sig_kid":  "<密钥标识>",
+  "sig_algo": "ES256"
 }
 ```
+
+`sig` / `sig_kid` / `sig_algo` 为**响应防伪签名**（服务端私钥签名，客户端内置公钥验签）：
+
+| 字段         | 说明                                                                    |
+| ---------- | --------------------------------------------------------------------- |
+| `sig`      | base64(对字符串 `data \| t \| n` 的签名)；私钥仅存服务端，逆向出客户端全部密钥也无法伪造响应            |
+| `sig_kid`  | 签名密钥标识（服务端轮换密钥时用于选公钥）                                                 |
+| `sig_algo` | `ES256`（ECDSA P-256，默认）或 `RS256`（RSA-2048，运行环境不支持 EC 时自动回落）               |
+
+> 校验顺序：先 HMAC 验 `sign` → 再验 `sig` → 最后解密 `data`。
+> 该签名与离线宽限票据签名共用一对密钥（`config/grace_keys.php`），客户端需在
+> `nebula/client/config.hpp` 的 `kRespSignPubKey` 填入对应公钥（**必填**）。
 
 解密 `data` 后得到业务响应：
 
@@ -208,31 +211,11 @@ POST http://<域名>/api/index.php?action=<接口名>
   "msg": "ok",
   "data": {
     "server_time": 1726000000,
-    "app_key": "SWxxxx",
-    "software": { "id": 1, "name": "默认软件" },
     "site_name": "Nebula 网络验证",
     "heartbeat_interval": 60,
     "session_ttl": 3600,
     "register_enable": true,
     "maintain_mode": false,
-    "login": {
-      "method": "password",
-      "label": "用户名 + 密码",
-      "need_username": true,
-      "need_password": true,
-      "need_code": false,
-      "fields": ["username", "password"]
-    },
-    "device_fp": {
-      "enable": true,
-      "components": ["board", "cpu", "disk", "bios", "gpu", "mac"],
-      "core": ["board", "cpu"],
-      "weights": { "board": 30, "cpu": 25, "disk": 20, "bios": 15, "gpu": 10, "mac": 10 }
-    },
-    "session": {
-      "k": "a1b2c3d4e5f6a7b8",
-      "s": "0123456789abcdef0123456789abcdef0123456789abcdef"
-    },
     "grace": {
       "enable": true,
       "seconds": 3600,
@@ -251,12 +234,7 @@ POST http://<域名>/api/index.php?action=<接口名>
       "need_update": true,
       "force_update": false,
       "update_url": "https://example.com/app.exe",
-      "update_note": "修复若干问题",
-      "changelog": "修复若干问题",
-      "file_hash": "",
-      "file_size": 0,
-      "self_file_hash": "",
-      "self_file_size": 0
+      "update_note": "修复若干问题"
     },
     "notices": [
       { "id": 1, "title": "欢迎使用", "content": "系统已上线", "type": 4 }
@@ -370,6 +348,7 @@ POST http://<域名>/api/index.php?action=<接口名>
     "expire_at": 1726003600,
     "ttl": 3600,
     "login_method": "password",
+    "feature_key": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
     "account_created": false,
     "user": {
       "user_id": 10,
@@ -408,6 +387,7 @@ POST http://<域名>/api/index.php?action=<接口名>
 | ----------------- | ------------------------------------------------------------ |
 | `login_method`    | 本次登录实际生效的方式                                                  |
 | `account_created` | 是否由本次登录自动建号（激活码方式首次登录为 `true`）                               |
+| `feature_key`     | 功能密钥（见 [2.18 功能密钥协议](#218-功能密钥协议)）。后台未配置时为空串；**只在 login 成功响应下发，init 不下发** |
 | `grace`           | 离线宽限票据（见 [2.16 离线宽限协议](#216-离线宽限协议)）。服务端关闭该能力或账号未激活时为 `null` |
 
 **设备超限响应（code 4001）**
@@ -455,7 +435,6 @@ POST http://<域名>/api/index.php?action=<接口名>
     "session_ttl": 3600,
     "force_offline": false,
     "has_notice": false,
-    "flash_notices": [],
     "grace": {
       "ticket": "G1.eyJ2IjoxLCJ1IjoxMCwibSI6ImExYjJjM2Q0...<base64url>.<sig-base64url>",
       "until": 1726007260,
@@ -814,7 +793,7 @@ C++ SDK 已内置工具：`Bcrypt::fileHashHex(路径, 是否SHA256)` 与 `Bcryp
 `device_fp` 让客户端再上报**多个硬件组件**的特征串，服务端据此做加权指纹校验，  
 用于识别机器码伪造、模拟器/虚拟机和一机多号。
 
-> C++ SDK（`sdk/nebula_sdk.hpp`）**已内置自动采集**（WMI 硬件序列号取哈希 + 主网卡裸 MAC，
+> C++ SDK（`sdk/nebula_sdk.hpp`，配置区在 `sdk/nebula/client/config.hpp`）**已内置自动采集**（WMI 硬件序列号取哈希 + 主网卡裸 MAC，
 > `device_name` 自动取真实电脑主机名），使用 SDK 时无需手动构造本字段。
 
 **上报格式**（`login` 请求中的可选字段，对象或 JSON 字符串均可）：
@@ -913,7 +892,7 @@ G1.<payload-b64url>.<signature-b64url>
 | --------- | ---------------------------------------------------------------------------------- |
 | `G1`      | 固定前缀（`ticket_prefix`），同时是签名数据的开头                                                   |
 | payload   | 载荷 JSON 的 **base64url**（无填充）编码                                                     |
-| signature | 对字符串 `G1.<payload-b64url>` 做 **ES256（ECDSA P-256 + SHA-256）** 签名，DER 编码后 base64url |
+| signature | 对字符串 `G1.<payload-b64url>` 做 **ES256（ECDSA P-256 + SHA-256）** 签名，DER 编码后 base64url；服务端运行环境不支持 EC 时自动回落 **RS256（RSA-2048）** |
 
 #### 载荷字段
 
@@ -1074,7 +1053,605 @@ else:  return_to_login()
 
 ---
 
-## 三、安全说明
+### 2.18 功能密钥协议
+
+> **功能密钥（Feature Key）是本系统给接入方的「数据防破解」增强能力**：  
+> 服务端把一把随机密钥与软件绑定，**只在 login 成功响应中下发**（`data.feature_key`）。  
+> 接入方用它加解密随程序分发的核心数据包 —— 结果是：**patch 掉登录判定、或登录失败/被踢/过期时，  
+> 客户端拿不到密钥，核心数据永远停留在密文状态**，从「保护验证结果」升级为「保护数据本身」。
+
+**原则：下发密钥，不下发验证结果**
+
+传统网络验证的信任边界在客户端：登录成功与否只是一个分支判断，逆向者 patch 掉分支即可绕过。  
+功能密钥把这个边界移到数据上：
+
+| 场景                     | 无功能密钥           | 有功能密钥               |
+| ------------------------ | ----------------- | ------------------------ |
+| 登录成功                   | 显示核心数据        | 解密核心数据后显示         |
+| patch 掉登录分支           | 直接显示核心数据      | **数据是密文，无法显示**     |
+| 登录失败 / 被踢 / 会话过期   | 数据明文留在内存/资源 | 密钥从未到达，数据保持密文 |
+| 离线宽限期间                 | 同上               | 宽限票据有效期内可继续用已解密数据 |
+
+**配置（管理后台）**
+
+后台「软件管理 → 编辑软件 → 功能密钥」：留空 = 未启用（login 响应中为空串）；  
+点「生成随机」填入 16 字节随机 hex（或任意 ≤128 字符的强随机串）。每个软件独立一把。
+
+**NF1 数据包格式（服务端/SDK 双端实现一致）**
+
+```
+数据包 = "NF1." + base64( iv[16] + AES-256-CBC(明文) ) + "." + hex( HMAC-SHA256("NF1." + base64段, macKey) )
+
+aesKey = SHA256( feature_key + "|nebula-feature-aes" )   // 域分离派生
+macKey = SHA256( feature_key + "|nebula-feature-mac" )
+```
+
+- **encrypt-then-MAC**：先对密文段做 HMAC，打开时**先验签（恒定时间比较）后解密**；
+- 密钥域分离：同一把 feature_key 派生出的 AES 钥与 HMAC 钥互不相关；
+- 格式带 `NF1` 版本前缀，未来换算法可平滑升级。
+
+**C++ SDK 用法（`nebula/client/feature.hpp`）**
+
+```cpp
+// ① 发布前：把核心数据（配置表、关卡数据、算法参数等）加密成数据包随程序分发
+std::string pack = nebula::feature::seal(coreData, /*发布时填入的*/ featureKey);
+//    → 把 pack 写入资源文件 / 内嵌常量。发布后工程里【不再保留 featureKey 明文】
+
+// ② 运行期：登录成功后用服务端下发的密钥打开
+nebula::LoginResult lr = client.login(...);
+if (lr.ok) {
+    std::string data, err;
+    if (nebula::feature::open(pack, lr.feature_key, data, err)) {
+        // data 即核心数据明文
+    } else {
+        // err：密钥不对 / 数据被篡改 —— 按破解处理
+    }
+}
+```
+
+> PHP 侧可用 `openssl_encrypt('aes-256-cbc', ...)` + `hash_hmac('sha256', ...)`  
+> 按上述 NF1 格式制作数据包；SDK 与 PHP 已做格式对拍（互通验证通过）。
+
+**安全边界（务必理解）**
+
+- 功能密钥随 login 响应**经通信信封（AES+HMAC+会话密钥）加密传输**，抓包拿不到明文；
+- 但密钥最终要进入客户端内存参与解密 —— **它提高的是破解成本与门槛，不是绝对防御**：  
+  对手若完整逆向客户端并 dump 运行期内存，仍可能取到已解密数据；
+- 推荐组合拳：功能密钥（数据加密）+ VMProtect（客户端加壳）+ 离线宽限（防断网轰炸）分层纵深。
+
+---
+
+## 三、管理后台接口
+
+入口：`POST /admin/index.php?action=<接口名>`  
+页面入口：`GET /admin/home.php`（或 `/admin/`，输出管理界面）
+
+### 3.1 认证方式
+
+登录后返回 `token`，后续请求通过 **请求头** 传递：
+
+```
+X-Token: <管理员token>
+X-CSRF:  <CSRF令牌>
+```
+
+> 管理端默认返回**明文 JSON**，便于前端 JS 处理。如需加密，请求体加 `"encrypt": 1`。
+
+#### CSRF 令牌
+
+所有**写操作**必须携带 CSRF 令牌（`X-CSRF` 头或 body 的 `csrf` 字段）。  
+令牌由页面入口 `/admin/home.php` 注入到 `window.__NB__.csrf`，并绑定当前 PHP session cookie。
+
+- 只读接口（列表、详情、统计、导出等）**豁免** CSRF 校验
+- 令牌缺失或错误返回 `code=1006`
+
+> 如果你的客户端不是浏览器（如脚本、自动化工具），需先 `GET /admin/home.php`  
+> 并保持 cookie，再从中提取 CSRF 令牌，后续请求同时带上 cookie 和令牌。
+
+
+### 3.2 接口清单
+
+| action                | 说明                                                                                                                                                                                                                                                                                                                            | 权限          |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `login`               | 管理员登录                                                                                                                                                                                                                                                                                                                         | 公开          |
+| `logout`              | 退出                                                                                                                                                                                                                                                                                                                            | 登录          |
+| `profile`             | 获取/修改个人信息、改密码、登录历史                                                                                                                                                                                                                                                                                                            | 登录          |
+| `dashboard`           | 首页统计（用户/卡密/设备/API/趋势）                                                                                                                                                                                                                                                                                                         | 登录          |
+| **用户管理**              |                                                                                                                                                                                                                                                                                                                               |             |
+| `user_list`           | 用户列表（分页/搜索/筛选/排序）                                                                                                                                                                                                                                                                                                             | 登录          |
+| `user_detail`         | 用户详情（含设备、卡密、日志、会话）                                                                                                                                                                                                                                                                                                            | 登录          |
+| `user_save`           | 新增 / 编辑用户                                                                                                                                                                                                                                                                                                                     | 操作员+        |
+| `user_delete`         | 删除用户（需二次密码）                                                                                                                                                                                                                                                                                                                   | 超管          |
+| `user_kick`           | 强制下线 / 重置密码 / 解锁 / 清空设备                                                                                                                                                                                                                                                                                                       | 操作员+        |
+| `user_batch_op`       | 批量：封禁/解封/加时长/加点数/下线/删除                                                                                                                                                                                                                                                                                                        | 操作员+（删除仅超管） |
+| `user_import`         | 从 CSV 批量导入用户                                                                                                                                                                                                                                                                                                                  | 操作员+        |
+| `user_export`         | 导出用户（csv/txt）                                                                                                                                                                                                                                                                                                                 | 登录          |
+| **代理商管理**             |                                                                                                                                                                                                                                                                                                                               |             |
+| `agent_list`          | 代理商列表（含发货统计与按卡类型额度；`all=1` 只取下拉选项）                                                                                                                                                                                                                                                                                            | 登录          |
+| `agent_detail`        | 代理商详情（档案 + 按类型额度单价 + 统计 + 最近卡密/批次/操作记录）                                                                                                                                                                                                                                                                                       | 登录          |
+| `agent_save`          | 新增/编辑/删除/启停/按类型充值(`op=grant`, `types`)/重置密码(`op=reset_password`)                                                                                                                                                                                                                                                              | 操作员+        |
+| **代理商激活码**            |                                                                                                                                                                                                                                                                                                                               |             |
+| `agent_code_list`     | 激活码列表（含发货规格、已用次数、已注册代理；`usable=1` 只看可用码）                                                                                                                                                                                                                                                                                      | 登录          |
+| `agent_code_save`     | 生成(`op=generate`)/编辑(`op=update`)/启停(`op=toggle`)/删除(`op=delete`)                                                                                                                                                                                                                                                             | 操作员+        |
+| **代理商充值卡密**           |                                                                                                                                                                                                                                                                                                                               |             |
+| `agent_recharge_list` | 充值卡密列表（余额充值 / 张数额度；`kind` / `status` / `usable` 过滤）                                                                                                                                                                                                                                                                           | 登录          |
+| `agent_recharge_save` | 生成(`op=generate`)/启停(`op=toggle`)/删除(`op=delete`)                                                                                                                                                                                                                                                                             | 操作员+        |
+| **卡密管理**              |                                                                                                                                                                                                                                                                                                                               |             |
+| `card_list`           | 卡密列表                                                                                                                                                                                                                                                                                                                          | 登录          |
+| `card_generate`       | 批量生成卡密                                                                                                                                                                                                                                                                                                                        | 操作员+        |
+| `card_detail`         | 卡密详情（绑定设备、使用记录）                                                                                                                                                                                                                                                                                                               | 登录          |
+| `card_update`         | 编辑未使用的卡密                                                                                                                                                                                                                                                                                                                      | 操作员+        |
+| `card_export`         | 导出卡密（txt/csv）                                                                                                                                                                                                                                                                                                                 | 登录          |
+| `card_void`           | 作废卡密（单张/按批次）                                                                                                                                                                                                                                                                                                                  | 操作员+        |
+| `card_batch_op`       | 批量作废 / 批量延长有效期 / 删除批次                                                                                                                                                                                                                                                                                                         | 操作员+        |
+| `card_batch_list`     | 卡密批次列表                                                                                                                                                                                                                                                                                                                        | 登录          |
+| **发卡商城**              |                                                                                                                                                                                                                                                                                                                               |             |
+| `shop_goods_list`     | 发卡商品列表（含分类、上架状态、库存口径四元组）                                                                                                                                                                                                                                                                                                      | 登录          |
+| `shop_goods_save`     | 商品新增 / 编辑（必选分类，价格与卡规格精确匹配库存）                                                                                                                                                                                                                                                                                                  | 操作员+        |
+| `shop_goods_delete`   | 删除商品（单个 `id` 或批量 `ids` 数组 / 逗号分隔）                                                                                                                                                                                                                                                                                             | 操作员+        |
+| `shop_goods_toggle`   | 商品上架 / 下架                                                                                                                                                                                                                                                                                                                     | 操作员+        |
+| `shop_goods_import`   | 商品批量导入                                                                                                                                                                                                                                                                                                                        | 操作员+        |
+| `shop_goods_options`  | 商品表单选项（分类列表、卡类型 / 时长 / 设备数可选值）                                                                                                                                                                                                                                                                                                | 登录          |
+| `shop_goods_upload`   | 商品图片上传（仅图片含 gif，≤5MB，`getimagesize` 校验）                                                                                                                                                                                                                                                                                       | 操作员+        |
+| `shop_cards_list`     | 发卡卡密库存列表                                                                                                                                                                                                                                                                                                                      | 登录          |
+| `shop_card_delete`    | 删除发卡卡密                                                                                                                                                                                                                                                                                                                        | 操作员+        |
+| `shop_order_list`     | 发卡订单列表（状态过滤）                                                                                                                                                                                                                                                                                                                  | 登录          |
+| `shop_order_op`       | 订单操作：人工收款确认发货 / 关闭订单                                                                                                                                                                                                                                                                                                          | 操作员+        |
+| `shop_setting_save`   | 发卡网设置（模式 built/external、易支付参数、站点地址 `shop_site_url`、装修项、分类、标签标题等）                                                                                                                                                                                                                                                              | 仅超管         |
+| **文件管理**              |                                                                                                                                                                                                                                                                                                                               |             |
+| `files_integrity`     | 文件完整性：`op=build` 重建 sha256 基准（存 `data/file_baseline.json`）/ `op=check` 比对出改动、新增、缺失三类                                                                                                                                                                                                                                          | 仅超管         |
+| `files_scan`          | Webshell 挂马扫描（14 条特征评分，≥20 分判定可疑）                                                                                                                                                                                                                                                                                             | 仅超管         |
+| `file_view`           | 查看文件内容（前 64KB）                                                                                                                                                                                                                                                                                                                | 仅超管         |
+| `file_delete`         | 删除文件：单个 `id` 或批量 `files` 数组（≤200，Deleter 密码一次确认，运行必需文件硬保护）                                                                                                                                                                                                                                                                    | 仅超管         |
+| **设备与会话**             |                                                                                                                                                                                                                                                                                                                               |             |
+| `device_list`         | 设备列表                                                                                                                                                                                                                                                                                                                          | 登录          |
+| `device_unbind`       | 解绑设备 / 批量解绑 / 按用户 / 清理离线                                                                                                                                                                                                                                                                                                      | 操作员+        |
+| `device_ban`          | 拉黑机器码（可设时长）                                                                                                                                                                                                                                                                                                                   | 操作员+        |
+| `session_list`        | 在线会话                                                                                                                                                                                                                                                                                                                          | 登录          |
+| `session_kick`        | 踢出会话（单个/批量/按用户）                                                                                                                                                                                                                                                                                                               | 操作员+        |
+| **运营**                |                                                                                                                                                                                                                                                                                                                               |             |
+| `notice_list`         | 公告列表                                                                                                                                                                                                                                                                                                                          | 登录          |
+| `notice_save`         | 公告增删改                                                                                                                                                                                                                                                                                                                         | 操作员+        |
+| `version_list`        | 版本列表                                                                                                                                                                                                                                                                                                                          | 登录          |
+| `version_save`        | 版本增删改                                                                                                                                                                                                                                                                                                                         | 操作员+        |
+| `group_list`          | 用户组列表                                                                                                                                                                                                                                                                                                                         | 登录          |
+| `group_save`          | 用户组增删改                                                                                                                                                                                                                                                                                                                        | 操作员+        |
+| **官网运营（互动模块）**        |                                                                                                                                                                                                                                                                                                                               |             |
+| `message_list`        | 官网留言板列表（`status` / `kw` 过滤，返回待审计数）                                                                                                                                                                                                                                                                                            | 登录          |
+| `message_op`          | 留言审核：`pass` / `reject`（可带理由）/ `delete`（级联清理回复与点赞）/ `batch`（批量通过/驳回/删除，单次上限 200）                                                                                                                                                                                                                                               | 操作员+        |
+| `feedback_list`       | 用户反馈列表（`status` / `type` / `kw` 过滤，返回各状态计数）                                                                                                                                                                                                                                                                                   | 登录          |
+| `feedback_reply`      | 反馈处理：`reply`（置为已回复，记录回复人与时间）/ `close` / `reopen` / `delete` / `batch_close`                                                                                                                                                                                                                                                   | 操作员+        |
+| `plan_list`           | 价格套餐列表                                                                                                                                                                                                                                                                                                                        | 登录          |
+| `plan_save`           | 套餐增删改：`save` / `delete` / `toggle`（`price` 为字符串，支持「面议」）                                                                                                                                                                                                                                                                       | 操作员+        |
+| `screenshot_list`     | 客户端截图列表                                                                                                                                                                                                                                                                                                                       | 登录          |
+| `screenshot_save`     | 截图增删改：`save` / `delete` / `toggle`；`url` 强制 http/https，拒绝 `javascript:` / `data:`                                                                                                                                                                                                                                             | 操作员+        |
+| **数据大屏与分析**           |                                                                                                                                                                                                                                                                                                                               |             |
+| `bigscreen`           | 数据大屏：实时在线、今日 / 累计概览、在线曲线、代理销量排行、卡密类型分布、运行时状态；`op=data`（默认）返回数据，`op=flush_cache` 清空缓存键（操作员+）                                                                                                                                                                                                                                   | 登录          |
+| `analytics`           | 留存复购：D1/D3/D7 队列留存、用户与代理复购率、DAU/WAU/MAU 活跃分层、充值趋势                                                                                                                                                                                                                                                                             | 登录          |
+| **日志与设置**             |                                                                                                                                                                                                                                                                                                                               |             |
+| `log_list`            | 业务日志查询                                                                                                                                                                                                                                                                                                                        | 登录          |
+| `audit_list`          | 审计日志（谁改了什么）                                                                                                                                                                                                                                                                                                                   | 登录          |
+| `audit_detail`        | 审计详情（字段级变更明细）                                                                                                                                                                                                                                                                                                                 | 登录          |
+| `stat_overview`       | API 调用统计                                                                                                                                                                                                                                                                                                                      | 登录          |
+| `setting_get`         | 读取设置（含 `login_methods_options` 登录方式、`agent_modes_options` 代理商控量模式可选项、`effective` 策略项当前生效值与来源）                                                                                                                                                                                                                                 | 登录          |
+| `setting_save`        | 保存设置（白名单含 `login_methods` / `single_login` / `geo_block` / `heartbeat_interval` / `heartbeat_timeout` / `unbind_per_day` / `rate_limit_per_min` / `agent_enable` / `agent_unit_price` / `agent_entry_key` / `contact` / `web_message_board` / `ip_blacklist` 等；`ip_blacklist` 归安全档，逐行 `inet_pton` 校验，支持单 IP 与 CIDR 段，非法行整单拒绝） | 操作员+        |
+
+#### 登录方式配置项 `login_methods`
+
+| 取值              | 含义           | 客户端/官网登录字段              |
+| --------------- | ------------ | ----------------------- |
+| `password`      | 用户名 + 密码（默认） | `username` + `password` |
+| `username_code` | 用户名 + 激活码    | `username` + `code`     |
+| `code`          | 激活码（卡密直登）    | `code`                  |
+
+- 三选一，**互斥**；同时作用于客户端 `/api/login` 与官网 `/web/api.php?action=login`。
+- 出厂默认写在 `config/config.php` 的 `policy.login_methods`，后台保存后以数据库 `nb_settings` 为准。
+- 客户端通过 `init` 的 `data.login` 获知当前方式；切换后客户端需重新 `init`。
+- `code` 方式下 `register` 自动关闭（返回 `1004`）。
+
+#### 策略项取值优先级（`lib/Policy.php`）
+
+以下策略项由 `Policy` 统一取值，**数据库优先、配置文件回退**：
+
+| 设置键                   | 说明                                    | 取值接口                          | 出厂默认    |
+| --------------------- | ------------------------------------- | ----------------------------- | ------- |
+| `single_login`        | 同账号单点登录（后登录踢掉先登录）                     | `Policy::singleLogin()`       | `false` |
+| `geo_block`           | 异地登录拦截（已绑定设备换 IP 即拒绝，返回 `4006`）       | `Policy::geoBlock()`          | `false` |
+| `heartbeat_interval`  | 心跳间隔（秒），经 `init` / `heartbeat` 下发给客户端 | `Policy::heartbeatInterval()` | `60`    |
+| `heartbeat_timeout`   | 离线判定（秒），后台在线状态、清理僵尸设备共用               | `Policy::heartbeatTimeout()`  | `180`   |
+| `unbind_per_day`      | 单账号每日解绑次数上限，`0` = 不限制                 | `Policy::unbindPerDay()`      | `3`     |
+| `rate_limit_per_min`  | 单 IP 每分钟最大请求数                         | `Policy::rateLimitPerMin()`   | `120`   |
+| `session_ttl`         | 登录态有效期（秒）                             | `Policy::sessionTtl()`        | `3600`  |
+| `default_max_devices` | 单卡默认最大设备数                             | `Policy::defaultMaxDevices()` | `1`     |
+
+**判定规则**（`Setting::isSet()` 只查数据库，语义明确）：
+
+- 数据库中**不存在**该键 → 使用 `config/config.php` 里的出厂值（**未保存过的站点行为与升级前一致**）
+- 数据库中**已存在**该键 → 一律以库中值为准（即使值是 `0` / 空串也算「已配置」）
+
+`setting_get` 返回的 `data.effective` 会逐项给出 `config` / `db` / `effective` / `source`  
+四个字段，后台「系统设置 → 安全设置」下方&#x7684;**「当前生效值」面板**据此展示，  
+可一眼确认改动是否已落到运行时。
+
+> 补边界：`heartbeat_interval` / `heartbeat_timeout` / `rate_limit_per_min` 为 `0` 或非数字时  
+> 回落默认值；`unbind_per_day` 为负时归零（不限制）。
+
+#### `bigscreen` — 数据大屏
+
+**请求**
+
+```json
+{
+  "op": "data",     // data（默认）| flush_cache
+  "days": 7,        // 趋势曲线天数（默认 7）
+  "hours": 24       // 在线曲线小时数（默认 24）
+}
+```
+
+`op=flush_cache` 会清空业务缓存键（心跳缓冲与统计缓冲除外），返回 `{ "count": <清空的键数> }`。
+
+**响应 `data` 主要字段**
+
+| 字段             | 说明                                                                                     |
+| -------------- | -------------------------------------------------------------------------------------- |
+| `realtime`     | 实时在线数、在线设备数、在线用户数、`timeout`（离线判定秒数）                                                    |
+| `today`        | 今日新增用户 / 激活 / 登录 / API 调用与失败 / 充值 / 新增代理                                               |
+| `total`        | 累计用户、有效用户、卡密（未用/已用）、代理、在线设备                                                            |
+| `online_curve` | 在线曲线（来源 `nb_online_stats` 快照），元素含 `t` / `label` / `online` / `devices`                 |
+| `curves`       | 趋势曲线：激活数 / 新增用户 / API 调用与失败，元素含 `date` / `label` 及各计数                                  |
+| `agent_rank`   | 代理销量排行：`agent_id` / `name` / `generated` / `used` / `unused` / `voided`                |
+| `type_dist`    | 卡密类型分布：`type` / `name` / `total` / `used`                                              |
+| `recent_logs`  | 最近 12 条业务日志                                                                            |
+| `runtime`      | 运行状态：`cache`（驱动/命中）、`heartbeat`（缓冲积压/落库统计）、`stat_buffer`（统计缓冲条数）、`cache_files`（文件缓存占用） |
+
+> `runtime` 是排查缓存 / 聚合问题的第一现场：心跳「缓冲不落库」属正常（等 cron 或阈值触发），  
+> 若长时间持续增长则说明 cron 未运行。
+
+#### `analytics` — 留存复购
+
+**请求**
+
+```json
+{ "days": 30, "cohort_days": 7 }
+```
+
+**响应主要字段**
+
+| 字段                  | 说明                                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------------------ |
+| `retention.list[]`  | 队列留存，元素含 `date` / `label` / `total` / `age` / `d1` / `d3` / `d7`（队列未满 N 天时该列为 `null`）                  |
+| `retention.summary` | 汇总留存率 `d1` / `d3` / `d7`（%）与纳入统计的队列数 `cohorts`                                                         |
+| `repurchase.user`   | 用户复购：`buyers`（激活过卡的用户）/ `repeat`（≥2 张）/ `rate`(%) / `once` / `two_to_five` / `six_plus` / `three_plus` |
+| `repurchase.agent`  | 代理复购：`agents`（兑换过充值卡的代理）/ `repeat`（≥2 次）/ `rate`(%) / `once` / `five_plus`                             |
+| `tier`              | 活跃分层：`dau` / `wau` / `mau` / `inactive`（活跃口径 = 有登录记录的去重用户数）                                            |
+| `dau`               | 每日活跃（`date` / `label` / `users` / `logins`）                                                            |
+| `recharge_trend`    | 每日充值次数（`date` / `label` / `count`）                                                                     |
+
+> `retention` / `repurchase` / `tier` 的口径说明随响应一并返回（`meta` 字段），便于前端展示提示。
+
+### 3.3 角色权限
+
+| role | 名称    | 权限              |
+| ---- | ----- | --------------- |
+| 1    | 超级管理员 | 全部（含删除用户、查看审计）  |
+| 2    | 操作员   | 除删除用户、查看审计外的写操作 |
+| 3    | 只读    | 仅查询类接口          |
+
+> 权限在**接口层**校验（`AdminAuth::READONLY_ACTIONS`），不依赖前端隐藏按钮。  
+> 即使直接构造请求，只读角色也无法执行写操作。
+
+### 3.3.1 批量操作接口说明
+
+#### `user_batch_op` — 用户批量操作
+
+```json
+{
+  "op": "status | add_days | add_points | kick | delete",
+  "ids": [1, 2, 3],
+  "value": 0,          // status 时: 0封禁 1正常 2冻结
+                       // add_days 时: 天数（可为负）
+                       // add_points 时: 点数（可为负，结果不小于0）
+  "password": "xxx"    // 仅 op=delete 需要，二次密码确认
+}
+```
+
+单次最多 500 个用户。`delete` 仅超管可用，且需密码确认。
+
+#### `user_import` — 用户批量导入
+
+```json
+{
+  "content": "用户名,密码,昵称,邮箱,会员天数,点数,设备上限\nuser1,pass123456,昵称,,30,100,2",
+  "dup": "skip",       // skip=跳过已存在  update=更新已存在
+  "default_days": 0    // CSV 未指定天数时的默认值
+}
+```
+
+返回：`{ ok, update, skip, fail, errors[] }`
+
+#### `card_batch_op` — 卡密批量操作
+
+```json
+{ "op": "void | extend | delete_batch", "ids": [1,2,3], "days": 30, "batch_id": 5 }
+```
+
+- `void`：批量作废（仅影响未使用的卡密）
+- `extend`：批量延长卡密自身有效期（永久卡不受影响）
+- `delete_batch`：删除批次记录（未使用的卡密一并删除，已使用的保留）
+
+#### `device_ban` — 拉黑机器码
+
+```json
+{ "device_ids": [1,2], "reason": "异常刷接口", "days": 7 }
+```
+
+`days=0` 表示永久。拉黑同时会解绑设备并踢下线。
+
+### 3.3.2 审计日志
+
+`audit_list` 参数：
+
+| 参数                      | 说明               |
+| ----------------------- | ---------------- |
+| `keyword`               | 搜索操作人/目标/摘要/IP   |
+| `action`                | 按动作筛选            |
+| `admin_id`              | 按操作人筛选           |
+| `date_from` / `date_to` | 日期范围（YYYY-MM-DD） |
+
+`audit_detail` 返回字段级变更：
+
+```json
+{
+  "audit": { "admin_name": "admin", "action_text": "编辑用户", "created_at": "..." },
+  "changes": [
+    { "field": "points", "label": "点数", "old": "10", "new": "110" },
+    { "field": "vip_expire", "label": "会员到期", "old": "未激活", "new": "2026-12-31 00:00:00" }
+  ]
+}
+```
+
+密码类字段只记录「已设置/已修改」，不记录明文或哈希。
+
+### 3.4 示例：管理员登录
+
+```bash
+curl -X POST "http://127.0.0.1/admin/index.php?action=login" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin888"}'
+```
+
+响应：
+
+```json
+{
+  "code": 0,
+  "msg": "登录成功",
+  "data": {
+    "token": "9f8e7d6c...",
+    "expire_at": 1726007200,
+    "admin": { "id": 1, "username": "admin", "nickname": "admin", "role": 1, "role_text": "超级管理员" }
+  }
+}
+```
+
+### 3.5 示例：生成卡密
+
+```bash
+curl -X POST "http://127.0.0.1/admin/index.php?action=card_generate" \
+  -H "Content-Type: application/json" \
+  -H "X-Token: 9f8e7d6c..." \
+  -d '{
+    "count": 100,
+    "type": 1,
+    "duration": 2592000,
+    "max_devices": 2,
+    "prefix": "VIP",
+    "name": "国庆活动批次",
+    "expire_days": 0
+  }'
+```
+
+参数说明：
+
+| 参数          | 说明                              |
+| ----------- | ------------------------------- |
+| count       | 生成数量，1-10000                    |
+| type        | 1时长卡 2点数卡 3次数卡 4永久卡             |
+| duration    | 时长卡=秒数；点数/次数卡=数值；永久卡忽略          |
+| max_devices | 激活后设备上限，1-99                    |
+| group_id    | 激活后进入的用户组 ID，0=不换组（保持注册时的默认用户组） |
+| prefix      | 卡密前缀，仅字母数字                      |
+| expire_days | 卡密本身有效期（天），0=永久有效               |
+| name        | 批次备注名                           |
+
+响应（只返回前 50 条预览）：
+
+```json
+{
+  "code": 0,
+  "msg": "成功生成 100 张卡密",
+  "data": {
+    "batch_id": 3,
+    "count": 100,
+    "codes": ["VIP-AB12-CD34-EF56-GH78", "..."],
+    "preview_count": 50,
+    "type": 1,
+    "duration": 2592000,
+    "expire_at": 0
+  }
+}
+```
+
+> 完整卡密请通过 `card_export` 导出。
+
+---
+
+## 四、代理商后台接口（`/agent/`）
+
+代理商（分销）拥有**完全独立**的后台，与主管理后台互不可见：
+
+| 项目        | 主管理后台                      | 代理商后台                    |
+| --------- | -------------------------- | ------------------------ |
+| 页面入口      | `/admin/`（安装时强制改名）         | `/agent/`                |
+| 接口入口      | `/admin/index.php?action=` | `/agent/api.php?action=` |
+| 账号表       | `nb_admins`                | `nb_agents`              |
+| 会话表       | `nb_admin_sessions`        | `nb_agent_sessions`      |
+| 会话 Cookie | `PHPSESSID`                | `NBAGSID`                |
+| 登录字段      | `username` + `password`    | `username` + `password`  |
+
+### 4.1 认证方式
+
+与主后台一致：登录拿 `token`，后续请求带 `X-Token`，写操作再带 `X-CSRF`。  
+CSRF 令牌由页面入口 `/agent/` 注入到 `window.__NBAG__.csrf`（绑定 `NBAGSID` 会话）。
+
+### 4.2 接口清单
+
+| action          | 说明                                                                       | CSRF       |
+| --------------- | ------------------------------------------------------------------------ | ---------- |
+| `login`         | 代理登录，返回 `token` 与代理资料                                                    | 豁免         |
+| `register`      | **凭激活码自助注册**（`code` / `username` / `password` / `password2` / `contact`） | 豁免（另加独立限流） |
+| `logout`        | 退出并作废当前 token                                                            | 需要         |
+| `profile`       | 我的资料 + 各卡类型额度/单价 + 余额 + 发货统计                                             | 豁免         |
+| `dashboard`     | 概览（资料 + 统计 + 最近 10 条操作记录）                                                | 豁免         |
+| `card_generate` | 生成卡密（按**该卡类型**的额度/单价扣减）                                                  | 需要         |
+| `card_list`     | 我生成的卡密（按 `agent_id` 强制过滤）                                                | 豁免         |
+| `card_export`   | 导出我名下的卡密（txt/csv）                                                        | 需要         |
+| `card_void`     | 作废我名下**未使用**的卡密                                                          | 需要         |
+| `batch_list`    | 我的批次                                                                     | 豁免         |
+| `recharge`      | 兑换充值卡密（余额充值 / 张数额度），`code` 为卡密                                           | 需要         |
+| `password`      | 修改自己的登录密码                                                                | 需要         |
+
+### 4.3 代理商注册（激活码）
+
+代理商有两种来源：**主管理员在后台创建**，或**凭「代理商激活码」自助注册**。
+
+- 主后台「业务管理 → 代理商激活码」生成激活码，码上写死了这些规格：  
+  **每种卡类型激活后进入的用户组**（可按类型分别指定）、**设备上限**、是否允许作废、控量模式、  
+  **代理生成卡密的固定前缀**、**注册后赠予余额**、**每种卡类型的额度/单价**、可用注册次数（`max_uses`，1 = 一次性）、有效期
+- 注册接口把上述规格一次性复制到 `nb_agents` 与 `nb_agent_types`，  
+  **代理商登录后无法自改** —— 因此「卡密激活后进入哪个用户组」始终由主管理员决定
+- 用户组取值优先级：**该卡类型的 `group_id`（`nb_agent_types.group_id`）→ 代理兜底组（`nb_agents.group_id`）→ `0`（不换组）**
+- **卡密前缀**：激活码 / 代理档案上的 `card_prefix` 非空时，代理生成卡密一律强制使用此前缀  
+  （`card_generate` 忽略代理提交的同名字段）；为空则不限制，仍由代理在 `/agent/` 自行填写
+- **注册后赠予余额**（`nb_agent_codes.init_balance`，单位：分）：仅控量模式为 **2（余额计费）** 时生效，  
+  注册时写入 `nb_agents.balance`，代理到手即可发货；其它模式一律写 0
+- 注册成功后 `nb_agents.reg_code` 记录所用激活码，便于对账；主后台激活码列表直接显示「该码注册了哪些代理」
+- 同一激活码并发注册用**带条件的 UPDATE** 消费次数（`used_count < max_uses`），不会超发；  
+  注册过程任一步失败会把次数退回
+- 失败码：`2004` 账号已被占用、`2005` 激活码无效/已停用、`2006` 可用次数已用完、`2007` 激活码已过期、  
+  `6003` 后台已关闭自助注册
+- 限流：同一 IP 10 分钟最多 5 次注册尝试
+
+### 4.4 代理商充值卡密（续费 / 加量）
+
+与「注册激活码」分工不同：**激活码用于开户**，**充值卡密用于给已有代理续费 / 加量**。  
+主后台「业务管理 → 代理商激活码 → 充值卡密」页签批量生成，代理商在 `/agent/` → 「充值卡密」自助兑换。
+
+| kind | 名称   | 兑换效果                                                                        | 适用模式   |
+| ---- | ---- | --------------------------------------------------------------------------- | ------ |
+| 1    | 余额充值 | `nb_agents.balance += amount`（分）                                            | 2 余额计费 |
+| 2    | 张数额度 | 对**一种或多种**卡类型分别 `nb_agent_types.quota_total += quota`（`quota = -1` 表示设为不限量） | 1 张数额度 |
+
+- 表 `nb_agent_recharge_codes`：`code` / `kind` / `amount`（分）/ `card_type` / `quota` /  
+  **`quota_map`（多卡类型张数 JSON，如 `{"1":10,"2":-1}`）** /  
+  `status` / `max_uses` / `used_count` / `expire_at` / `last_agent_id` / `last_used_at`
+- **多卡类型张数**：`kind=2` 时优先读 `quota_map`，为空则回退旧字段 `card_type` + `quota`（单类型，兼容存量卡密）；  
+  单类型卡密生成时也会顺带回写 `card_type` / `quota`。取值规则：`0` = 该类型不充值（不入库），  
+  `-1` = 该类型设为「不限量」，小于 `-1` 收敛为 `-1`，非法卡类型直接丢弃；至少要有一种类型有效，否则拒绝生成
+- 生成参数：`count`（≤200）、`prefix`（默认 `RCG`，形如 `RCG-XXXX-XXXX`）、`kind`、  
+  `amount_yuan`（kind=1）、**`quota_map`（kind=2，多类型）** 或 `card_type` + `quota`（kind=2，单类型旧写法）、  
+  `max_uses`（>1 可当通用充值码）、`expire_days`（0 = 永久）、`remark`
+- 兑换：`AgentRecharge::redeem()` 在**同一事务**内先带条件 UPDATE 扣次数  
+  （`status=1 AND used_count < max_uses`，防并发重复兑换），再按 `quota_map` 逐项入账，  
+  最后写代理日志（`action=recharge`，明细形如「时长卡 +10 张、点数卡 设为不限量」）
+- 已是「不限量」的类型再充值仍保持不限量（`IF(quota_total < 0, -1, ...)`）
+- 已兑换过的卡密**不可删除**，只能停用（保留追溯）；停用 / 过期 / 次数用尽的卡密兑换时会被拒绝
+- 代理端在「充值卡密」页可看到当前余额与各类型额度，兑换成功后即时刷新
+- 升级脚本：`php install/migrate_agent_recharge.php`（建表）+ `php install/migrate_recharge_quota_map.php`（多类型，均可重复执行）
+
+### 4.5 控量模式（`nb_agents.charge_mode`）与按卡类型计费
+
+**额度与单价按卡类型分别配置**（`nb_agent_types`：`agent_id + card_type` 唯一），  
+`nb_agents.quota_total / unit_price` 为历史字段，自 v1.1 起不再参与计费。
+
+| 值 | 名称   | 生成时的扣减规则                                                               |
+| - | ---- | ---------------------------------------------------------------------- |
+| 1 | 张数额度 | 扣该卡类型的 `quota_used`；该类型 `quota_total = -1` 表示不限，`enabled = 0` 表示不开放此类型 |
+| 2 | 余额计费 | 扣 `balance`（分）：**该卡类型的单价** × 张数；类型单价为 0 时回落到「系统设置 → 代理商默认单价」           |
+| 3 | 不限量  | 不扣减，仅记录归属与日志（仍要求该类型已开放）                                                |
+
+- 额度/余额的扣减使用**带条件的 UPDATE** 保证并发安全；生成失败（如卡密去重后为 0 张）会自动补偿退回
+- 代理**不能**自定义「设备上限」「激活用户组（按卡类型）」「卡密固定前缀」与「各类型额度/单价」——统一取代理档案（或激活码预设），  
+  避免越权发放高权限卡密
+- 余额计费下 `Agent::typeList()` 会为每种卡类型给出 **`can_make` / `can_make_text`**  
+  （= `balance ÷ 该类型单价`，不足一张按 0 计），代理端「发货规格」据此显示每种卡还能生成多少张
+- 主后台「编辑代理商」与「生成激活码」表单都提供按卡类型的**额度/单价/激活用户组**矩阵；  
+  充值走 `agent_save` 的 `op=grant`，提交 `types: {"4": 2, "1": 1}` 表示给永久卡 +2 张、时长卡 +1 张
+
+### 4.6 生成卡密请求示例
+
+```json
+{
+  "count": 10,
+  "type": 1,
+  "duration": 30,
+  "prefix": "VIP",
+  "expire_days": 0,
+  "name": "双十一批次",
+  "remark": ""
+}
+```
+
+- `type`：1 时长卡 / 2 点数卡 / 3 次数卡 / 4 永久卡（必须为该代理**已开放**的类型）
+- `duration`：时长卡填**天数**（服务端换算为秒），其他类型填原始数值，永久卡可传 0
+- 单次最多 500 张；生成限流：每分钟 10 次、每天 100 次
+
+响应中的 `data.codes` 只返回前 50 条预览，`data.cost` 会说明本次扣的是哪个类型的额度或多少钱。
+
+### 4.7 归属性
+
+代理生成的卡密写入 `nb_cards.agent_id`，批次写入 `nb_card_batches.agent_id`：
+
+- 主后台「卡密管理」可用 `agent_id` 筛选来源（`''` 全部 / `0` 官方直发 / `>0` 指定代理）
+- `card_export` 同样支持 `agent_id` 参数
+- 主后台删除代理商时，若其名下有卡密会被拒绝（避免归属变成野指针），需改为「禁用」
+- 删除激活码时，若该码已被注册使用同样会被拒绝，需改为「停用」
+
+### 4.8 相关系统设置
+
+| 设置项                     | 说明                                             |
+| ----------------------- | ---------------------------------------------- |
+| `agent_enable`          | 是否开放代理商后台（关闭后 `/agent/` 与接口全部拒绝）               |
+| `agent_register_enable` | 是否开放代理商**自助注册**（关闭后只能由管理员在后台创建账号）              |
+| `agent_unit_price`      | 代理商默认单价（元/张），某卡类型未单独定价时使用；为 0 时「余额计费」模式拒绝生成该类型 |
+| `agent_entry_key`       | 可选入口密钥，填写后需先访问 `/agent/?k=密钥`，否则返回仿真 404       |
+
+---
+
+## 五、发卡网前台接口（`/shop/`）
+
+发卡网前台为独立入口，无需后台会话。接口入口 `/shop/api.php?action=`，  
+买家会话为独立 Cookie（HttpOnly + SameSite=Lax）；登录方式跟随后台 `login_methods`  
+配置，登录/注册/找回均带图形验证码与 IP 限流。
+
+| action           | 说明                                  | 认证        |
+| ---------------- | ----------------------------------- | --------- |
+| `info`           | 商店信息：商品、分类、装修（标题/横幅/主题色/公告）、登录方式    | 公开        |
+| `order`          | 创建订单：卡规格四元组精确匹配库存，内置（返回支付参数）或人工收款模式 | 公开（游客可下单） |
+| `auth`           | 登录 / 注册 / 卡密直登（`loginBy` 自动建号激活）    | 公开        |
+| `captcha`        | 图形验证码                               | 公开        |
+| `reclaim_lookup` | 找回密码第一步：凭激活码查询账号（限流每小时 5 次）         | 公开        |
+| `reclaim_save`   | 找回密码第二步：验证码校验通过后重置密码                | 公开        |
+| `account`        | 我的账号：购买的卡密、会员时长                     | 登录        |
+| `activate`       | 激活卡密（委托绑定到当前账号）                     | 登录        |
+| `query`          | 订单查询：凭不可枚举订单号（miss 封禁 40 次）或「凭证+密码」 | 公开        |
+
+支付回调 `/shop/notify.php`（易支付 POST）：MD5 验签 + 金额比对 + 幂等，  
+自动发货走事务 `FOR UPDATE` 取未使用卡密，缺货自动转人工。
+
+---
+
+## 六、安全说明
 
 1. **固定 IV 的取舍**：为便于客户端实现，IV 由密钥派生而非随机。这降低了语义安全性，但配合 HMAC 签名 + 时间戳 + nonce 防重放，已能抵御常见的抓包篡改与重放攻击。若需更高强度，可改为随机 IV 前置到密文（需同步修改客户端）。
 2. **签名保护范围**：签名覆盖 `data` 与时间戳、nonce，任何篡改都会导致校验失败。
@@ -1084,8 +1661,36 @@ else:  return_to_login()
    - 单 IP 每分钟 10 次登录尝试
    - 单 IP 每分钟 20 次激活尝试
    - 单账号每日 3 次设备解绑
-5. **密码存储**：bcrypt（cost 10），兼容历史 md5 哈希自动升级。改密后该账号所有旧会话立即失效。
-6. **离线宽限票据**：
+5. **密码存储**：bcrypt（cost 10），兼容历史 md5 哈希自动升级。  
+   管理员密码要求至少 8 位且含字母和数字；改密后该账号所有旧会话立即失效。
+6. **管理端防护**：
+   - **CSRF**：写操作校验令牌（`X-CSRF`），只读接口豁免
+   - **入口密钥**：可配置 `admin.entry_key`，访问后台需带 `?k=密钥`，错误时返回 404 不暴露后台
+   - **IP 白名单**：可限制后台访问来源 IP
+   - **二次密码确认**：删除类敏感操作需重新输入管理密码
+   - **登录防爆破**：连续失败 N 次锁定账号（默认 5 次 / 15 分钟），失败尝试记录来源 IP
+   - **审计追溯**：所有写操作记录操作人、IP、UA、时间及字段级变更前后值
+   - **会话隔离**：管理端令牌存独立表（`nb_admin_sessions`），与用户会话互不影响
+   - **代理商隔离**：代理商使用 `nb_agents` + `nb_agent_sessions` + `NBAGSID` 会话，  
+     仅能操作 `agent_id` 归属自己的卡密（作废、导出均做强校验），且无法自定义设备上限、用户组与各类型额度单价
+   - **激活码即开户凭证**：代理自助注册必须持有主管理员生成的激活码，  
+     注册次数用条件 UPDATE 消费（不会超发），已注册过的码禁止删除（保留追溯）
+   - **密钥不落地**：AES 密钥只存在服务端配置，前端页面仅注入随机化的会话标识
+7. **跨域**：默认关闭（`cors_origins` 为空数组）。需要跨域时填具体域名，**不要用 `*`**，  
+   因为管理端使用凭据（cookie + token），通配来源会导致凭据泄露。
+8. **前端源码保护**：
+   - 界面逻辑按模块拆分到 `admin/assets/js/`，不内联在页面里
+   - 接口地址、会话 key、CSRF 令牌由 PHP 动态注入，不硬编码在静态 JS 中
+   - 敏感配置（密钥、盐值）从不下发到前端
+9. **生产环境建议**：
+   - 使用 HTTPS，避免密钥在传输中暴露
+   - 将 `enforce_crypto` 保持为 `true`
+   - 修改后台目录名（`mv admin manage_xxxx`）
+   - 配置后台入口密钥（`admin.entry_key`）
+   - 开启管理端 IP 白名单
+   - 关闭 `debug` 与 `log.record_raw`
+   - 删除 `install` 目录
+10. **离线宽限票据**：
     - 用 **ECDSA P-256（ES256）** 非对称签名，服务端只持有**私钥**，客户端只拿到**公钥**——  
       公钥泄露无法伪造票据，与「对称密钥下发到客户端」的方案有本质区别。
     - 私钥落盘在 `config/grace_keys.php`，位于部署模板已 deny 的 `config/` 目录内；  
@@ -1094,60 +1699,10 @@ else:  return_to_login()
     - 宽限只延长**离线**运行时间，联网后立即以服务端判定为准，不会成为「永久绕过封号」的后门。
     - 需要**立即使所有已下发票据失效**时：删除 `config/grace_keys.php`（服务端会自动重新生成密钥），  
       或把 `grace.seconds` 设为 `0` 关闭该能力。
-7. **缓存与聚合**：
+11. **缓存与聚合**：
     - 缓存只存**派生数据与计数**（在线缓冲、心跳缓冲、统计缓冲、热点配置），不缓存明文密码等敏感字段。
     - Redis 未设密码时只监听内网 / 本机（`127.0.0.1`），切勿把无密码 Redis 暴露到公网。
     - 文件缓存落在 `logs/cache`，依赖部署模板对 `logs/` 目录的整目录 deny；  
       若自行改动缓存目录，务必同步补充 deny 规则。
     - 心跳缓冲 / 统计缓冲**不落业务数据**，即使缓存整体丢失，也只会造成少量在线时长统计偏差，  
       不影响登录、激活、计费等核心链路（每个请求的判定仍实时读库）。
-
----
-
-## 四、支付回调（异步通知）
-
-发卡支付成功后，支付渠道服务器回调本系统完成入账。入口脚本位于 `shop/`：
-
-| 渠道 | 回调入口 | 协议 |
-|---|---|---|
-| 微信支付官方（Native / JSAPI） | `shop/wechat_notify.php` | 微信支付 **APIv3** |
-| 易支付（通用托管） | `shop/notify.php` | MD5 签名表单 |
-| 支付宝 | `shop/alipay_notify.php` | RSA2 表单 |
-
-### 4.1 微信支付 V3 回调（`shop/wechat_notify.php`）
-
-**配置**（后台 `shop_pay_cfg.wechat.*` / `wechatauth.*`）：`appid`、`mchid`（商户号）、
-`apiKey`（**APIv3 密钥**，32 字节）、`cert`（商户 API 证书私钥）、`serial`（商户证书序列号）；
-另需把微信支付平台证书放置于 `Setting::get('wechat_cert_dir')` 指定目录（默认 `certs/wechat/`）。
-
-**处理流程（与官方规范一致）：**
-
-1. 读取通知体外层 JSON（`id / event_type / resource_type / resource`）。
-2. **验签**：取请求头 `Wechatpay-Timestamp / Wechatpay-Nonce / Wechatpay-Signature / Wechatpay-Serial`，
-   构造验签串 `"{timestamp}\n{nonce}\n{原始请求体}\n"`，用 **Serial 对应的平台证书公钥** 验证
-   `Wechatpay-Signature`（SHA256 with RSA）。时间戳与服务器时差超过 ±300 秒视为重放，拒绝。
-3. **解密 resource**：`AEAD_AES_256_GCM`
-   - 密钥 = APIv3 密钥（32 字节）；IV = `resource.nonce`（12 字节）；
-   - 密文 = `base64_decode(resource.ciphertext)`，**末 16 字节为 GCM tag**；
-   - AAD = `resource.associated_data`；
-   - 解密得到 `transaction` 明文 JSON。
-4. **业务校验与入账**：`trade_state == SUCCESS`、`out_trade_no` 对应订单存在且金额一致
-   （`amount.total` 单位为分）、状态幂等；`transaction_id` 记入订单 `trade_no`。
-5. **应答**（微信以此判断是否重试）：
-   - 成功：`200` + `{"code":"SUCCESS","message":"成功"}`；
-   - 失败（验签失败 / 解密失败 / 订单异常）：**`5xx`** + `{"code":"FAIL","message":"原因"}`，
-     微信将按衰减节奏重试通知；**切勿**对失败返回 200（微信会认为应答成功、永不重试）。
-
-> 实现集中在 `lib/Pay.php::wechatVerifyNotify()`（验签 + 解密 + 校验）与
-> `wechatAuthHeader()`（商户侧调用 APIv3 的 Authorization 头构造）。
-> 回归测试见 `tests/wechat_v3_notify_test.php`。
-
-### 4.2 易支付 / 支付宝回调
-
-- 易支付：`GET/POST` 表单签名（MD5，按商户密钥排序拼接），验签通过且金额一致后入账，
-  返回纯文本 `success`；
-- 支付宝：RSA2 验签（支付宝公钥），异步通知按参数 `trade_status` 判定，
-  处理成功输出 `success`。
-
-所有渠道回调共同约束：**入账幂等**（重复通知不重复发货）、**金额以渠道通知为准**、
-**任何异常都不得返回成功应答**（让渠道重试，直至人工介入）。

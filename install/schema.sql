@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS `nb_softwares` (
   `update_url`     VARCHAR(255) DEFAULT NULL,
   `update_note`    TEXT         DEFAULT NULL,
   `login_methods`  VARCHAR(20)  NOT NULL DEFAULT '' COMMENT '登录方式覆盖（空=跟随全局设置，password/username_code/code）',
+  `feature_key`    VARCHAR(128) NOT NULL DEFAULT '' COMMENT '功能密钥（仅 login 成功后下发，空=未启用；接入方用于解密随程序分发的核心数据包）',
   `policy_json`    TEXT         DEFAULT NULL COMMENT '策略覆盖 JSON（空=全部跟随全局；键见 lib/Policy.php）',
   `status`         TINYINT      NOT NULL DEFAULT 1 COMMENT '1启用 0停用',
   `remark`         VARCHAR(255) DEFAULT NULL,

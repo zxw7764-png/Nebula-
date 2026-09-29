@@ -163,7 +163,7 @@ nebula::Client::LoginResult lr = c.login(account, secret);
 | `username_code` | 用户名     | 激活码      |
 | `code`（卡密直登）    | 卡密      | 任意（自动置空） |
 
-成功时 `lr.ok = true`：`lr.token`（后续所有接口的凭证）、`lr.user`（`user_id` / `username` / `vip_expire` / `vip_text` / `points` / `max_devices` / `group_id`…）、`lr.account_created`（卡密直登自动建号时为 true）。失败时 `lr.code` / `lr.msg`，错误码见 `docs/API.md` 1.4（本地码：`-1` 网络 / `-2` 验签解密 / `-3` HTTP）。
+成功时 `lr.ok = true`：`lr.token`（后续所有接口的凭证）、`lr.user`（`user_id` / `username` / `vip_expire` / `vip_text` / `points` / `max_devices` / `group_id`…）、`lr.account_created`（卡密直登自动建号时为 true）、`lr.feature_key`（功能密钥，见 13.2；后台未启用时为空串）。失败时 `lr.code` / `lr.msg`，错误码见 `docs/API.md` 1.4（本地码：`-1` 网络 / `-2` 验签解密 / `-3` HTTP）。
 
 ### 5.3 heartbeat · 心跳保活
 
@@ -433,6 +433,42 @@ c.loginAndGuard(account, secret,
 
 - **想用**：判定跳转被壳虚拟化（需 `NEBULA_SHELL_ENABLE=1` + VMP 加壳），patch 难度明显提高。
 - **不用**：完全可跳过，保留原有的 `LoginResult lr = c.login(...); if(lr.ok)` 即可——未定义 `NEBULA_SHELL_ENABLE` 时 `NEBULA_MARK_*` 是空宏，此调用零开销、等价于直接把 `lr.ok` 走分支。
+
+### 13.2 功能密钥（可选）：数据防破解
+
+> 原理：「下发解密密钥，不下发验证结果」。传统验证的信任边界是客户端里的一个
+> `if(lr.ok)` 分支，patch 掉即绕过；功能密钥把边界移到**数据**上——核心数据加密后
+> 随程序分发，解密密钥只在 login 成功响应中由服务端下发（登录失败 / 被踢 / 过期后
+> 密钥不出现）。patch 掉登录判定也拿不到密钥，**密文数据永远解不开**。
+
+**四步用法**（头文件 `nebula/client/feature.hpp`，伞头已自动包含）：
+
+```cpp
+// ① 后台「软件管理」为本软件设置功能密钥（可一键随机生成）
+// ② 开发期：把核心数据加密成数据包，随程序分发（资源文件 / 内嵌常量）
+std::string pack = nebula::feature::seal(coreData, "后台设置的那串密钥");
+//    ★ 发布后源码中不再保留密钥明文，只有 pack
+
+// ③ 运行期：登录成功后用服务端下发的密钥打开
+nebula::Client::LoginResult lr = c.login(account, secret);
+if (lr.ok && !lr.feature_key.empty()) {
+    std::string data, err;
+    if (nebula::feature::open(pack, lr.feature_key, data, err)) {
+        StartMain(data);        // data = 核心数据明文
+    } else {
+        // err：数据被篡改或密钥不对 —— 按破解处理
+    }
+}
+
+// ④ 服务器 PHP 侧制作数据包（与 SDK 格式互通，已对拍验证）：
+//    openssl_encrypt('aes-256-cbc') + hash_hmac('sha256')，格式见 docs/API.md 2.18
+```
+
+**数据包格式 `NF1`**：`NF1.<base64(iv[16]+AES-256-CBC)>.<hex(HMAC-SHA256)>`，
+encrypt-then-MAC（先恒定时间验签后解密），AES/HMAC 密钥由功能密钥域分离派生。
+
+**安全边界**：密钥经通信信封加密传输（抓包拿不到明文），但最终要进客户端内存参与
+解密——它大幅提高破解成本，不是绝对防御；配合 13.1 授权门卫 + VMP 加壳分层使用效果最佳。
 
 ---
 
