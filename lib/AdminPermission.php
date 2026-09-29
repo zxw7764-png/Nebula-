@@ -302,6 +302,42 @@ final class AdminPermission
     ];
 
     // ------------------------------------------------------------------
+    // 查看类 action 白名单
+    // ------------------------------------------------------------------
+    /**
+     * 「能看到功能展示、不能实际操作」：下列查看类 action 对所有已登录
+     * 管理员放行（数据展示层），写操作仍按超管勾选的权限清单拦截。
+     *
+     * 刻意不放行的敏感查看接口（即使它们语义上也是「查看」）：
+     *   · software_list        —— 下发 aes_key / sign_salt（SDK 通信密钥）
+     *   · setting_get          —— 含支付参数 / 安全配置 / 缓存连接信息
+     *   · admin_list           —— 管理员清单与权限配置（admin.manage 硬权限）
+     *   · user_export / card_export —— 数据导出（外带），导出权限单独控制
+     *   · shop_goods_list      —— 发卡商品与挂卡规格（业务档配置）
+     *   · template_list / tpl_sections_get / shop_sw_get / software_web_get
+     *                          —— 站点展示档配置
+     *   · files_* / system_update_* —— 安全工具与基础设施档
+     * 未放行的页面由前端统一渲染「未授权」空态（见 router.js GUARD_OF_PAGE）。
+     */
+    private const VIEW_ACTIONS = [
+        // 总览 / 统计
+        'dashboard', 'bigscreen', 'analytics', 'stat_overview',
+        // 用户与设备（查看）
+        'user_list', 'user_detail', 'group_list',
+        'device_list', 'device_ban_list', 'session_list',
+        // 卡密与交易（查看）
+        'card_list', 'card_detail', 'card_batch_list',
+        'shop_cards_list', 'shop_order_list',
+        // 代理（查看）
+        'agent_list', 'agent_detail', 'agent_code_list', 'agent_recharge_list',
+        // 内容运营（查看）
+        'notice_list', 'version_list', 'message_list', 'feedback_list',
+        'plan_list', 'seller_list', 'screenshot_list', 'game_list',
+        // 日志审计（查看）
+        'log_list', 'audit_list', 'audit_detail',
+    ];
+
+    // ------------------------------------------------------------------
     // 校验
     // ------------------------------------------------------------------
 
@@ -400,6 +436,10 @@ final class AdminPermission
         $perm = self::ACTION_PERM[$action];
         if ($perm === null) {
             return; // 无需权限
+        }
+        // 查看类白名单：登录管理员一律放行（功能展示可见，操作才按勾选拦截）
+        if (in_array($action, self::VIEW_ACTIONS, true)) {
+            return;
         }
         self::require($admin, $perm);
     }

@@ -110,16 +110,40 @@ function tabVisible(tid) {
     return !p || can(p);
 }
 
+// ------------------------------------------------------------------
+// 「能看到功能展示，不能实际操作」
+// ------------------------------------------------------------------
+// 菜单与复合页 tab 全部展示（不再按权限隐藏）；未授权页面的主加载
+// 接口在服务端就不放行（见 lib/AdminPermission.php VIEW_ACTIONS 注释），
+// 这里按 page/tab → { 主 action, 权限点 } 做统一兜底：进入后渲染
+// 「未授权」空态，而不是卡在加载中。操作类接口被拦时由 api.js toast。
+const GUARD_OF_PAGE = {
+    softwares:     { perm: 'settings.business' },   // software_list 下发 SDK 通信密钥
+    setting:       { perm: 'settings.site' },
+    templates:     { perm: 'settings.site' },
+    admins:        { perm: 'admin.manage' },
+    files:         { perm: 'settings.business' },
+    system_update: { perm: 'settings.infra' },
+    // 复合页内 tab
+    shop_setting:  { perm: 'settings.site' },
+    shop_goods:    { perm: 'settings.business' },
+    portal_web:    { perm: 'settings.site' },
+    games:         { perm: 'settings.site' },
+};
+
+function pageOpen(pid) {
+    const g = GUARD_OF_PAGE[pid];
+    return !g || can(g.perm);
+}
+
 function visibleTabs(cid) {
-    return (COMPOSITES[cid] || []).filter(tabVisible);
+    // tab 全展示；未授权 tab 进入时由 go()/renderSubTabs 兜底渲染空态
+    return COMPOSITES[cid] || [];
 }
 
 export function visibleMenus() {
-    return MENUS.filter(m => {
-        if (m.group) return true;
-        if (m.type === 'composite') return visibleTabs(m.id).length > 0;
-        return !m.perm || can(m.perm);
-    });
+    // 菜单全部展示（能看到功能入口），未授权页面进入后渲染「未授权」空态
+    return MENUS.slice();
 }
 
 const SUB_KEY = 'nb_comp_tab_v1';
@@ -129,14 +153,16 @@ function readSubTab(cid) {
     if (pendingTab) {
         const t = pendingTab;
         pendingTab = null;
-        if (visibleTabs(cid).includes(t)) return t;
+        if (visibleTabs(cid).includes(t) && pageOpen(t)) return t;
     }
     try {
         const raw = JSON.parse(localStorage.getItem(SUB_KEY) || '{}');
-        if (visibleTabs(cid).includes(raw[cid])) return raw[cid];
+        if (visibleTabs(cid).includes(raw[cid]) && pageOpen(raw[cid])) return raw[cid];
     } catch (e) {
  }
-    return visibleTabs(cid)[0] || null;
+    // 默认落第一个「已授权」tab；全部未授权时回第一个（渲染层兜底空态）
+    const tabs = visibleTabs(cid);
+    return tabs.find(pageOpen) || tabs[0] || null;
 }
 
 function writeSubTab(cid, tid) {
@@ -160,6 +186,11 @@ function renderSubTabs(cid, active) {
     bar.querySelectorAll('button[data-tab]').forEach(btn => {
         btn.addEventListener('click', () => {
             const tid = btn.dataset.tab;
+            if (!pageOpen(tid)) {
+                document.getElementById('content').innerHTML =
+                    empty('<i class="bi bi-shield-lock"></i>', '该功能未授权，请联系超级管理员开通');
+                return;
+            }
             writeSubTab(cid, tid);
             bar.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === btn));
             const fn = registry[tid];
@@ -292,6 +323,19 @@ export function go(page) {
 
     const menus = visibleMenus();
     if (!menus.some(m => m.id === page)) page = 'dashboard';
+
+    // 未授权页面：渲染「未授权」空态（数据接口服务端本就不放行，不白费请求）
+    if (!pageOpen(page)) {
+        S.page = page;
+        const titleEl = document.getElementById('pageTitle');
+        if (titleEl) titleEl.textContent = TITLES[page] || page;
+        renderNav();
+        hideSubTabs();
+        document.getElementById('content').innerHTML =
+            empty('<i class="bi bi-shield-lock"></i>', '该功能未授权，请联系超级管理员开通');
+        replayContentAnim();
+        return;
+    }
 
     S.page = page;
     const titleEl = document.getElementById('pageTitle');
