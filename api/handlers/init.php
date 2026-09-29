@@ -63,20 +63,27 @@ $notices = Database::all(
 $kid  = '';
 $skey = '';
 if ($machineId !== '') {
-    $nowSk = time();
-    $kid   = bin2hex(random_bytes(8));
-    $skey  = bin2hex(random_bytes(24));
+    // 2026-09-30 修复（防表灌水）：sign_keys 每次签发都插一行（7 天 TTL），
+    // 随机 machine_id + 代理池可无限写表。按机器码限流：单机器码 10 次/分钟，
+    // 超限拒绝签发但正常返回响应其余字段（kid/s 为空，客户端回落主盐路径）。
+    if (!RateLimit::hit('signkey:' . hash('sha256', 'nbmid|' . $machineId), 10, 60)) {
+        Logger::log('init', 0, '会话密钥签发过于频繁', ['machine_id' => substr($machineId, 0, 32)]);
+    } else {
+        $nowSk = time();
+        $kid   = bin2hex(random_bytes(8));
+        $skey  = bin2hex(random_bytes(24));
 
-    Database::exec('DELETE FROM ' . Database::t('sign_keys') . ' WHERE expire_at > 0 AND expire_at < ?', [$nowSk]);
-    Database::exec(
-        'DELETE FROM ' . Database::t('sign_keys') . ' WHERE machine_id = ? AND software_id = ?',
-        [$machineId, (int) $sw['id']]
-    );
-    Database::exec(
-        'INSERT INTO ' . Database::t('sign_keys') . ' (kid, skey, software_id, machine_id, created_at, expire_at, last_used_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [$kid, $skey, (int) $sw['id'], $machineId, $nowSk, $nowSk + 86400 * 7, $nowSk]
-    );
+        Database::exec('DELETE FROM ' . Database::t('sign_keys') . ' WHERE expire_at > 0 AND expire_at < ?', [$nowSk]);
+        Database::exec(
+            'DELETE FROM ' . Database::t('sign_keys') . ' WHERE machine_id = ? AND software_id = ?',
+            [$machineId, (int) $sw['id']]
+        );
+        Database::exec(
+            'INSERT INTO ' . Database::t('sign_keys') . ' (kid, skey, software_id, machine_id, created_at, expire_at, last_used_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [$kid, $skey, (int) $sw['id'], $machineId, $nowSk, $nowSk + 86400 * 7, $nowSk]
+        );
+    }
 }
 
 Response::ok([

@@ -19,12 +19,23 @@ class RiskScore
     /** 单用户缓存时长（秒） */
     public const TTL = 600;
 
-    /** 评估单个用户（persist=true 时按阈值自动冻结） */
+    /**
+     * 评估单个用户（persist=true 时按阈值自动冻结）
+     * ------------------------------------------------------------------
+     * 2026-09-30 修复：缓存命中时也必须执行冻结判定。
+     * 自动冻结的唯一触发点是登录失败后的 evaluate(uid, true)——若命中缓存
+     * 直接 return，阈值穿越会被延迟到缓存过期（最长 10 分钟），且攻击者
+     * 停手等待缓存过期后就永远不会被冻结。maybeFreeze 内部是幂等的
+     * （status<>1 直接返回、UPDATE 带 status=1 条件），重复调用无害。
+     */
     public static function evaluate(int $userId, bool $persist = false): array
     {
         $ck = 'risk_user_' . $userId;
         $hit = Cache::get($ck);
         if (is_array($hit) && isset($hit['score'])) {
+            if ($persist) {
+                self::maybeFreeze($userId, $hit);
+            }
             return $hit;
         }
 

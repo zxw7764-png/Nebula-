@@ -12,6 +12,9 @@ data/file_baseline.json
 data/backups/*
 !data/backups/.gitkeep
 
+# 测试证书由 tests/wechat_v3_notify_test.php 运行时自动生成（仅测试用，勿入库）
+tests/_certs/
+
 # 用户上传文件
 uploads/shop/*
 uploads/web/*

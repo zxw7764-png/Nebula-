@@ -18,6 +18,15 @@
 $token     = Util::str($requestData, 'token', '');
 $machineId = Util::str($requestData, 'machine_id', '');
 
+// 2026-09-30 修复：心跳必须携带 machine_id。
+// 下面的「设备解绑检查」以 machine_id 为前提——缺失时会静默旁路设备校验，
+// 管理端强制解绑后旧会话仍可一直心跳到 TTL。旧客户端不带 machine_id，
+// 按 need_relogin 处理走一轮 init+login 即可带上。
+if ($machineId === '') {
+    Logger::log('heartbeat', 0, '心跳缺少 machine_id', ['token' => substr($token, 0, 8)]);
+    Response::send(4003, '缺少机器码 machine_id', ['need_relogin' => true]);
+}
+
 $v = Session::validate($token, $machineId);
 if (!$v['ok']) {
     Logger::log('heartbeat', 0, $v['msg'], ['machine_id' => $machineId]);
