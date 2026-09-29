@@ -42,7 +42,8 @@
 - 新增 `docs/ARCHITECTURE.md` 架构设计文档：分层架构、请求生命周期，
   以及客户端 API 管线 / 管理端鉴权 / 密钥平滑轮换 / 离线宽限 / 响应防伪造 / 心跳与统计聚合 /
   支付回调 / 在线更新 等关键链路时序图，附组件清单与安全设计对照表
-- 修正 README 与代码不一致处：PHP 最低版本 `7.4` → `8.1`（`str_contains` 需 8.0、`never` 返回类型需 8.1）；
+- 统一全项目 PHP 最低版本声明为 `8.0`（README / 架构文档 / 安装向导 / 在线更新引擎），
+  并将 `lib/bootstrap.php` 中 `fake_404_exit()` 的 `never` 返回类型改为 `void`，消除 8.1 专属语法依赖；
   `install/` 清单改为真实分发内容并说明迁移脚本随更新包分发、不随空白包分发；
   `sdk/` 布局补充 `nebula/` 子模块与 `vmp/`、`themida/`；`api/handlers` 清单补充 `online`
 - 统一文档中心互链：`docs/API.md`、`docs/API_RAW_EXAMPLES.md`、`docs/TEMPLATE.md`、

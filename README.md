@@ -207,7 +207,7 @@ yanzheng/
 
 | 项目      | 要求                                      |
 | ------- | --------------------------------------- |
-| PHP     | ≥ 8.1（`str_contains` 需 8.0，`never` 返回类型需 8.1） |
+| PHP     | ≥ 8.0（`str_contains` / `str_starts_with` 需 8.0） |
 | 扩展      | `pdo_mysql`、`openssl`、`json`、`mbstring` |
 | 数据库     | MySQL 5.7+ / MariaDB 10.3+              |
 | 缓存（可选）  | Redis 5.0+（无 `redis` 扩展也能用，见「缓存与心跳聚合」）；不部署则自动走文件缓存 |

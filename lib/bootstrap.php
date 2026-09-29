@@ -122,7 +122,7 @@ if (!function_exists('fake_404_exit')) {
      * 输出自定义 404 页并终止（沿用历史函数名，内部已换装自定义错误页）。
      * 用于后台入口 token 校验失败等场景：不返回任何暴露后台存在的信息。
      */
-    function fake_404_exit(): never
+    function fake_404_exit(): void
     {
         nb_error_page(404);
         exit;

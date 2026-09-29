@@ -274,7 +274,7 @@ try {
     $filesBackedUp = 0;
     for ($i = 0; $i < $zip->numFiles; $i++) {
         $entry = $zip->getNameIndex($i);
-        // 兼容 PHP 7.3：用 substr 判断是否为目录条目（以 / 结尾）
+        // 用 substr 判断是否为目录条目（以 / 结尾）
         if (substr($entry, -1) === '/') continue;
         // 跳过 manifest.json 本身
         if ($entry === 'manifest.json') continue;
@@ -318,7 +318,7 @@ try {
     $errors = [];
     for ($i = 0; $i < $zip->numFiles; $i++) {
         $entry = $zip->getNameIndex($i);
-        // 兼容 PHP 7.3：用 substr 判断是否为目录条目（以 / 结尾）
+        // 用 substr 判断是否为目录条目（以 / 结尾）
         if (substr($entry, -1) === '/') continue;
         if ($entry === 'manifest.json') continue;
 

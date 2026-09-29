@@ -466,7 +466,7 @@ h3 { font-size: 15px; margin-bottom: 12px; color: #f1f5f9; }
                 }
             }
             $checks = [
-                'PHP 版本 >= 7.3'   => version_compare(PHP_VERSION, '7.3.0', '>='),
+                'PHP 版本 >= 8.0'   => version_compare(PHP_VERSION, '8.0.0', '>='),
                 'PDO MySQL 扩展'    => extension_loaded('pdo_mysql'),
                 'OpenSSL 扩展'      => extension_loaded('openssl'),
                 'JSON 扩展'         => extension_loaded('json'),

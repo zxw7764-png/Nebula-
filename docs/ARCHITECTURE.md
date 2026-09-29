@@ -8,7 +8,7 @@
 面向二次开发、安全审计与私有化部署运维人员。
 
 - **代码版本**：以 `lib/bootstrap.php` 的 `NB_VERSION` 为准（本文撰写时为 `2.65.18`）
-- **运行环境**：PHP ≥ 8.1（`str_contains` 要求 8.0，`never` 返回类型要求 8.1）、MySQL 5.7+ / MariaDB 10.3+
+- **运行环境**：PHP ≥ 8.0（`str_contains` / `str_starts_with` 要求 8.0）、MySQL 5.7+ / MariaDB 10.3+
 - **协议真源**：服务端 [`lib/Crypto.php`](../lib/Crypto.php) 与客户端 [`sdk/nebula/client/envelope.hpp`](../sdk/nebula/client/envelope.hpp)，二者与 [`docs/API.md`](API.md) 严格对齐
 
 ---

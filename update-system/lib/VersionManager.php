@@ -212,7 +212,7 @@ class VersionManager
         $checks = [];
 
         // PHP 版本
-        $reqPhp = $manifest['requirements']['php'] ?? '>=7.4';
+        $reqPhp = $manifest['requirements']['php'] ?? '>=8.0';
         $phpOk = self::checkPhpVersion($reqPhp);
         $checks[] = ['name' => 'PHP 版本', 'level' => $phpOk ? 'ok' : 'error',
             'text' => $phpOk ? "PHP " . PHP_VERSION . " (满足 {$reqPhp})" : "PHP " . PHP_VERSION . " 不满足 {$reqPhp}"];
