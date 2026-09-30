@@ -75,7 +75,7 @@ $tiers = [
     AdminPermission::SETTINGS_SECURITY => [
         'login_methods', 'single_login', 'geo_block',
         'login_reclaim_enable',
-        'heartbeat_interval', 'heartbeat_timeout',
+        'heartbeat_interval', 'heartbeat_timeout', 'session_ttl',
         'unbind_per_day', 'rate_limit_per_min',
         'web_reg_max_hour', 'web_act_cooldown_min', 'web_act_max_min',
         // 人机风控总开关：关闭后四端接口不再做前端信号评分（排查误拦用）

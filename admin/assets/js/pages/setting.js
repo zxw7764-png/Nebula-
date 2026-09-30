@@ -277,6 +277,11 @@ async function render() {
             <div class="field"><label>离线判定(秒)</label>
                 <input id="stTimeout" type="number" value="${esc(s.heartbeat_timeout || '180')}"></div>
         </div>
+        <div class="row2">
+            <div class="field"><label>登录态有效期(秒)</label>
+                <input id="stSessionTtl" type="number" value="${esc(s.session_ttl || '3600')}">
+                <div class="hint">客户端登录令牌最长存活时间（从首次登录起算），到期需重新 init + login；0 = 不限</div></div>
+        </div>
         <div class="card-head" style="padding-left:0;margin-top:4px"><h3 style="font-size:13px">离线宽限（断网时客户端可凭签名票据继续运行）</h3></div>
         <div class="row2">
             <div class="field"><label>启用离线宽限</label>
@@ -700,6 +705,7 @@ async function saveSecurity() {
     const rules = [
         ['stHb',      '心跳间隔',   1, 3600],
         ['stTimeout', '离线判定',   1, 86400],
+        ['stSessionTtl','登录态有效期', 0, 604800],
         ['stUnbind',  '每日解绑上限', 0, 9999],
         ['stRate',    '接口限流',   1, 100000],
         ['stGraceSec','单次宽限时',  0, 86400],
@@ -720,6 +726,7 @@ async function saveSecurity() {
             geo_block: document.getElementById('stGeo').value,
             heartbeat_interval: document.getElementById('stHb').value.trim(),
             heartbeat_timeout: document.getElementById('stTimeout').value.trim(),
+            session_ttl: document.getElementById('stSessionTtl').value.trim(),
             unbind_per_day: document.getElementById('stUnbind').value.trim(),
             rate_limit_per_min: document.getElementById('stRate').value.trim(),
             web_reg_max_hour: document.getElementById('stWebRegMax').value.trim(),
