@@ -10,6 +10,12 @@
  *   - Grace.php 的密钥同时用于「离线宽限票据签名」和「响应签名」
  *   - 本类将两者分离，响应签名密钥独立管理，更安全
  */
+
+// PHP 8.1+ 才内置此常量，8.0 及以下手动定义
+if (!defined('OPENSSL_ALGO_ES256')) {
+    define('OPENSSL_ALGO_ES256', 'sha256');
+}
+
 class RespSign
 {
     private static ?array $keys = null;
@@ -134,6 +140,8 @@ class RespSign
             'RS256' => ['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA],
         ];
 
+        $cnf = self::opensslConfig();
+
         $config = Config::get('resp_sign', []);
         $algo = (string) ($config['algo'] ?? 'ES256');
         $tryAlgos = [$algo];
@@ -141,7 +149,6 @@ class RespSign
             $tryAlgos = ['ES256', 'RS256'];
         }
 
-        $cnf = self::opensslConfig();
         $generated = false;
 
         foreach ($tryAlgos as $a) {
