@@ -277,6 +277,27 @@ async function render() {
             <div class="field"><label>离线判定(秒)</label>
                 <input id="stTimeout" type="number" value="${esc(s.heartbeat_timeout || '180')}"></div>
         </div>
+        <div class="card-head" style="padding-left:0;margin-top:4px"><h3 style="font-size:13px">离线宽限（断网时客户端可凭签名票据继续运行）</h3></div>
+        <div class="row2">
+            <div class="field"><label>启用离线宽限</label>
+                ${boolSel('stGraceEnable', (s.grace_enable === undefined ? '1' : s.grace_enable))}
+                <div class="hint">关闭后心跳失败即判离线，不签发宽限票据；分软件可在「软件管理 → 编辑 → 策略覆盖」单独开关</div>
+            </div>
+            <div class="field"><label>单次宽限时长(秒)</label>
+                <input id="stGraceSec" type="number" value="${esc(s.grace_seconds || '3600')}">
+                <div class="hint">一张票据允许的离线时长，建议为心跳间隔的 15~30 倍；填 0 = 关闭</div>
+            </div>
+        </div>
+        <div class="row2">
+            <div class="field"><label>单次累计上限(秒)</label>
+                <input id="stGraceMax" type="number" value="${esc(s.grace_max_seconds || '7200')}">
+                <div class="hint">一个会话内离线总上限（0 = 不限制，仅受账号到期时间钳制）</div>
+            </div>
+            <div class="field"><label>时钟偏差容忍(秒)</label>
+                <span class="v" style="display:block;padding-top:6px">${esc(cfg?.grace?.clock_skew || '120')}</span>
+                <div class="hint">只读：客户端时钟与服务器时间的允许偏差，修改 config/config.php 中的 grace.clock_skew</div>
+            </div>
+        </div>
         <div class="row2">
             <div class="field"><label>每日解绑次数上限</label>
                 <input id="stUnbind" type="number" value="${esc(s.unbind_per_day || '3')}"></div>
@@ -681,6 +702,8 @@ async function saveSecurity() {
         ['stTimeout', '离线判定',   1, 86400],
         ['stUnbind',  '每日解绑上限', 0, 9999],
         ['stRate',    '接口限流',   1, 100000],
+        ['stGraceSec','单次宽限时',  0, 86400],
+        ['stGraceMax','累计上限',    0, 604800],
     ];
     for (const [id, name, min, max] of rules) {
         const raw = document.getElementById(id).value.trim();
@@ -709,6 +732,9 @@ async function saveSecurity() {
             risk_device_weight: document.getElementById('stRiskDevice').value.trim(),
             risk_agent_weight: document.getElementById('stRiskAgent').value.trim(),
             risk_freeze_score: document.getElementById('stRiskFreeze').value.trim(),
+            grace_enable: document.getElementById('stGraceEnable').value,
+            grace_seconds: document.getElementById('stGraceSec').value.trim(),
+            grace_max_seconds: document.getElementById('stGraceMax').value.trim(),
         },
     });
     if (res.code === 0) {

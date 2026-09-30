@@ -54,10 +54,12 @@ Response::ok([
             'login_lock_seconds'   => (int) Config::get('admin.login_lock_seconds', 900),
         ],
         // 离线宽限（运行参数只读展示；分软件开关在「软件管理 → 编辑 → 策略覆盖」）
+        // 注意：seconds / max_seconds 走 Setting::intWithConfig，与 Policy 层取值一致，
+        //       避免「后台改了数据库值但下方只显示 config.php 默认值」的错位
         'grace'   => [
             'enable'      => (bool) Config::get('grace.enable', true),
-            'seconds'     => (int) Config::get('grace.seconds', 0),
-            'max_seconds' => (int) Config::get('grace.max_seconds', 0),
+            'seconds'     => (int) Setting::intWithConfig('grace_seconds', 'grace.seconds'),
+            'max_seconds' => (int) Setting::intWithConfig('grace_max_seconds', 'grace.max_seconds'),
             'clock_skew'  => (int) Config::get('grace.clock_skew', 120),
             // ES256 公钥 PEM（公开信息，可展示）：客户端 SDK 的 grace_public_key 字段填它；
             // 密钥由服务端自动生成落盘 config/grace_keys.php，后台只读展示，改密钥走「轮换密钥」按钮
