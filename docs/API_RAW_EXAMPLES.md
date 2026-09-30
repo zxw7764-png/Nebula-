@@ -92,7 +92,8 @@
             "file_hash": "",
             "file_size": 0,
             "self_file_hash": "",
-            "self_file_size": 0
+            "self_file_size": 0,
+            "versions": []
         },
         "notices": [
             {

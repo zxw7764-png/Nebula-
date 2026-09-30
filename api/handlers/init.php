@@ -125,6 +125,8 @@ Response::ok([
         // 客户端自身版本登记的哈希/大小（完整性自校验；未登记为 '' / 0）
         'self_file_hash' => $selfHash,
         'self_file_size' => $selfSize,
+        // 历史版本列表：客户端「更新日志」据此渲染多条版本条目
+        'versions'     => Software::changelogList($sw, 'stable', 10),
     ],
     'notices'        => $notices,
 ]);

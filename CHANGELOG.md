@@ -4,6 +4,27 @@
 版本号遵循语义化版本（`主.次.修订`）。每次发版请在本文件顶部追加条目，并同步
 `lib/bootstrap.php` 的 `NB_VERSION`；发布到版本更新系统时，把对应条目整理为 `release_notes`。
 
+## [2.65.21] - 2026-10-01
+
+### 新增
+
+- `init` 响应 `data.version` 新增 `versions` 数组：下发该软件 stable 渠道**已发布且填写了更新说明**的历史版本
+  列表（`version` / `channel` / `changelog` / `force_update` / `download_url` / `file_hash` / `file_size` /
+  `created_at`，按 id 倒序，最多 10 条），供客户端「更新日志」逐条展开查看。此前只下发最新一条 `changelog`，
+  客户端只能展示一个版本，无法呈现历史版本
+- `Software::changelogList()`：历史版本列表查询（`status = 1` 且 `changelog` 非空），
+  与 `versionInfo()` 的「最新一条」定位互补，互不影响既有字段
+
+### 文档
+
+- `docs/API.md` 的 `init` 响应示例与字段说明补充 `data.version.versions`
+- `docs/API_RAW_EXAMPLES.md` 的 `init` 原始响应示例补充 `versions`
+
+### 说明
+
+- 纯增量、向后兼容：老客户端忽略该字段即可；服务端无历史版本记录时下发空数组，
+  客户端仍可退回「`latest` + `changelog`」单条展示
+
 ## [2.65.18] - 2026-09-30
 
 ### 修复（登录链路安全审查 P1）
@@ -141,7 +162,6 @@
 ### 修复（接口）
 - `login.php` 成功响应中 `$sw` 未定义（软件识别后未保存引用），功能密钥等按软件
   下发的字段会被 `?? ''` 静默吞成空串 —— 已在入口处捕获 `Software::current()` 修复。
-
 
 ### 修复（支付）
 - **微信支付 V3 回调按官方规范完全重写**（`lib/Pay.php` `wechatVerifyNotify`、`shop/wechat_notify.php`）。

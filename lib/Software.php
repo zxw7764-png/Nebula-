@@ -515,6 +515,37 @@ class Software
     }
 
     /**
+     * 取某软件某渠道的历史版本列表（客户端「更新日志」展示用）。
+     * 只返回已发布且填写了 changelog 的记录，按发布时间倒序。
+     */
+    public static function changelogList(array $sw, string $channel = 'stable', int $limit = 10): array
+    {
+        $limit = max(1, min(50, $limit));
+        $rows  = Database::all(
+            'SELECT version, channel, changelog, force_update, download_url, file_hash, file_size, created_at'
+            . ' FROM ' . Database::t('versions')
+            . " WHERE software_id = ? AND channel = ? AND status = 1 AND changelog IS NOT NULL AND changelog <> ''"
+            . ' ORDER BY id DESC LIMIT ' . $limit,
+            [(int) $sw['id'], $channel]
+        );
+
+        $list = [];
+        foreach ($rows as $r) {
+            $list[] = [
+                'version'      => (string) $r['version'],
+                'channel'      => (string) $r['channel'],
+                'changelog'    => (string) $r['changelog'],
+                'force_update' => (int) $r['force_update'],
+                'download_url' => (string) ($r['download_url'] ?? ''),
+                'file_hash'    => (string) ($r['file_hash'] ?? ''),
+                'file_size'    => (int) ($r['file_size'] ?? 0),
+                'created_at'   => (int) ($r['created_at'] ?? 0),
+            ];
+        }
+        return $list;
+    }
+
+    /**
      * 指定版本号的已发布记录（客户端完整性自校验用）：
      * 客户端启动时按自身 client_ver 取该版本登记的 file_hash / file_size 与 exe 实际值比对，
      * 不一致即判定被篡改。版本未登记 / 未发布 / 未填哈希时返回 null（客户端跳过校验）。
