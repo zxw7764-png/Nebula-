@@ -335,6 +335,13 @@ set_error_handler(function ($no, $str, $file, $line) {
     throw new ErrorException($str, 0, $no, $file, $line);
 });
 
+// ------------------------------------------------------------------
+// 预热响应签名密钥：确保后台访问时 RespSign 公钥已存在，无需依赖首次 API 请求
+// ------------------------------------------------------------------
+if (class_exists('RespSign')) {
+    @RespSign::publicKey();
+}
+
 register_shutdown_function(function () {
     $err = error_get_last();
     if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
