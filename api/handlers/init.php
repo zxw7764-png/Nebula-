@@ -105,13 +105,6 @@ Response::ok([
     // 之后 login / heartbeat 会下发签名票据，心跳失败时本地验签即可离线运行。
     // enable=false 表示服务端未开启，客户端跳过该逻辑。
     'grace'          => Grace::info(),
-    // 响应签名公钥：客户端 SDK 用此验签 API 响应，防止中间人篡改
-    // 密钥由服务端自动生成落盘 config/resp_sign_keys.php，客户端只需公钥
-    'resp_sign'      => class_exists('RespSign') ? [
-        'public_key' => RespSign::publicKey() ?? '',
-        'kid'        => RespSign::keyId() ?? '',
-        'algo'       => RespSign::algorithm() ?? '',
-    ] : null,
     'crypto'         => [
         'enforce' => (bool) Config::get('security.enforce_crypto', true),
         'algo'    => 'AES-256-CBC',

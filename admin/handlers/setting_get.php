@@ -65,11 +65,5 @@ Response::ok([
             // 密钥由服务端自动生成落盘 config/grace_keys.php，后台只读展示，改密钥走「轮换密钥」按钮
             'public_key'  => class_exists('Grace') ? (string) (Grace::publicKey() ?? '') : '',
         ],
-        // 响应签名公钥（独立于离线宽限密钥，用于客户端验签 API 响应）
-        'resp_sign' => [
-            'public_key' => class_exists('RespSign') ? (string) (RespSign::publicKey() ?? '') : '',
-            'kid'        => class_exists('RespSign') ? RespSign::keyId() : '',
-            'algo'       => class_exists('RespSign') ? RespSign::algorithm() : '',
-        ],
     ],
 ]);
