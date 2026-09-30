@@ -1,10 +1,10 @@
 # Nebula 网络验证
 
-一套基于 PHP + MySQL 的网络验证（授权）系统后端，提供客户端 API 与管理后台 API。官方提供 **C++ 与 Python** 两套协议同规格的开箱即用 SDK，C# / 易语言等其他语言依据接口文档直接对接。
+一套基于 PHP + MySQL 的网络验证（授权）系统后端，提供客户端 API 与管理后台 API。官方提供 **C++、Python 与 C#** 三套协议同规格的开箱即用 SDK，易语言等其他语言依据接口文档直接对接。
 
 ## 📚 文档中心
 
-全部功能文档统一放在 **`docs/`** 文件夹（C++ SDK 文档随 SDK 放在 **`sdk/`**，Python SDK 文档随 SDK 放在 **`sdk-py/`**），点标题跳转：
+全部功能文档统一放在 **`docs/`** 文件夹（C++ SDK 文档随 SDK 放在 **`sdk/`**，Python SDK 文档随 SDK 放在 **`sdk-py/`**，C# SDK 文档随 SDK 放在 **`sdk-c#/`**），点标题跳转：
 
 | 文档 | 说明 |
 | --- | --- |
@@ -14,6 +14,7 @@
 | [sdk/SDK.md](sdk/SDK.md) | C++ SDK 接入文档（初始化 / 登录 / 心跳 / 内置提示 / 完整性自校验） |
 | [sdk/SDK_PROTECTION.md](sdk/SDK_PROTECTION.md) | C++ SDK 客户端加固指南（壳标记 / 代码混淆 / 反调试 / 反虚拟机，**默认关闭，按需开启**） |
 | [sdk-py/README.md](sdk-py/README.md) | Python SDK 接入文档（协议同规格 / 内置 Pygame 登录界面 / 完整性自校验 / 自动更新 / 功能密钥 NF1） |
+| [sdk-c#/NebulaSDK.md](sdk-c%23/NebulaSDK.md) | C# SDK 接入文档（.NET 10 / WinForms；登录 / 心跳 / 离线宽限 / 功能密钥 NF1 / 运行时防护与字符串混淆） |
 | [docs/TEMPLATE.md](docs/TEMPLATE.md) | 界面模板开发文档（目录规范 / 小游戏 / 交互音效 / 布局与自定义区块） |
 
 > 界面模板使用与后台可视化编辑（换肤 / 布局与自定义区块 / 小游戏参数）的操作入口在管理后台
@@ -188,6 +189,12 @@ yanzheng/
 │   ├── nebula/             协议实现 + Pygame 登录界面（config.py 为唯一配置文件）
 │   ├── docs/               界面截图
 │   └── test_smoke.py       联调自测脚本
+├── sdk-c#/                 开箱即用的 C# 接入 SDK（.NET 10 / Windows x64，协议与 C++ 同规格）
+│   ├── SdkConfig.cs        唯一配置文件（服务端地址 / 密钥 / 防护开关）
+│   ├── NebulaSDK.md        C# SDK 完整接入文档
+│   ├── client/             业务接口（Client / Device / Offline / Update / 功能密钥完整性 / 类型）
+│   ├── core/               协议内核（Crypto / Envelope / Http / Json / Log / SecureString）
+│   └── protect/            加固组件（运行时防护 / 字符串混淆 / 壳标记）
 ├── docs/
 │   ├── ARCHITECTURE.md     架构设计文档（分层架构 / 关键链路时序图 / 安全设计对照）
 │   ├── API.md              完整接口文档
@@ -491,6 +498,8 @@ c.logout(lr.token);
   `device_name` 也自动取真实电脑主机名
 - 仅 Windows（VS/MSVC 工具链），系统自带 `bcrypt` / `WinHTTP` 已 `#pragma comment` 自动链接，**不需要 OpenSSL 或 libcurl**
 - 另提供 `activate` / `devices` / `unbindDevice` / `userinfo` / `getNotices` / `checkVersion` / `online` / `checkOffline`（离线票据本地校验）等接口
+
+📘 其他语言：**C# SDK**（.NET 10 / WinForms，协议与 C++ 同规格）见 **[sdk-c#/NebulaSDK.md](sdk-c%23/NebulaSDK.md)**。
 
 ### 方式二：手写协议
 

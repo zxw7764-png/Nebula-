@@ -403,9 +403,12 @@ async function render() {
             <span class="k">离线宽限</span>
             <span class="v">${cfg.grace.enable ? tag('已开启', 'green') : tag('未开启', 'gray')}${cfg.grace.enable ? ` · 单次 ${cfg.grace.seconds} 秒 / 累计上限 ${cfg.grace.max_seconds} 秒` : ''}
                 <span class="hint">断网时客户端可凭签名票据离线运行；单次=一张票据允许的离线时长，累计=一个会话内离线总上限（不超账号到期时间）；分软件开关在「软件管理 → 编辑 → 策略覆盖」</span></span>
+            <span class="k">离线宽限公钥</span>
+            <span class="v">${cfg.grace.public_key ? `<span class="mono" style="display:inline-block;max-width:420px;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px" title="${esc(cfg.grace.public_key)}">${esc(cfg.grace.public_key)}</span> <button class="btn ghost xs" id="stCopyGracePub">复制 PEM</button> <button class="btn ghost xs" id="stRotateGraceKey">轮换密钥</button> ${tag('已生成', 'green')}` : tag('尚未生成（首次心跳时自动生成）', 'gray')}
+                <span class="hint">离线宽限票据验证公钥，客户端 SDK 的 grace_public_key 字段填它；「轮换密钥」删除旧密钥文件并重新生成（旧离线票据立即失效，需更新重发布客户端）</span></span>
             <span class="k">响应签名公钥</span>
-            <span class="v">${cfg.grace.public_key ? `<span class="mono" style="display:inline-block;max-width:420px;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px" title="${esc(cfg.grace.public_key)}">${esc(cfg.grace.public_key)}</span> <button class="btn ghost xs" id="stCopyGracePub">复制 C++ 代码</button> <button class="btn ghost xs" id="stCopyGracePem">复制 PEM</button> ${tag('已生成', 'green')}` : tag('尚未生成（首次心跳时自动生成）', 'gray')}
-                <span class="hint">「复制 C++ 代码」得到可直接粘贴进客户端 SDK kRespSignPubKey 的 NEBULA_STR 片段（换行已转义，不会编译报错）；「复制 PEM」得到原始 PEM 文本；此处只读展示，删除服务器 config/grace_keys.php 可轮换密钥（轮换后需更新客户端并重新发布）</span></span>
+            <span class="v">${cfg.resp_sign && cfg.resp_sign.public_key ? `<span class="mono" style="display:inline-block;max-width:420px;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px" title="${esc(cfg.resp_sign.public_key)}">${esc(cfg.resp_sign.public_key)}</span> <button class="btn ghost xs" id="stCopyRespPub">复制 PEM</button> <button class="btn ghost xs" id="stCopyRespCpp">复制 C++ 代码</button> <button class="btn ghost xs" id="stRotateRespKey">轮换密钥</button> ${tag('已生成', 'green')}` : tag('尚未生成（首次请求时自动生成）', 'gray')}
+                <span class="hint">API 响应签名验证公钥，客户端 SDK 的 kRespSignPubKey 配置填它；与离线宽限密钥独立管理，轮换不影响离线票据；「复制 C++ 代码」得到可直接粘贴进客户端 SDK 的 NEBULA_STR 片段（换行已转义）</span></span>
             <span class="k">后台入口</span>
             <span class="v mono">${esc(cfg.admin.path || '/admin/')} ${cfg.admin.entry_key_enable ? tag('已启用入口密钥', 'green') : ''}
                 <span class="hint">后台访问路径与入口密钥；入口密钥开启后需先验密钥才能打开登录页，可隐藏后台被扫描</span></span>
@@ -522,17 +525,60 @@ async function render() {
         const lines = String(pem).trim().split(/\r?\n/).map(l => '    "' + l + '\\n"');
         return 'NEBULA_STR(\n' + lines.join('\n') + ')';
     };
-    const copyPub = document.getElementById('stCopyGracePub');
-    if (copyPub) copyPub.addEventListener('click', () => {
+    // 离线宽限公钥按钮
+    const copyGracePub = document.getElementById('stCopyGracePub');
+    if (copyGracePub) copyGracePub.addEventListener('click', () => {
         const pem = ((((d.config || {}).grace || {}).public_key) || '');
-        if (!pem) return toast('公钥尚未生成', 'err');
-        copyText(gracePubCpp(pem)).then(() => toast('已复制 C++ 片段，可直接替换 kRespSignPubKey = 右侧'));
+        if (!pem) return toast('离线宽限公钥尚未生成', 'err');
+        copyText(pem).then(() => toast('已复制离线宽限公钥 PEM'));
     });
-    const copyPem = document.getElementById('stCopyGracePem');
-    if (copyPem) copyPem.addEventListener('click', () => {
-        const pem = ((((d.config || {}).grace || {}).public_key) || '');
-        if (!pem) return toast('公钥尚未生成', 'err');
-        copyText(pem).then(() => toast('已复制公钥 PEM'));
+    const rotateGraceBtn = document.getElementById('stRotateGraceKey');
+    if (rotateGraceBtn) rotateGraceBtn.addEventListener('click', async () => {
+        if (!confirm('轮换离线宽限签名密钥？\n\n旧密钥文件将被备份，旧客户端的离线票据立即失效。\n轮换后需要更新并重新发布所有客户端。')) return;
+        rotateGraceBtn.disabled = true;
+        rotateGraceBtn.textContent = '轮换中…';
+        try {
+            const res = await api('grace_rotate_keys', {});
+            if (res.code !== 0) { toast(res.msg || '轮换失败', 'err'); return; }
+            toast('密钥已轮换，kid=' + (res.data?.kid || ''), 'ok');
+            setTimeout(() => render(), 600);
+        } catch (e) {
+            toast('轮换失败：' + (e.message || ''), 'err');
+        } finally {
+            rotateGraceBtn.disabled = false;
+            rotateGraceBtn.textContent = '轮换密钥';
+        }
+    });
+
+    // 响应签名公钥按钮
+    const copyRespPub = document.getElementById('stCopyRespPub');
+    if (copyRespPub) copyRespPub.addEventListener('click', () => {
+        const pem = ((((d.config || {}).resp_sign || {}).public_key) || '');
+        if (!pem) return toast('响应签名公钥尚未生成', 'err');
+        copyText(pem).then(() => toast('已复制响应签名公钥 PEM'));
+    });
+    const copyRespCpp = document.getElementById('stCopyRespCpp');
+    if (copyRespCpp) copyRespCpp.addEventListener('click', () => {
+        const pem = ((((d.config || {}).resp_sign || {}).public_key) || '');
+        if (!pem) return toast('响应签名公钥尚未生成', 'err');
+        copyText(gracePubCpp(pem)).then(() => toast('已复制 C++ 片段，可直接替换 kRespSignPubKey'));
+    });
+    const rotateRespBtn = document.getElementById('stRotateRespKey');
+    if (rotateRespBtn) rotateRespBtn.addEventListener('click', async () => {
+        if (!confirm('轮换响应签名密钥？\n\n旧密钥文件将被备份，旧 API 响应的签名立即失效。\n轮换后需要更新并重新发布所有客户端。\n\n注意：此操作不影响离线宽限票据。')) return;
+        rotateRespBtn.disabled = true;
+        rotateRespBtn.textContent = '轮换中…';
+        try {
+            const res = await api('resp_sign_rotate_keys', {});
+            if (res.code !== 0) { toast(res.msg || '轮换失败', 'err'); return; }
+            toast('密钥已轮换，kid=' + (res.data?.kid || ''), 'ok');
+            setTimeout(() => render(), 600);
+        } catch (e) {
+            toast('轮换失败：' + (e.message || ''), 'err');
+        } finally {
+            rotateRespBtn.disabled = false;
+            rotateRespBtn.textContent = '轮换密钥';
+        }
     });
 
     const logoBtn = document.getElementById('stLogoUpload');

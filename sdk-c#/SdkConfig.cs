@@ -71,41 +71,6 @@
 //   · 不要将包含真实密钥的代码提交到公开仓库
 //   · 如发生密钥泄露，请立即在后台重新生成密钥并更新本文件
 //
-// ── 加固功能开关 ──────────────────────────────────────────────────────
-//   ★ 一键全开：把 Harden=true 即可全部启用（防护等级3 + 混淆 + 壳标记 + 运行时多样性）
-//
-//   ProtectLevel        运行时防护等级
-//     0  关闭（默认）→ 不做任何检测
-//     1  基础        → IsDebuggerPresent / PEB / 堆标志 / CPUID / 注册表 / BIOS
-//     2  标准        → + 远程调试器 / NtQuery / 硬件断点 / 工具进程 / 注入检测 / API hook
-//     3  严格        → + 调试器窗口 / 时序异常 / 驱动文件 / 低配 / 开机时间
-//
-//   ProtectAction       命中加固检测后的处置
-//     0  只记录
-//     1  回调上报（默认）
-//     2  降级（拒绝后续 init / 业务）
-//     3  弹窗退出
-//
-//   ObfStrings          代码混淆开关
-//     true  → 启用编译期字符串加密 + 间接调用 + 不透明谓词
-//     false → 关闭（默认）
-//
-//   ShellEnable         壳标记开关（VMProtect / Themida / 自定义壳）
-//     true  → 启用壳标记（需配合外部加壳工具使用）
-//     false → 关闭（默认）
-//
-//   RuntimeDiverse      运行时多样性
-//     true  → SecureString 每次启动随机密钥、不透明谓词每次启动随机形态
-//     false → 固定密钥 + 固定谓词（默认）
-//
-//   ProtectStrictPolicy 疑似环境检测严格度
-//     false（默认）→ 宽松模式，疑似环境仅警告，不阻断登录
-//     true          → 严格模式，疑似环境直接拒绝登录
-//
-//   DebugLog            调试日志开关
-//     true  → 写入 nebula_debug.log（用于开发和排查问题）
-//     false → 关闭日志（生产环境推荐）
-//
 // ── 常见坑点 ───────────────────────────────────────────────────────────────
 //   1. AesKey 必须是 32 位十六进制（16 字节），长度不对会导致加解密失败
 //   2. RespSignPubKey 若为空，所有请求会返回"未配置响应签名公钥"错误
@@ -121,52 +86,25 @@ namespace Nebula.Sdk
         public const string SdkVersion = "1.0.3";
 
         /// <summary>① API 入口地址（http:// 或 https://）</summary>
-        public const string ApiUrl = "https://yz.baige.fun/api/index.php";
+        public const string ApiUrl = "https://your-domain.com/api/index.php";
 
         /// <summary>② 软件标识（app_key）</summary>
-        public const string AppKey = "SWBFE6879E94DD";
+        public const string AppKey = "YOUR_APP_KEY";
 
         /// <summary>③ 软件通信密钥（32 位 hex）</summary>
-        public const string AesKey = "eb32f8087805a06cf8e45e306e7a8d5f";
+        public const string AesKey = "YOUR_AES_KEY_32HEX";
 
         /// <summary>④ 签名盐（48 位 hex）</summary>
-        public const string SignSalt = "147ea3cc63530253a1617df4da45d7b0cc1a345f67fe2db3";
+        public const string SignSalt = "YOUR_SIGN_SALT_48HEX";
 
         /// <summary>⑤ 响应签名公钥（PEM，必填；服务端「重新生成密钥」后须同步）</summary>
         public const string RespSignPubKey =
     "-----BEGIN PUBLIC KEY-----\n"+
-    "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEOcJAuC3Q19fcDAP1wkU+3Z9Uhrqa\n"+
-    "SAEgSwTwQhBYcMnrpl8NaLFKGRJwOQtbCLg3tkKuYxMuEd5sP1k5AOGcIQ==\n"+
+    "YOUR_RESP_SIGN_PUBLIC_KEY\n"+
     "-----END PUBLIC KEY-----\n";
 
         /// <summary>⑥ TLS 证书指纹锁定（可选，只对 https:// 生效）</summary>
-        public const string TlsCertSha256 = "f31dc7cd4dbed7b9b6034bae7577452a6e50102ff3121775e64698b76f08b80d";
-
-        // ====== 加固功能开关 ======
-
-        /// <summary>★ 一键全开（= 防护等级3 + 混淆 + 壳标记 + 运行时多样性）</summary>
-        public const bool Harden = false;
-
-        /// <summary>运行时防护等级：0 关闭 / 1 基础 / 2 标准 / 3 严格</summary>
-        public const int ProtectLevel = Harden ? 3 : 0;
-
-        /// <summary>命中加固检测后的处置：0 记录 / 1 回调(默认) / 2 降级 / 3 弹窗退出</summary>
-        public const int ProtectAction = 1;
-
-        /// <summary>代码混淆开关：编译期字符串加密 + 间接调用 + 不透明谓词</summary>
-        public const bool ObfStrings = Harden;
-
-        /// <summary>壳标记开关（VMProtect / Themida / 自定义壳）</summary>
-        public const bool ShellEnable = Harden;
-
-        /// <summary>运行时多样性：SecureString 随机密钥 + 谓词随机形态</summary>
-        public const bool RuntimeDiverse = Harden;
-
-        /// <summary>时序异常阈值（毫秒）；越小越灵敏、越容易误报</summary>
-        public const double TimingThresholdMs = 50.0;
-
-        /// <summary>疑似环境处置策略（false = 宽松[默认]，true = 严格）</summary>
-        public const bool ProtectStrictPolicy = false;
+        public const string TlsCertSha256 = "";
 
         /// <summary>调试日志开关（写到 exe 同目录 nebula_debug.log；发布置 false）</summary>
         public const bool DebugLog = false;

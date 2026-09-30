@@ -49,6 +49,9 @@
 - 统一文档中心互链：`docs/API.md`、`docs/API_RAW_EXAMPLES.md`、`docs/TEMPLATE.md`、
   `sdk/SDK.md`、`sdk/SDK_PROTECTION.md` 的导航加入架构文档；修正 `sdk/SDK.md` 子头数量（19 → 21）
 - 修正 `lib/Grace.php` 注释中指向不存在的 `docs/OFFLINE_GRACE.md` 的失效引用
+- README 补登 **C# SDK**（`sdk-c#/`，SDK 1.0.3 / .NET 10）：首段 SDK 数量由「C++ 与 Python 两套」
+  更正为三套，文档中心新增 `sdk-c#/NebulaSDK.md` 条目，目录树补充 `sdk-c#/` 分支，
+  客户端对接章节加 C# SDK 指引（此前 README 误称「C# 等其他语言依据接口文档直接对接」，与实际不符）
 
 ## [2.65.16] - 2026-09-30
 

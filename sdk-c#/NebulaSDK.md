@@ -22,16 +22,9 @@
   - [4.10 离线宽限 (Grace)](#410-离线宽限-grace)
   - [4.11 功能密钥数据包 (NF1)](#411-功能密钥数据包-nf1)
   - [4.12 自身完整性校验](#412-自身完整性校验)
-- [5. 安全防护功能](#5-安全防护功能)
-  - [5.1 运行时防护 (RuntimeProtection)](#51-运行时防护-runtimeprotection)
-  - [5.2 字符串混淆 (Obfuscate)](#52-字符串混淆-obfuscate)
-  - [5.3 TLS 证书指纹锁定](#53-tls-证书指纹锁定)
-  - [5.4 通信信封加密](#54-通信信封加密)
-- [6. VMP / 壳保护 现状与规划](#6-vmp--壳保护-现状与规划)
-- [7. 一键全开安全功能](#7-一键全开安全功能)
-- [8. 完整接入示例](#8-完整接入示例)
-- [9. 错误码参考](#9-错误码参考)
-- [10. 文件清单](#10-文件清单)
+- [5. 完整接入示例](#5-完整接入示例)
+- [6. 错误码参考](#6-错误码参考)
+- [7. 文件清单](#7-文件清单)
 
 ---
 
@@ -48,8 +41,6 @@ Nebula SDK 是一套面向 .NET / WinForms 应用的软件授权验证客户端 
 | 离线宽限 | 断网后凭签名票据继续运行，到时自动退出 |
 | 自动更新 | 检测 → 下载 → SHA256 校验 → 批处理自替换 → 重启 |
 | 公告系统 | 四种类型：列表、弹窗、立即闪现、列表查询 |
-| 运行时防护 | 反调试、反虚拟机/沙箱、硬件断点检测 |
-| 字符串混淆 | 编译期 XOR 加密，降低静态分析风险 |
 | 完整性自校验 | 程序文件 SHA256/MD5 + 大小校验，防二进制篡改 |
 | 功能密钥包 | NF1 格式数据包，encrypt-then-MAC，用于核心数据保护 |
 
@@ -103,7 +94,6 @@ if (login.Ok) {
 | `SignSalt` | `const string` | ✅ | 签名盐值（48 位十六进制），用于 HMAC |
 | `RespSignPubKey` | `const string` | ✅ | 响应签名公钥（PEM 格式），验签服务端响应 |
 | `TlsCertSha256` | `const string` | ❌ | TLS 证书指纹（64 位 hex），仅 HTTPS 生效，防中间人 |
-| `ProtectStrictPolicy` | `const bool` | ❌ | 防护严格模式开关（`false`=宽松/默认，`true`=严格） |
 | `DebugLog` | `const bool` | ❌ | 调试日志开关（发布时置 `false`） |
 
 ### 安全建议
@@ -511,460 +501,8 @@ public bool EnforceSelfIntegrity();
 
 ---
 
-## 5. 安全防护功能
 
-### 5.1 运行时防护 (RuntimeProtection)
-
-`NebulaRuntimeProtection.cs` 提供完整的运行时反调试、反虚拟机/沙箱、代码补丁自检。
-
-#### 加固开关（在 `SdkConfig.cs` 中配置）
-
-| 开关 | 默认 | 说明 |
-|------|------|------|
-| `Harden` | `false` | ★ 一键全开（= 防护等级3 + 混淆 + 壳标记 + 运行时多样性） |
-| `ProtectLevel` | `0` | 运行时防护等级：`0` 关闭 / `1` 基础 / `2` 标准 / `3` 严格 |
-| `ProtectAction` | `1` | 命中后处置：`0` 记录 / `1` 回调 / `2` 降级 / `3` 弹窗退出 |
-| `ProtectStrictPolicy` | `false` | 疑似环境是否也拦截（`true` 会误伤 VM 用户） |
-| `TimingThresholdMs` | `50.0` | 时序异常阈值（毫秒） |
-
-#### 检测能力（三个等级）
-
-| 检测项 | 等级 | 权重 | 误报风险 |
-|--------|------|------|----------|
-| `IsDebuggerPresent` | 1 | 100（铁证） | 无 |
-| `PEB.BeingDebugged`（NtQuery 三重检测） | 1 | 100（铁证） | 无 |
-| 进程堆标志异常 | 1 | 35 | 极低 |
-| `CheckRemoteDebuggerPresent` | 2 | 100（铁证） | 无 |
-| `ProcessDebugPort` / `DebugObjectHandle` | 2 | 100（铁证） | 无 |
-| `ProcessDebugFlags == 0` | 2 | 80 | 无 |
-| 线程硬件断点 `Dr0-Dr7` | 2 | 70 | 低 |
-| 调试/逆向工具进程（x64dbg, IDA 等） | 2 | 60 | 低 |
-| 调试器窗口（OllyDbg, x64dbg 等） | 3 | 60 | 低 |
-| 关键代码执行时序异常 | 3 | 30 | 中 |
-| frida 等注入框架模块 | 2 | 70 | 无 |
-| 关键 API 首字节被改（inline hook） | 2 | 20/45 | 中 |
-| 受保护代码段被改写（`GuardCode`） | 2 | 90 | 无 |
-| CPUID/WMI 虚拟机厂商 | 1 | 30 | 高（Hyper-V/VBS 也置位） |
-| 注册表虚拟机痕迹 | 1 | 35 | 无 |
-| BIOS/主板厂商字段 | 1 | 40 | 低 |
-| 网卡 MAC OUI 属虚拟网卡 | 1 | 45 | 低 |
-| 虚拟机增强工具进程 | 2 | 30 | 无 |
-| 虚拟机/沙箱模块 | 2 | 30/60 | 无 |
-| WDAG 隔离环境账号 | 2 | 60 | 无 |
-| 虚拟机驱动文件痕迹 | 3 | 25 | 无 |
-| 机器配置异常偏低 | 3 | 15 | 中 |
-| 开机时间 < 5 分钟 | 3 | 20 | 中 |
-
-#### 判定规则
-
-- `Debugged`：命中任一铁证或弱线索累计 ≥ 90 分
-- `Virtualized`：虚拟机线索累计 ≥ 60 分
-- `Sandboxed`：命中沙箱特征（Sandboxie/Cuckoo/WDAG）
-- `Hooked`：命中注入模块或 ≥2 个关键 API 被改写
-- `Clean`：以上全部没命中
-
-#### 使用方式
-
-**方式 A：SDK 自动（推荐）**
-
-```csharp
-// 在 SdkConfig.cs 中设置 ProtectLevel = 2（标准）
-
-// 在程序启动时执行检测
-var report = RuntimeProtection.Scan();
-if (!report.Clean)
-{
-    Console.WriteLine(report.Summary());
-    Console.WriteLine(report.Detail());
-}
-
-// 设置回调上报到服务端
-RuntimeProtection.SetCallback(r => {
-    // sendToServer(r.Score, r.Debugged, r.Virtualized, r.Sandboxed, r.Hooked);
-});
-
-// 启动后台巡检（每 5 秒检测一次）
-RuntimeProtection.StartWatchdog(5000);
-// 程序退出时停止
-RuntimeProtection.StopWatchdog();
-```
-
-**方式 B：检测 + 处置一步到位**
-
-```csharp
-var report = RuntimeProtection.ScanAndEnforce(out bool mayContinue);
-if (!mayContinue)
-{
-    // action=2 时进入降级模式，拒绝后续业务
-    // action=3 时已弹窗退出，不会走到这里
-}
-```
-
-**方式 C：兼容旧接口**
-
-```csharp
-var result = RuntimeProtection.Check(new RuntimeProtection.CheckOptions
-{
-    StrictPolicy = SdkConfig.ProtectStrictPolicy,
-    CheckHardwareBreakpoints = true,
-    LogFile = "nebula_protect.log",
-});
-if (result.HasThreat) { /* 处理 */ }
-```
-
-#### 代码补丁自检（`GuardCode`）
-
-```csharp
-// 程序启动时登记关键函数地址
-RuntimeProtection.GuardCode(
-    Marshal.GetFunctionPointerForDelegate(myVerifier), 256);
-
-// 之后 Scan() 会自动比对哈希，检测是否被 patch
-bool ok = RuntimeProtection.VerifyGuardedCode();
-```
-
-#### Report 字段
-
-| 字段 | 说明 |
-|------|------|
-| `Clean` | 是否一切正常 |
-| `Debugged` / `Virtualized` / `Sandboxed` / `Hooked` | 四个分类结论 |
-| `Score` | 累计风险分 |
-| `StrongHits` / `WeakHits` / `VmScore` | 各类线索计分 |
-| `Flags` | 命中位掩码（`Flag` 枚举） |
-| `Reasons` | 命中的具体项（中文，可直接打日志） |
-| `Summary()` / `Detail()` | 一行摘要 / 明细字符串 |
-
-### 5.2 代码混淆 (Obfuscate)
-
-`NebulaObfuscate.cs` 提供多维度代码混淆能力。
-
-#### 字符串加密
-
-```csharp
-// 编译期加密（配合代码生成器使用）
-byte[] enc = Obfuscate.EncodeForCompile("敏感字符串", 42);
-var msg = Obfuscate.Encoded(enc, 42).Decrypt();
-
-// 运行期加密
-byte key;
-string encrypted = Obfuscate.EncryptRuntime("动态数据", out key);
-string decrypted = Obfuscate.DecryptRuntime(encrypted, key);
-```
-
-#### 间接调用（打散调用图）
-
-```csharp
-// 通过 volatile 委托间接调用，阻止编译器内联与静态分析
-Obfuscate.Vcall(MyFunction, arg1, arg2);
-var result = Obfuscate.VcallR(MyFunction, arg1, arg2);
-```
-
-#### 不透明谓词 / 虚假分支
-
-```csharp
-// 恒为 true/false，形态随启动变化（RuntimeDiverse=true 时）
-if (!Obfuscate.OpaqueTrue() && Obfuscate.OpaqueTrue())
-{
-    Obfuscate.DeadBranch();  // 永不到达的干扰代码
-}
-```
-
-### 5.3 擦除型敏感字符串 (SecureString)
-
-`NebulaSecureString.cs` 提供运行时随机源和擦除型敏感字符串。
-
-```csharp
-// 配置区密钥用 SecureString 包裹
-private static readonly SecureString s_appKey = new("SWBFE6879E94DD");
-string key = s_appKey.Str();  // 用时才解码
-
-// RuntimeDiverse=true 时每次启动密钥随机
-```
-
-### 5.4 TLS 证书指纹锁定
-
-```csharp
-// SdkConfig.cs
-public const string TlsCertSha256 = "f31dc7cd4dbed7b9b6034bae7577452a6e50102ff3121775e64698b76f08b80d";
-```
-
-- 仅对 HTTPS 生效
-- 通过 `SslStream` 自定义校验回调比对服务器证书 SHA256
-- 服务器更换证书后需更新此值
-- 自动更新包下载：同 host 复用指纹锁定，跨 host 由哈希/大小校验兜底
-
-### 5.5 通信信封加密
-
-**请求信封**：
-
-```
-{ data, sign, t, n, [k], app_key }
-```
-
-- `data` = `base64( IV[16] + AES-256-CBC(业务JSON) )`
-- `sign` = `hex( HMAC-SHA256( data|t|n, salt ) )`
-- `t` = Unix 时间戳
-- `n` = 随机 nonce（8 字节 hex）
-- `k` = 会话密钥 ID（`init` 后下发，非公开接口必带）
-
-**响应信封**：
-
-```
-{ data, sign, t, n, code, [sig] }
-```
-
-校验顺序：① HMAC → ② 服务端非对称签名（`sig`） → ③ AES 解密
-
-**密钥派生**：
-- AES Key = `SHA256(AES_KEY)` → 32 字节
-- AES IV = `MD5(AES_KEY)` → 16 字节（IV 前置于密文）
-
-**签名算法**：自动识别 ES256（ECDSA P-256）和 RS256（RSA-2048 PKCS#1），DER 与 P1363 格式均支持。
-
----
-
-## 6. VMP / 壳保护集成（VMProtect · Themida · 自定义壳）
-
-### 6.0 C# 加固体系总览
-
-Nebula C# SDK 采用三层加固体系，各层独立开关，也可一键全开：
-
-| 加固层 | 配置开关 | 代码接口 | 文件 |
-|--------|----------|---------|------|
-| ① 壳标记 | `ShellEnable` | `Shell.BeginVM()` 等 | `NebulaShell.cs` |
-| ② 代码混淆 | `ObfStrings` | `Obfuscate.*` | `NebulaObfuscate.cs` |
-| ③ 运行时防护 | `ProtectLevel` | `RuntimeProtection.Scan()` | `NebulaRuntimeProtection.cs` |
-| ④ 运行时多样性 | `RuntimeDiverse` | `SecureString` / `RuntimeRand` | `NebulaSecureString.cs` |
-| ★ 一键全开 | `Harden = true` | 自动启用以上全部 | `SdkConfig.cs` |
-
-### 6.1 壳标记（`NebulaShell.cs`）
-
-`Shell` 类提供统一的壳标记接口。开启 `ShellEnable=true` 后：
-- 自动探测 `VMProtectSDK32.dll` / `VMProtectSDK64.dll` 是否已加载
-- 探测 Themida / WinLicense 的 `SecureEngineSDK` DLL
-- 未检测到壳 SDK 时，所有标记退化为空操作（零开销）
-
-#### 标记强度
-
-| 方法 | 强度 | 用在哪 |
-|------|------|--------|
-| `Shell.BeginUltra()` | 最强最慢 | 全程序只标 1~2 处（如卡密校验总入口） |
-| `Shell.BeginVM()` | 强（虚拟化） | 授权判定、密钥派生、关键常量比较 |
-| `Shell.BeginMutate()` | 中（只变异指令） | 高频函数（网络收发、状态机） |
-| `Shell.BeginScope()` | 仅划范围 | Themida 按区域处理 |
-
-#### 使用示例
-
-```csharp
-// 在关键函数中插入壳标记
-public bool VerifyLicense(string ticket, string token)
-{
-    Shell.BeginVM("verify_license");           // 虚拟化保护开始
-    var result = client.CheckOffline(ticket, token);
-    Shell.End();                                // 结束
-
-    Shell.BeginMutate("update_ui");            // 变异保护（高频）
-    UpdateUiState(result.Ok);
-    Shell.End();
-    return result.Ok;
-}
-
-// 最高强度：只标 1~2 处
-public LoginResult DoLogin(string account, string secret)
-{
-    Shell.BeginUltra("login_entry");
-    var r = client.Login(account, secret);
-    Shell.End();
-    return r;
-}
-```
-
-#### VMProtect 工具函数
-
-```csharp
-// 检测当前进程是否已被 VMProtect 加壳
-bool protected = Shell.IsProtected();
-
-// VMProtect 内置调试器检测（比 SDK 自己的更难绕过）
-bool debugged = Shell.IsDebuggerPresent(checkKernelMode: false);
-
-// VMProtect 内置虚拟机检测
-bool vm = Shell.IsVirtualMachinePresent();
-
-// VMProtect 镜像 CRC 校验（检测程序是否被补丁）
-bool crcOk = Shell.IsValidImageCRC();
-```
-
-#### VMProtect 授权系统（可选）
-
-`Shell` 类还封装了 VMProtect 自带的序列号 / HWID 系统：
-
-```csharp
-// 设置序列号
-int state = Shell.SetSerialNumber("serial-key-from-vmp");
-Console.WriteLine(Shell.SerialStateText(state));
-
-// 获取硬件 ID
-string hwid = Shell.GetCurrentHWID();
-
-// 序列号状态判断
-bool valid = Shell.IsSerialValid(state);
-```
-
-### 6.2 怎么让壳真的生效（VMProtect 为例）
-
-1. 在 `SdkConfig.cs` 中设置 `ShellEnable = true`（或 `Harden = true`）
-2. 在代码中插入 `Shell.BeginVM()` / `Shell.End()` 标记
-3. 编译出 `MyApp.exe`
-4. 打开 VMProtect → 加载该 exe → 左侧 `Functions` 会自动列出所有标记区域
-5. 勾选需要的项 → 设置 `Compilation Type`：`Virtualization` / `Mutation` / `Ultra`
-6. 需要"防补丁"就开 `Options → Check image CRC`
-7. 点 `Compile` 生成加壳后的 exe
-
-> ⚠️ 加壳后的 exe 哈希变了，如果后台「版本管理」登记了 `self_file_hash`，必须重新登记，否则会被完整性自校验拦下。
-
-### 6.3 加壳的坑（务必看）
-
-| 坑 | 说明 |
-|----|------|
-| **别保护 IAT / 导入表完整性** | SDK 依赖 WinHTTP + bcrypt 系统 DLL。壳开了"导入表保护"且配置不当 → 网络请求失败、加密失败 |
-| **别把整个 exe 全虚拟化** | 只虚拟化标记出来的核心函数。全量虚拟化会让启动慢十倍 |
-| **杀软误报** | 加壳 + 反调试组合极易被国产杀软报毒。发布前务必过一遍主流杀软 |
-| **标记段里尽量别放 return** | 个别壳版本对"标记区内提前返回"支持不好 |
-| **保留一个未加壳版本** | 用来排查线上崩溃（加壳后崩溃栈基本没意义） |
-| **.NET 特殊性** | C# 编译产物是 IL，VMProtect 对 .NET 的保护能力有限。建议配合 ConfuserEx / .NET Reactor 做 IL 层混淆，再叠 VMProtect 原生壳 |
-
-### 6.4 .NET 专用壳保护推荐
-
-.NET 程序的 VMP 集成推荐组合方案：
-
-| 层 | 工具 | 说明 |
-|----|------|------|
-| IL 层混淆 | **ConfuserEx** / **Obfuscar** / **.NET Reactor** | 控制流混淆 + 字符串加密 + 防反编译 |
-| 原生壳保护 | **VMProtect** / **Themida** | 对编译后的 Native exe 做虚拟化 |
-| SDK 层 | `Shell.BeginVM()` 标记 + `RuntimeProtection` | 壳标记让加壳工具知道保护哪里 |
-
-#### ConfuserEx 集成示例（.csproj 后编译）
-
-```xml
-<Target Name="Obfuscate" AfterTargets="Build">
-  <Exec Command="confuser.exe MyApp.dll --config=confuser.crproj" />
-</Target>
-```
-
-### 6.5 自定义壳挂载（Enigma / Obsidium 等）
-
-有些壳没有统一的标记头文件。C# 版通过运行时 DLL 探测：
-如果壳的 SDK DLL 不在系统路径，`Shell` 类的探测会静默失败，
-所有标记退化为空操作。可以通过 P/Invoke 加载自定义壳的 DLL：
-
-```csharp
-// 在程序启动时加载自定义壳 DLL
-[DllImport("kernel32.dll")] static extern IntPtr LoadLibrary(string name);
-// 在 Main() 中：
-LoadLibrary("MyCustomShell.dll");
-// 之后 Shell.BeginVM() 会探测到你的壳
-```
-
----
-
-## 7. 一键全开安全功能
-
-将以下配置全部开启即为"一键全开"模式：
-
-### SdkConfig.cs 一键全开
-
-```csharp
-public static class SdkConfig
-{
-    // 基础配置（必填）
-    public const string ApiUrl = "https://your-domain.com/api/index.php";
-    public const string AppKey = "YOUR_APP_KEY";
-    public const string AesKey = "your32hexaeskey0000000000000000";
-    public const string SignSalt = "your48hexsignsalt0000000000000000000000000000000000";
-
-    // ⑤ 响应签名公钥（PEM，必填）
-    public const string RespSignPubKey =
-        "-----BEGIN PUBLIC KEY-----\n" +
-        "YOUR_PUBLIC_KEY_HERE\n" +
-        "-----END PUBLIC KEY-----\n";
-
-    // ⑥ TLS 证书指纹锁定（开启 = 防中间人）
-    public const string TlsCertSha256 = "your_server_cert_sha256_here";
-
-    // ===== 安全功能一键全开 =====
-    // 严格防护模式（VM/沙箱也按威胁处理，会误伤 VM 用户）
-    public const bool ProtectStrictPolicy = true;   // ← 全开：true
-
-    // 调试日志（全开时建议临时开启，排查后关闭）
-    public const bool DebugLog = true;              // ← 全开：true（稳定后改 false）
-}
-```
-
-### 程序启动时一键全开
-
-```csharp
-// ═══ 运行时防护 ═══
-RuntimeProtection.SetCallback(r => {
-    // 上报到服务端
-    // sendToServer(r.Score, r.Summary());
-});
-RuntimeProtection.ScanAndEnforce(out bool mayContinue);
-if (!mayContinue) Environment.Exit(0);
-RuntimeProtection.StartWatchdog(5000);   // 后台巡检
-
-// ═══ 壳标记 ═══
-// 在关键函数中插入 Shell.BeginVM() / Shell.End()
-// 编译后用 VMProtect / Themida 加壳
-
-// ═══ 代码补丁自检 ═══
-RuntimeProtection.GuardCode(
-    Marshal.GetFunctionPointerForDelegate(myVerifier), 256);
-```
-
-### 一键全开功能清单
-
-| 序号 | 功能 | 配置项/代码 | 效果 |
-|------|------|------------|------|
-| 1 | **★ 一键全开** | `Harden = true` | 防护等级3 + 混淆 + 壳标记 + 运行时多样性 |
-| 2 | TLS 证书指纹锁定 | `TlsCertSha256` 填入 64 位 hex | 防中间人攻击 |
-| 3 | 响应签名强制验证 | `RequireResponseSignature = true` | 防伪造服务器响应 |
-| 4 | 运行时防护 | `ProtectLevel = 3` | 反调试/反VM/反沙箱全开 |
-| 5 | 命中处置 | `ProtectAction = 2` | 命中即降级 |
-| 6 | 后台巡检 | `StartWatchdog(5000)` | 每 5 秒检测一次 |
-| 7 | 壳标记 | `Shell.BeginVM()` / `Shell.End()` | VMProtect/Themida 保护区域 |
-| 8 | 代码混淆 | `Obfuscate.*` | 字符串加密 + 间接调用 + 不透明谓词 |
-| 9 | 擦除型敏感字符串 | `SecureString` | 密钥不明文常驻内存 |
-| 10 | 代码补丁自检 | `GuardCode()` | 检测函数是否被 patch |
-| 11 | 完整性自校验 | `EnforceSelfIntegrity()` | 防程序文件被篡改 |
-| 12 | 自动更新 | `AutoUpdateEnable = true` | 自动修复安全漏洞 |
-| 13 | 仅 HTTPS 更新 | `AllowInsecureUpdate = false` | 防更新包被劫持 |
-| 14 | 不走系统代理 | `UseSystemProxy = false` | 防本地代理调试 |
-
-### 功能开关速查表
-
-| 功能 | 开启方式 | 关闭方式 |
-|------|---------|---------|
-| **★ 一键全开** | `Harden = true` | `Harden = false` |
-| 运行时防护 | `ProtectLevel = 1/2/3` | `ProtectLevel = 0` |
-| 命中处置 | `ProtectAction = 2` (降级) | `ProtectAction = 0` (只记录) |
-| 严格策略 | `ProtectStrictPolicy = true` | `ProtectStrictPolicy = false` |
-| 壳标记 | `ShellEnable = true` | `ShellEnable = false` |
-| 代码混淆 | `ObfStrings = true` | `ObfStrings = false` |
-| 运行时多样性 | `RuntimeDiverse = true` | `RuntimeDiverse = false` |
-| TLS 指纹锁定 | `TlsCertSha256 = "64位hex"` | `TlsCertSha256 = ""` |
-| 响应签名验证 | `RequireResponseSignature = true` | `RequireResponseSignature = false` |
-| 后台巡检 | `StartWatchdog(5000)` | `StopWatchdog()` |
-| 完整性校验 | 调用 `EnforceSelfIntegrity()` | 不调用 |
-| 自动更新 | `AutoUpdateEnable = true` | `AutoUpdateEnable = false` |
-| HTTPS 强制 | `AllowInsecureUpdate = false` | `AllowInsecureUpdate = true` |
-| 系统代理 | `UseSystemProxy = false` | `UseSystemProxy = true` |
-| 调试日志 | `DebugLog = true` | `DebugLog = false` |
-
----
-
-## 8. 完整接入示例
+## 5. 完整接入示例
 
 以下是从零到完整运行的接入流程（WinForms 登录窗口）：
 
@@ -993,20 +531,7 @@ client.SetUiHandler((kind, msg) =>
 });
 
 // ════════════════════════════════════════════════════════════════════
-// 第 3 步：运行时防护检查（init 前）
-// ════════════════════════════════════════════════════════════════════
-var protectResult = RuntimeProtection.Check(new RuntimeProtection.CheckOptions
-{
-    StrictPolicy = SdkConfig.ProtectStrictPolicy,
-    CheckHardwareBreakpoints = true,
-    LogFile = "nebula_protect.log",
-});
-if (protectResult.HasThreat && SdkConfig.ProtectStrictPolicy)
-{
-    // 严格模式：高严重度威胁直接退出
-    Environment.Exit(0);
-}
-
+// 第 3 步：init → 自校验 → 版本检查
 // ════════════════════════════════════════════════════════════════════
 // 第 4 步：初始化（建议后台线程）
 // ════════════════════════════════════════════════════════════════════
@@ -1066,7 +591,7 @@ client.Dispose();
 
 ---
 
-## 9. 错误码参考
+## 6. 错误码参考
 
 ### 本地错误码（`Error` 枚举，负值）
 
@@ -1126,11 +651,11 @@ client.Dispose();
 
 ---
 
-## 10. 文件清单
+## 7. 文件清单
 
 | 文件 | 职责 |
 |------|------|
-| `SdkConfig.cs` | 接入方配置区（唯一需修改的文件，含加固开关） |
+| `SdkConfig.cs` | 接入方配置区（唯一需修改的文件） |
 | `NebulaClient.cs` | 客户端主类（`Client`、`ClientOptions`、`NebulaFactory`） |
 | `NebulaTypes.cs` | 公共结果类型与错误码 |
 | `NebulaEnvelope.cs` | 通信信封（请求加密 + 响应验签解密） |
@@ -1142,10 +667,6 @@ client.Dispose();
 | `NebulaOffline.cs` | 离线宽限票据（验签 + 绑定校验） |
 | `NebulaUpdate.cs` | 自动更新（下载 + 校验 + 自替换重启） |
 | `NebulaStoreFeatureIntegrity.cs` | 已读记录 + 完整性自校验 + 功能密钥包 (NF1) |
-| `NebulaRuntimeProtection.cs` | 运行时防护（反调试/反VM/反沙箱/代码补丁自检/后台巡检） |
-| `NebulaObfuscate.cs` | 代码混淆（字符串加密 + 间接调用 + 不透明谓词） |
-| `NebulaShell.cs` | **壳标记集成**（VMProtect / Themida / 自定义壳 P/Invoke） |
-| `NebulaSecureString.cs` | **擦除型敏感字符串 + 运行时随机源** |
 
 ---
 

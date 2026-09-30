@@ -229,6 +229,8 @@ function swEdit(s) {
                 <option value="0" ${pol.grace_enable === 0 ? 'selected' : ''}>关闭</option>
             </select>
         </div>
+        <div class="field"><label>单次宽限时长(秒)</label><input id="swP_grace_seconds" type="number" min="0" value="${pol.grace_seconds > 0 ? pol.grace_seconds : ''}" placeholder="跟随全局"></div>
+        <div class="field"><label>累计上限(秒)</label><input id="swP_grace_max_seconds" type="number" min="0" value="${pol.grace_max_seconds > 0 ? pol.grace_max_seconds : ''}" placeholder="跟随全局"></div>
     </div>`;
 
     openModal(s.id ? `编辑软件 · ${esc(s.name)}` : '新增软件', body, [
@@ -252,6 +254,8 @@ function swEdit(s) {
                     default_max_devices: document.getElementById('swP_default_max_devices').value.trim(),
                     device_fp_enable: document.getElementById('swP_device_fp_enable').value,
                     grace_enable: document.getElementById('swP_grace_enable').value,
+                    grace_seconds: document.getElementById('swP_grace_seconds').value.trim(),
+                    grace_max_seconds: document.getElementById('swP_grace_max_seconds').value.trim(),
                 },
                 status: parseInt(document.getElementById('swStatus').value, 10) || 0,
                 remark: document.getElementById('swRemark').value.trim(),

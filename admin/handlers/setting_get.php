@@ -58,9 +58,16 @@ Response::ok([
             'enable'      => (bool) Config::get('grace.enable', true),
             'seconds'     => (int) Config::get('grace.seconds', 0),
             'max_seconds' => (int) Config::get('grace.max_seconds', 0),
-            // ES256 公钥 PEM（公开信息，可展示）：客户端 SDK 的 vpmkRespSignPubKey 必须填它；
-            // 密钥由服务端自动生成落盘 config/grace_keys.php，后台只读展示，改密钥走「删除密钥文件轮换」
+            'clock_skew'  => (int) Config::get('grace.clock_skew', 120),
+            // ES256 公钥 PEM（公开信息，可展示）：客户端 SDK 的 grace_public_key 字段填它；
+            // 密钥由服务端自动生成落盘 config/grace_keys.php，后台只读展示，改密钥走「轮换密钥」按钮
             'public_key'  => class_exists('Grace') ? (string) (Grace::publicKey() ?? '') : '',
+        ],
+        // 响应签名公钥（独立于离线宽限密钥，用于客户端验签 API 响应）
+        'resp_sign' => [
+            'public_key' => class_exists('RespSign') ? (string) (RespSign::publicKey() ?? '') : '',
+            'kid'        => class_exists('RespSign') ? RespSign::keyId() : '',
+            'algo'       => class_exists('RespSign') ? RespSign::algorithm() : '',
         ],
     ],
 ]);

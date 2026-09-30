@@ -189,6 +189,10 @@ final class AdminPermission
         // 系统维护（健康巡检 / 数据备份）与「系统设置 → 系统」同档
         'system_maintenance'    => self::SETTINGS_INFRA,
 
+        // ---- 离线宽限密钥管理：换钥影响所有客户端离线票据，仅超管档 ----
+        'grace_rotate_keys'     => self::SETTINGS_SECURITY,
+        'resp_sign_rotate_keys' => self::SETTINGS_SECURITY,
+
         // ---- 软件管理（多软件网络验证）：查看含通信密钥，仅超管档 ----
         'software_list'         => self::SETTINGS_BUSINESS,
         'software_save'         => self::SETTINGS_BUSINESS,

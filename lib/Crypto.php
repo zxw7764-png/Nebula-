@@ -365,14 +365,14 @@ class Crypto
             'n'    => $nonce,
         ];
 
-        // 非对称签名（ES256/RS256，密钥与离线宽限共用；签名对象 = data|t|n）
+        // 非对称签名（ES256/RS256，独立于离线宽限密钥；签名对象 = data|t|n）
         // 失败时静默省略 sig —— 客户端只在开启 pin 时才强制要求。
-        if (class_exists('Grace') && method_exists('Grace', 'signMessage')) {
-            $sig = Grace::signMessage($data . '|' . $t . '|' . $nonce);
+        if (class_exists('RespSign') && method_exists('RespSign', 'signMessage')) {
+            $sig = RespSign::signMessage($data . '|' . $t . '|' . $nonce);
             if ($sig !== null && $sig !== '') {
                 $resp['sig']    = base64_encode($sig);
-                $resp['sig_kid'] = Grace::keyId();
-                $resp['sig_algo'] = Grace::algorithm();
+                $resp['sig_kid'] = RespSign::keyId();
+                $resp['sig_algo'] = RespSign::algorithm();
             }
         }
 

@@ -196,6 +196,30 @@ class Policy
     }
 
     // ==================================================================
+    // 离线宽限（分软件策略）
+    // ==================================================================
+
+    /** 分软件离线宽限单次时长（秒），0 或 null 表示跟随全局 */
+    public static function graceSeconds(?array $sw = null): int
+    {
+        $v = self::swPolicyVal($sw, 'grace_seconds');
+        if ($v !== null && (int) $v > 0) {
+            return (int) $v;
+        }
+        return (int) Setting::intWithConfig('grace_seconds', 'grace.seconds');
+    }
+
+    /** 分软件离线宽限累计上限（秒），0 或 null 表示跟随全局 */
+    public static function graceMaxSeconds(?array $sw = null): int
+    {
+        $v = self::swPolicyVal($sw, 'grace_max_seconds');
+        if ($v !== null && (int) $v > 0) {
+            return (int) $v;
+        }
+        return (int) Setting::intWithConfig('grace_max_seconds', 'grace.max_seconds');
+    }
+
+    // ==================================================================
     // 运维辅助
     // ==================================================================
 
