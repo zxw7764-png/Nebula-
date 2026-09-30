@@ -63,27 +63,20 @@ $notices = Database::all(
 $kid  = '';
 $skey = '';
 if ($machineId !== '') {
-    // 2026-09-30 修复（防表灌水）：sign_keys 每次签发都插一行（7 天 TTL），
-    // 随机 machine_id + 代理池可无限写表。按机器码限流：单机器码 10 次/分钟，
-    // 超限拒绝签发但正常返回响应其余字段（kid/s 为空，客户端回落主盐路径）。
-    if (!RateLimit::hit('signkey:' . hash('sha256', 'nbmid|' . $machineId), 10, 60)) {
-        Logger::log('init', 0, '会话密钥签发过于频繁', ['machine_id' => substr($machineId, 0, 32)]);
-    } else {
-        $nowSk = time();
-        $kid   = bin2hex(random_bytes(8));
-        $skey  = bin2hex(random_bytes(24));
+    $nowSk = time();
+    $kid   = bin2hex(random_bytes(8));
+    $skey  = bin2hex(random_bytes(24));
 
-        Database::exec('DELETE FROM ' . Database::t('sign_keys') . ' WHERE expire_at > 0 AND expire_at < ?', [$nowSk]);
-        Database::exec(
-            'DELETE FROM ' . Database::t('sign_keys') . ' WHERE machine_id = ? AND software_id = ?',
-            [$machineId, (int) $sw['id']]
-        );
-        Database::exec(
-            'INSERT INTO ' . Database::t('sign_keys') . ' (kid, skey, software_id, machine_id, created_at, expire_at, last_used_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [$kid, $skey, (int) $sw['id'], $machineId, $nowSk, $nowSk + 86400 * 7, $nowSk]
-        );
-    }
+    Database::exec('DELETE FROM ' . Database::t('sign_keys') . ' WHERE expire_at > 0 AND expire_at < ?', [$nowSk]);
+    Database::exec(
+        'DELETE FROM ' . Database::t('sign_keys') . ' WHERE machine_id = ? AND software_id = ?',
+        [$machineId, (int) $sw['id']]
+    );
+    Database::exec(
+        'INSERT INTO ' . Database::t('sign_keys') . ' (kid, skey, software_id, machine_id, created_at, expire_at, last_used_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [$kid, $skey, (int) $sw['id'], $machineId, $nowSk, $nowSk + 86400 * 7, $nowSk]
+    );
 }
 
 Response::ok([
@@ -112,6 +105,13 @@ Response::ok([
     // 之后 login / heartbeat 会下发签名票据，心跳失败时本地验签即可离线运行。
     // enable=false 表示服务端未开启，客户端跳过该逻辑。
     'grace'          => Grace::info(),
+    // 响应签名公钥：客户端 SDK 用此验签 API 响应，防止中间人篡改
+    // 密钥由服务端自动生成落盘 config/resp_sign_keys.php，客户端只需公钥
+    'resp_sign'      => class_exists('RespSign') ? [
+        'public_key' => RespSign::publicKey() ?? '',
+        'kid'        => RespSign::keyId() ?? '',
+        'algo'       => RespSign::algorithm() ?? '',
+    ] : null,
     'crypto'         => [
         'enforce' => (bool) Config::get('security.enforce_crypto', true),
         'algo'    => 'AES-256-CBC',
