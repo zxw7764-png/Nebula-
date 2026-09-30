@@ -92,7 +92,10 @@ NEBULA_HARDEN=1
 | 位置 | 强度 | 原因 |
 | --- | --- | --- |
 | `Client::post()` 的加密 + 签名段 | `MUTATE`（变异） | 每次请求都走，用虚拟化太慢 |
-| `Client::checkOffline()` 的 ES256 验签 + 机器码/会话绑定校验 | `VM`（虚拟化） | 调用频率低，是"本地授权判定"的核心 |
+| `Client::loginAndGuard()` 的内置登录成功/失败判定分支 | `VM`（虚拟化） | 调用频率低，是"登录授权判定"的核心；模板需被接入层实际调用才会实例化产码 |
+
+> ⚠️ `Client::checkOffline()`（ES256 验签 + 机器码/会话绑定）**没有任何壳标记**，
+> 旧版本文档曾误写为 VM 标记位置；需要保护它请按 §1.2 自己加 `NEBULA_MARK_VM_BEGIN/END`。
 
 ### 1.2 建议你自己再标哪些函数
 
@@ -131,6 +134,67 @@ std::string MyApp::verifyLicense() {
 Themida / WinLicense：同样道理，打开 exe 后在 `Protection Options` 里会看到
 `VM_START / MUTATE_*` 标记出来的区域，勾上 `Virtualize` / `Mutate` 即可。
 
+#### 1.3.1 本项目实测的 VMProtect 壳配置（NebulaUILoader.exe / Nebula.dll）
+
+> 本工程（Nebula Menu）实际跑通的配置，可直接照抄。
+> 前提：工程预处理器已定义 `NEBULA_HARDEN=1`（其中已包含 `NEBULA_SHELL_ENABLE=1`）。
+
+**① 保护范围：只勾两处，不要全量虚拟化**
+
+| 函数 | 类型 | 原因 |
+| --- | --- | --- |
+| `Client::loginAndGuard<...>` | `Virtualization` | 登录成功/失败判定，调用频率低，是最关键的授权分支 |
+| `Client::post()` | `Mutation` | 每次网络请求都走，虚拟化太慢，变异足够 |
+
+> `loginAndGuard` 是**模板 + `NEBULA_NOINLINE`**：接入层不调用它就**不会实例化、不产码**，
+> VMProtect 的 `Functions` 列表里也看不到这个函数，更不会出现 `VMProtectBeginVirtualization`。
+
+**② 选项设置**
+
+| 分类 | 选项 | 取值 |
+| --- | --- | --- |
+| 虚拟机 | 版本 / 实例 | 默认 |
+| 虚拟机 | 复杂性 | `100%`（体积或启动耗时吃不消就降到 `50%`） |
+| 文件 | 内存保护 | 是 |
+| 文件 | 导入保护信息 | **否**（必须） |
+| 文件 | 资源保护 | 是（开完必须实测，见 ③） |
+| 文件 | 压缩输出的文件 | 是 |
+| 文件 | 输出文件 | `Nebula.vmp.dll`（加壳后改名覆盖 `x64\Release\Nebula.dll`） |
+| 检测 | 调试器 | **否** |
+| 检测 | 虚拟机工具 | **否** |
+| 附加 | 分段 | `.???` |
+| 附加 | 移除调试信息 | 是 |
+| 附加 | 移除重定位信息 | **否**（DLL 必须保留） |
+| 附加 | Shadow Stack Compatible | 否 |
+
+**③ 三个必须知道的坑**
+
+1. **导入保护信息 = 否**：SDK 依赖 WinHTTP / bcrypt 等系统 DLL，一旦加密导入表，
+   网络请求与加密一起失效，表现就是**「登录永远失败」**，且没有任何报错线索。
+2. **调试器 / 虚拟机检测 = 否**：这两项命中时壳是**直接终止进程**（不是弹提示），
+   用户侧看到的就是游戏崩溃；再叠加 VBS / Hyper-V / 云电脑 / 网吧环境的大量误报，得不偿失。
+3. **资源保护 / 内存保护开完要实测**：本工程把「注入成功音效」（`IDR_INJECT_SOUND`）与
+   MDI 字体都以 `RCDATA` 内嵌在 `Nebula.dll` 里，若出现无声或字体乱码，先关掉这两项复测定位。
+
+**④ 加壳顺序（别搞反）**
+
+```
+1) 备份未加壳的 Nebula.dll（排查线上崩溃要用）
+2) VMProtect 打开 Nebula.dll → 勾 ① 的两处 → 按 ② 设好选项 → Compile 产出 Nebula.vmp.dll
+3) 用 Nebula.vmp.dll 覆盖 x64\Release\Nebula.dll
+4) 只重新编译 NebulaUILoader（它的 PostBuildEvent 会把 Nebula.dll 嵌成 RCDATA 资源）
+   —— 不要再单独编译 Payload，否则会把刚加壳的 dll 覆盖回未加壳版本
+5) 对 NebulaUILoader.exe 重复加壳（选项同 ②），产物另存为 *.vmp.exe
+```
+
+⚠️ 加壳后**哈希与大小都变了**：若后台「版本管理」登记过 `self_file_hash`，
+必须**重新登记**加壳后 exe 的哈希/大小，否则 `enforceSelfIntegrity()` 会以
+「程序文件校验失败」把用户挡在登录之外。
+
+⚠️ **虚拟化范围不宜过大**：本项目实测，范围放大后 Loader 的 `.text` 从约 868 KB 膨胀到约 33 MB
+（≈38 倍），dll 同理（约 640 KB → 约 28 MB）。若成品体积出现这种量级，说明虚拟化范围过大，
+请回到 ① ——只勾那两个函数。
+
 ### 1.4 宏名对不上怎么办（Enigma / Obsidium / 老版本 Themida）
 
 有些壳没有统一的标记头文件，或宏名不一样（如 `SECURE_BEGIN/SECURE_END`）。
@@ -147,7 +211,7 @@ Themida / WinLicense：同样道理，打开 exe 后在 `Protection Options` 里
 ```
 
 Enigma Protector 这类**只能靠 GUI 选函数**的壳：`NEBULA_SHELL_ENABLE` 可以不开，
-反正标记是空的；直接在 Enigma 里按函数名勾选 `Client::post`、`checkOffline` 等即可。
+反正标记是空的；直接在 Enigma 里按函数名勾选 `Client::post`、`loginAndGuard` 等即可。
 
 ### 1.5 加壳的坑（务必看）
 
