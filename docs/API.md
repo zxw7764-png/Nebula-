@@ -272,7 +272,7 @@ POST http://<域名>/api/index.php?action=<接口名>
 > `notices` 仅下发 **列表公告**（type=4，公告栏展示用，按归属软件过滤）；弹窗公告（type=2）与立即公告（type=3）由客户端经 `notice` 接口配合 SDK `popupNotices()` / `flashNotices()` 处理。
 
 > `data.version.versions` 为**历史版本列表**：该软件该渠道已发布（`status = 1`）且填写了更新说明的记录，
-> 按 id 倒序最多 10 条，每条含 `version` / `channel` / `changelog` / `force_update` / `download_url` /
+> 按版本号倒序最多 10 条，每条含 `version` / `channel` / `changelog` / `force_update` / `download_url` /
 > `file_hash` / `file_size` / `created_at`，供客户端「更新日志」逐条展开查看。服务端无历史记录时下发空数组
 > （老客户端忽略该字段即可，向后兼容）。「当前最新版本」仍以 `data.version.latest` 与 `data.version.changelog`
 > 为准，两者互不影响。

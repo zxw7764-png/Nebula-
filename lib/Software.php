@@ -484,12 +484,15 @@ class Software
      */
     public static function versionInfo(array $sw, string $channel = 'stable'): array
     {
-        $row = Database::one(
+        // 取版本号最大的一条已发布记录：按版本号语义比较而非插入顺序，
+        // 避免「后补发的低版本插在前面」导致误判最新版
+        $rows = Database::all(
             'SELECT * FROM ' . Database::t('versions') . '
              WHERE software_id = ? AND channel = ? AND status = 1
-             ORDER BY id DESC LIMIT 1',
+             LIMIT 500',
             [(int) $sw['id'], $channel]
         );
+        $row = self::newestByVersion($rows);
         if ($row) {
             return [
                 'source'       => 'db',
@@ -516,7 +519,7 @@ class Software
 
     /**
      * 取某软件某渠道的历史版本列表（客户端「更新日志」展示用）。
-     * 只返回已发布且填写了 changelog 的记录，按发布时间倒序。
+     * 只返回已发布且填写了 changelog 的记录，按版本号倒序。
      */
     public static function changelogList(array $sw, string $channel = 'stable', int $limit = 10): array
     {
@@ -525,9 +528,13 @@ class Software
             'SELECT version, channel, changelog, force_update, download_url, file_hash, file_size, created_at'
             . ' FROM ' . Database::t('versions')
             . " WHERE software_id = ? AND channel = ? AND status = 1 AND changelog IS NOT NULL AND changelog <> ''"
-            . ' ORDER BY id DESC LIMIT ' . $limit,
+            . ' LIMIT 500',
             [(int) $sw['id'], $channel]
         );
+
+        // 语义化排序需在 PHP 侧完成（MySQL 无法按版本号逐段比较）
+        usort($rows, static fn($a, $b) => Util::versionCompare((string) $b['version'], (string) $a['version']));
+        $rows = array_slice($rows, 0, $limit);
 
         $list = [];
         foreach ($rows as $r) {
@@ -543,6 +550,18 @@ class Software
             ];
         }
         return $list;
+    }
+
+    /** 从版本记录中挑出版本号最大的一条（版本号逐段语义比较） */
+    private static function newestByVersion(array $rows): ?array
+    {
+        $best = null;
+        foreach ($rows as $r) {
+            if ($best === null || Util::versionCompare((string) $r['version'], (string) $best['version']) > 0) {
+                $best = $r;
+            }
+        }
+        return $best;
     }
 
     /**

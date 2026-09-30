@@ -4,6 +4,21 @@
 版本号遵循语义化版本（`主.次.修订`）。每次发版请在本文件顶部追加条目，并同步
 `lib/bootstrap.php` 的 `NB_VERSION`；发布到版本更新系统时，把对应条目整理为 `release_notes`。
 
+## [2.65.22] - 2026-10-01
+
+### 修复
+
+- 版本排序改为「按版本号倒序」：`Software::versionInfo()` 原用 `ORDER BY id DESC`（即插入顺序）定位最新版本，
+  `changelogList()` 同样按 id 倒序，导致「先发高版本、后补发低版本」时最新版判定与更新日志顺序双双错乱
+  （现网即出现 1.0.2 先入库、1.0.1 后入库，最新版被误判为 1.0.1）；
+  改为用 `Util::versionCompare()` 按版本号逐段语义比较：`versionInfo()` 经新增的 `Software::newestByVersion()`
+  取最大值，`changelogList()` 在 PHP 侧 `usort` 后再 `array_slice` 截断，排序结果与发布先后无关
+
+### 说明
+
+- `nb_versions.created_at` 为**入库时间**（仅在新增时写入），不代表版本先后，故未采用按时间排序
+- `Software::releaseOf()`（按指定版本号取哈希，供客户端完整性自校验）不受影响
+
 ## [2.65.21] - 2026-10-01
 
 ### 新增
