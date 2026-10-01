@@ -1,6 +1,6 @@
 # Nebula 网络验证系统 · 架构设计文档
 
-> 📚 本文属 Nebula 文档中心，主索引见 [../README.md](../README.md)；
+> 📚 本文属 Nebula 文档中心，主索引见 [README.md](../README.md)，完整指南见 [GUIDE.md](GUIDE.md)；
 > 其他文档：[API 接口](API.md) · [报文示例](API_RAW_EXAMPLES.md) · [界面模板](TEMPLATE.md) ·
 > [C++ SDK 接入] · [C++ SDK 加固] · [Python SDK]（三套 SDK 文档随官网分发包 sdk.zip / sdk-py.zip 提供，不在本仓库）
 
