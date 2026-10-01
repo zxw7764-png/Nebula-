@@ -10,7 +10,7 @@ POST http://<域名>/api/index.php?action=<接口名>
 
 > ### 不想手写协议？
 >
-> `sdk/` 目录提供**零依赖的 C++ SDK**（header-only），把 `sdk/nebula/` 目录 + `nebula_sdk.hpp` 一起拖进项目即可，  
+> **C++ SDK 随官网分发包 `sdk.zip` 提供**（header-only），把 `sdk/nebula/` 目录 + `nebula_sdk.hpp` 一起拖进项目即可，  
 > 无需 OpenSSL / libcurl（用系统自带的 `bcrypt.dll` / `winhttp.dll`，仅 Windows + MSVC）。
 > 配置只需改一个文件：`sdk/nebula/client/config.hpp`。
 >
@@ -236,7 +236,7 @@ POST http://<域名>/api/index.php?action=<接口名>
       "ticket_prefix": "G1",
       "usage": "心跳失败时，本地用 public_key 验签后可在 until 前离线运行"
     },
-    "crypto": { "enforce": true, "algo": "AES-256-CBC", "sign": "HMAC-SHA256" },
+    "crypto": { "proto": 31, "kex": "ECDH-P256", "algo": "AES-256-GCM", "resp_sign": "ES256" },
     "version": {
       "client_ver": "1.0.0",
       "latest": "1.1.0",

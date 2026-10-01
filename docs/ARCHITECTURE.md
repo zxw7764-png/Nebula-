@@ -2,14 +2,14 @@
 
 > 📚 本文属 Nebula 文档中心，主索引见 [../README.md](../README.md)；
 > 其他文档：[API 接口](API.md) · [报文示例](API_RAW_EXAMPLES.md) · [界面模板](TEMPLATE.md) ·
-> [C++ SDK 接入](../sdk/SDK.md) · [C++ SDK 加固](../sdk/SDK_PROTECTION.md) · [Python SDK](../sdk-py/README.md)
+> [C++ SDK 接入] · [C++ SDK 加固] · [Python SDK]（三套 SDK 文档随官网分发包 sdk.zip / sdk-py.zip 提供，不在本仓库）
 
 本文档描述 Nebula 网络验证系统的整体架构、请求生命周期、关键链路时序与安全设计，
 面向二次开发、安全审计与私有化部署运维人员。
 
 - **代码版本**：以 `lib/bootstrap.php` 的 `NB_VERSION` 为准（本文撰写时为 `2.65.18`）
 - **运行环境**：PHP ≥ 8.0（`str_contains` / `str_starts_with` 要求 8.0）、MySQL 5.7+ / MariaDB 10.3+
-- **协议真源**：服务端 [`lib/Crypto.php`](../lib/Crypto.php) 与客户端 [`sdk/nebula/client/envelope.hpp`](../sdk/nebula/client/envelope.hpp)，二者与 [`docs/API.md`](API.md) 严格对齐
+- **协议真源**：服务端 [`lib/Handshake.php`](../lib/Handshake.php) + [`lib/Crypto.php`](../lib/Crypto.php) 与客户端 `sdk/nebula/client/handshake.hpp`（随官网 `sdk.zip` 分发），二者与 [`docs/API.md`](API.md) 严格对齐
 
 ---
 
@@ -146,85 +146,41 @@ sequenceDiagram
 
 ---
 
-## 3. 通信协议与安全模型
+## 3. 通信协议与安全模型（Nebula 3.1）
 
-### 3.1 信封结构
+> 3.0 静态密钥信封（AES-256-CBC + HMAC + 会话盐 `k` + 密钥平滑轮换）已**完全移除**；
+> 当前唯一协议为 3.1：ECDH 会话握手 + AES-256-GCM + seq 防重放。
 
-| 字段 | 含义 | 说明 |
-| --- | --- | --- |
-| `app_key` | 软件标识 | 外层明文，用于多软件识别与密钥选择 |
-| `data` | 业务密文 | `base64(IV[16] + AES-256-CBC 密文)` |
-| `sign` | 签名 | `HMAC-SHA256("{data}\|{t}\|{n}", salt)` 的十六进制 |
-| `t` | 时间戳 | 与服务器时差须在 ±300 秒（`security.time_window`）内 |
-| `n` | 随机串（nonce） | 每次请求唯一，服务端独占占用去重 |
-| `k` | 会话密钥标识 | `init` 下发；业务接口必带，主盐只保公开接口可用 |
+### 3.1 会话握手
 
-### 3.2 加解密与防重放实现
+- 客户端生成临时 ECDH P-256 密钥对，明文请求 `handshake`：
+  `{ app_key, eph_pub, nc, ts, mhash }`（`nc` 为 16 字节客户端随机数）
+- 服务端生成自己的临时密钥对，响应 `{ sid, eph_pub, ns, ts_s, sign }`，
+  会话落库 `nb_hsessions`（含双方公钥、派生密钥、seq 游标，TTL 到期/失效即删）
+- `sign` = 服务端对 `sid|eph_pub_S|ns|nc|ts_s` 的 ES256 签名，客户端用内置公钥先验签——
+  **防伪造服务器**（握手阶段即可识别假服务端，对称密钥从未离开服务端）
 
-- **密钥派生**：AES 密钥 = `SHA256(aes_key)` 前 32 字节
-- **IV**：**每次加密随机生成 16 字节**并随密文下发（不再使用固定 IV，避免明文前缀泄露结构）；
-  仅在 `random_bytes` 不可用时回落到派生 IV，并兼容极老客户端的「固定 IV + 纯密文」报文
-- **签名**：`HMAC-SHA256`，比较用 `hash_equals()` 恒定时间，防时序攻击
-- **防重放**：`Cache::lock()` 独占占用 nonce——Redis 驱动即 `SET NX EX`（集群全局），
-  文件驱动即独占创建文件（单机）；重放请求返回 `5004`
-- **多软件密钥**：每个软件独立 `aes_key` / `sign_salt`，`Software::resolve()` 命中后
-  经 `Crypto::useKeys()` 切换，会话盐覆盖随主钥切换一并清空
+### 3.2 密钥派生与业务信封
 
-### 3.3 会话密钥（P0-02）
+- 共享密钥 = ECDH 双方私钥 × 对方公钥的 X 坐标（32 字节大端）
+- `sk_enc` = `hash_hkdf('sha256', shared, 32, 'nebula31-enc', nc‖ns)`；
+  `sk_mac` = 同法 info=`nebula31-mac`
+- IV = `sha256(nc‖ns)` 前 4 字节 ‖ `seq` 大端 8 字节（每会话 IV 空间独立）
+- 业务请求：`{ proto:31, sid, seq, t, data, mac, app_key }`，
+  `data = base64(IV[12] + AES-256-GCM(业务JSON) + tag[16])`，
+  `mac = HMAC-SHA256(sk_mac, sid|seq|t|sha256(data))` 小写 hex
+- **防重放**：`seq` 必须单调递增，服务端按会话游标校验，旧序号返回 `5004`
+- 会话失效（过期/未找到）返回 `5002`，SDK 自动重握手重试一次
 
-`init` 签发会话密钥并下发 `k` 标识；业务接口请求须携带 `k`，
-服务端以**会话级盐**替代主盐验签。即便主钥 `aes_key` / `sign_salt` 被从客户端逆向出来，
-攻击者也无法伪造业务请求——换一个会话即作废。会话密钥同时绑定 `machine_id`，
-检测到跨设备复用时返回 `5002`。
+### 3.3 响应防伪造
 
-### 3.4 密钥平滑轮换
+响应 `{ data, sig, code }` 由服务端**私钥签名**（ES256，签名对象 `data|sid`），
+客户端内置公钥验签——先验签后解密。逆向端即使完整 dump 客户端内存也拿不到
+任何可复用的对称机密（握手密钥对是临时的，私钥不落盘），无法解密历史流量或伪造响应。
 
-服务端换钥后，老客户端仍持旧钥。`api/index.php` 在验签/解密失败且失败原因为
-`bad_sign` / `decrypt_fail` 时，用 `Software::prevKeys()` 取宽限期内的旧钥重试一次：
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant SDK as 老客户端（持旧钥）
-    participant API as api/index.php
-    participant CR as Crypto
-    participant SW as Software
-
-    SDK->>API: 请求（旧钥签名）
-    API->>CR: parseRequest → CryptoException(bad_sign)
-    API->>SW: prevKeys(软件) 取宽限期内旧钥
-    alt 旧钥仍在宽限期
-        SW-->>API: 旧 aes_key / sign_salt
-        API->>CR: useKeys(旧钥) → parseRequest 重试
-        Note over API: decrypt_fail 时先 forgetNonce 撤销占用，避免误判重放
-        CR-->>API: 成功 → 继续业务
-    else 已过宽限期
-        SW-->>API: null
-        API-->>SDK: 5002 验签失败
-    end
-```
-
-### 3.5 响应防伪造
-
-响应由服务端**私钥签名**（`Grace::signMessage()`，ES256，密钥不可用时回落 RS256），
-客户端内置公钥验签。逆向出对称密钥也无法伪造响应，因为私钥永不出服务端。
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant H as handler
-    participant R as Response
-    participant G as Grace（私钥）
-    participant SDK as 客户端
-
-    H->>R: send(code, msg, data)
-    R->>R: AES 加密业务数据 + 组装信封
-    R->>G: signMessage(响应体)
-    G-->>R: DER 签名（ES256）
-    R-->>SDK: {data, sign, srv_sign, ...}
-    SDK->>SDK: 内置公钥验签（sdk/nebula/client/envelope.hpp）
-    Note over SDK: 验签失败 → 拒绝该响应（本地码 -2）
-```
+> 协议唯一参照：服务端 [`lib/Handshake.php`](../lib/Handshake.php) +
+> [`lib/Crypto.php`](../lib/Crypto.php)，客户端 `sdk/nebula/client/handshake.hpp`
+> （随官网 `sdk.zip` 分发）；字段详见 [`docs/API.md`](API.md)。
 
 > 客户端离线校验的票面与验签步骤见第 5 节；协议字段见 [`docs/API.md`](API.md) 的
 > 「离线宽限协议」与「响应防伪造」章节。
@@ -460,11 +416,11 @@ sequenceDiagram
 
 | 威胁 | 缓解措施 | 实现位置 |
 | --- | --- | --- |
-| 报文窃听 | AES-256-CBC + 随机 IV | `lib/Crypto.php` |
+| 报文窃听 | AES-256-GCM（ECDH 会话密钥，客户端零静态机密） | `lib/Handshake.php`、`lib/Crypto.php` |
 | 报文篡改 | HMAC-SHA256 + `hash_equals` | `lib/Crypto.php` |
 | 重放攻击 | 时间窗 ±300s + nonce 独占占用 | `lib/Crypto.php` |
 | 密钥逆向后伪造请求 | 会话密钥（`k`）强制 + 机器码绑定 | `api/index.php` |
-| 伪造服务端响应 | 服务端私钥签名（ES256），客户端公钥验签 | `lib/Grace.php`、`sdk/nebula/client/envelope.hpp` |
+| 伪造服务端响应 | 服务端私钥签名（ES256），客户端公钥验签 | `lib/Handshake.php`、`lib/RespSign.php` |
 | SQL 注入 | 全量预处理参数；`ORDER BY` 白名单 | `lib/Database.php` |
 | XSS | 输出转义 + CSP nonce 白名单 | `lib/bootstrap.php`、前端渲染层 |
 | CSRF | 写操作令牌校验 | `admin/index.php`、`agent/api.php` 等 |
@@ -479,10 +435,10 @@ sequenceDiagram
 ## 12. 扩展约定
 
 1. **新增客户端接口**：在 `api/handlers/` 添加同名的 `{action}.php`，并在
-   [`docs/API.md`](API.md) 与 `sdk/nebula/client/envelope.hpp`（如需新字段）同步
+   [`docs/API.md`](API.md) 与客户端 `handshake.hpp`（随官网 sdk.zip 分发，如需新字段）同步
 2. **新增管理接口**：在后台 `handlers/` 添加文件，并**必须**在 `lib/AdminPermission.php`
    的 `ACTION_PERM` 登记权限（未登记即拒绝）；只读接口需加入 `admin/index.php` 的 `$csrfExempt`
 3. **新增业务表涉及软件维度**：必须接入 `Tenant` 的 `apply*` / `requireTouch*` 校验
-4. **协议变更**：必须同时修改服务端 `lib/Crypto.php`、客户端 `envelope.hpp` 与 `docs/API.md`
+4. **协议变更**：必须同时修改服务端 `lib/Handshake.php` / `lib/Crypto.php`、客户端 `handshake.hpp` 与 `docs/API.md`
 5. **数据库变更**：写入 `schema.sql`（新装）并在 `install/migrate.php` 的 `MIGRATIONS` 追加幂等迁移
 6. **版本发布**：更新 `lib/bootstrap.php` 的 `NB_VERSION`，并在 [`CHANGELOG.md`](../CHANGELOG.md) 顶部追加条目
