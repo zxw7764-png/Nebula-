@@ -38,8 +38,8 @@ Response::ok([
         'policy'  => Config::get('policy'),
         'crypto'  => [
             'enforce'     => Config::get('security.enforce_crypto'),
-            'algo'        => 'AES-256-CBC',
-            'sign'        => 'HMAC-SHA256',
+            'algo'        => 'ECDH P-256 + AES-256-GCM',
+            'sign'        => 'ES256',
             'time_window' => Config::get('security.time_window'),
         ],
         // 注意：只暴露「展示用」的安全项，绝不返回 entry_key / default_pass 等敏感值
