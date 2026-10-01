@@ -56,3 +56,8 @@ sdk/build/out/
 *.dll
 # 例外：随 SDK 分发的加固工具静态库
 !sdk/vmp/*.lib
+
+# SDK 分发包不再入库（改为官网 zip 分发：demo-login.zip / sdk.zip / sdk-py.zip）
+/sdk/
+/sdk-py/
+/sdk-c#/
