@@ -1,9 +1,5 @@
 # Nebula 网络验证 · 接口文档
 
-> 📚 本文属 Nebula 文档中心，主索引见 [../README.md](../README.md)；
-> 其他文档：[架构设计](ARCHITECTURE.md) · [报文示例](API_RAW_EXAMPLES.md) · [界面模板](TEMPLATE.md) ·
-> [C++ SDK 接入](../sdk/SDK.md) · [Python SDK](../sdk-py/README.md)
-
 所有客户端接口统一入口：
 
 ```
@@ -33,93 +29,110 @@ POST http://<域名>/api/index.php?action=<接口名>
 
 ---
 
-## 一、通信协议
+## 一、通信协议（Nebula 3.1 —— ECDH 会话 + AES-256-GCM）
 
-### 1.1 请求格式
+> **3.0 静态密钥信封（AES-256-CBC + HMAC + 会话盐 k）已完全移除。**
+> 客户端不再持有任何跨会话对称机密：通信密钥每次进程启动由 ECDH 握手临时协商，
+> 会话结束/过期即废。旧版 3.0 信封请求会被服务端拒绝（`1001`）。
 
-所有请求体为 JSON，统一信封结构：
+### 1.0 握手：建立 3.1 会话
+
+`action=handshake`（明文 JSON，公开接口，独立频控 10 次/分钟）。
+
+**请求：**
 
 ```json
 {
-  "data": "<base64(iv[16] + AES-256-CBC密文)>",
-  "sign": "<HMAC-SHA256 hex>",
-  "t":    1726000000,
-  "n":    "a1b2c3d4e5f6a7b8",
-  "k":    "0f1e2d3c4b5a6978",
-  "app_key": "SWxxxx"
+  "app_key": "SWxxxx",
+  "eph_pub": "<base64(65字节非压缩P-256点: 0x04||X||Y)>",   // 客户端每次进程启动新生成的临时公钥
+  "nc":      "<base64(16字节随机数)>",
+  "ts":      1726000000,
+  "mhash":   "<sha256(machine_id) hex>"                     // 只传哈希，防撞库
 }
 ```
 
-| 字段      | 说明                                                           |
-| ------ | ------------------------------------------------------------ |
-| `data` | 业务参数 JSON 序列化后加密：`base64(iv[16] + 密文)`（见 1.2 节）              |
-| `sign` | `HMAC-SHA256(data + "\|" + t + "\|" + n, SIGN_SALT)` 的小写 hex |
-| `t`    | 秒级 Unix 时间戳，与服务端时差不得超过 `time_window`（默认 300 秒）               |
-| `n`    | 随机字符串（≥8 位），一次性使用，服务端做重放校验                                   |
-| `k`    | **会话密钥 ID（init 之后必填）**，见 1.2.1 节                             |
-| `app_key` | **软件标识（必填）**，后台「软件管理」下发；服务端用它选定软件并使用该软件独立的 AES_KEY / SIGN_SALT，账号/卡密/设备等数据均按软件隔离。未携带或无效 → `1004`，**不再回落默认软件** |
-
-### 1.2 加密参数
-
-传输加密统一为 **AES-256-CBC（机密性）+ HMAC-SHA256 签名（完整性）**：
-
-| 项目   | 值                                           |
-| ---- | ------------------------------------------- |
-| 算法   | AES-256-CBC + PKCS#7 填充                     |
-| 密文格式 | `base64(iv[16] + 密文)`                       |
-| 密钥   | `SHA256(AES_KEY)` 前 32 字节                   |
-| IV   | `MD5(AES_KEY)` 前 16 字节（固定）                  |
-| 完整性  | 外层 `sign` 签名（HMAC-SHA256，先验签后解密，篡改密文必然验签失败） |
-
-> 完整性由 encrypt-then-MAC 保证：客户端先对密文签名，服务端**验签通过才解密**。
-
-### 1.2.1 会话级签名密钥（k 字段）
-
-为防止编译进客户端的 `SIGN_SALT` 被逆向后伪造任意请求，服务端采用**会话级密钥**：
-
-1. 客户端调用 `init`（主盐签名，不带 `k`）→ 响应 `data` 解密后含：
-
-```json
-"session": { "k": "<16位hex密钥ID>", "s": "<48位hex会话盐>" }
-```
-
-1. 之后**所有非白名单接口**（register/login/heartbeat/activate/unbind/devices/userinfo/logout）：
-   - 请求信封必须携带 `k` 字段
-   - `sign` 改用会话盐 `s` 计算
-   - 缺 `k`、`k` 无效或过期 → `5002`
-2. 服务端**响应用「验请求所用的同一把盐」签名**：init 响应用主盐，业务响应用会话盐
-3. 密钥管理：每次 `init` 重新下发（同一 `machine_id` 仅保留最新一把），7 天未续自动过期；init 时可携带旧 `k` 平滑轮换
-4. 安全效果：主盐只保 `init/notice/version` 三个只读接口可用；即使主盐被 dump，也无法伪造业务请求，且换一次 init 旧密钥即作废
-5. 服务端开关：`config.php` → `security.session_key_required`（默认 `true`）
-
-### 1.3 响应格式
-
-响应同样使用加密信封，外层额外附带明文 `code` 便于快速判断：
+**响应（明文 JSON，带服务端长期私钥签名）：**
 
 ```json
 {
-  "data": "<base64(iv + 密文)>",
-  "sign": "<hmac>",
-  "t":    1726000000,
-  "n":    "xxxx",
   "code": 0,
-  "sig":      "<base64(非对称签名)>",
+  "proto": 31,
+  "sid":    "<32位hex会话ID>",
+  "eph_pub":"<base64(服务端临时公钥点)>",
+  "ns":     "<base64(16字节随机数)>",
+  "ts_s":   1726000000,
+  "sign":     "<base64(ES256签名)>",
   "sig_kid":  "<密钥标识>",
   "sig_algo": "ES256"
 }
 ```
 
-`sig` / `sig_kid` / `sig_algo` 为**响应防伪签名**（服务端私钥签名，客户端内置公钥验签）：
+**客户端校验与派生（必须严格按此顺序）：**
 
-| 字段         | 说明                                                                    |
-| ---------- | --------------------------------------------------------------------- |
-| `sig`      | base64(对字符串 `data \| t \| n` 的签名)；私钥仅存服务端，逆向出客户端全部密钥也无法伪造响应            |
-| `sig_kid`  | 签名密钥标识（服务端轮换密钥时用于选公钥）                                                 |
-| `sig_algo` | `ES256`（ECDSA P-256，默认）或 `RS256`（RSA-2048，运行环境不支持 EC 时自动回落）               |
+1. 验签：`sign` 的签名对象 = `sid|eph_pub|ns|nc(b64)|ts_s`，用内置公钥（`kRespSignPubKey`）校验——防止 MITM 替换服务端临时公钥；
+2. ECDH：`shared = ECDH(eph_priv_C, eph_pub_S)` 的 X 坐标（32 字节大端）；
+3. HKDF-SHA256 派生（盐 = `nc‖ns`）：
+   - `sk_enc = HKDF(shared, info="nebula31-enc", 32)`
+   - `sk_mac  = HKDF(shared, info="nebula31-mac", 32)`
+4. GCM IV 前缀：`iv_prefix = SHA256(nc‖ns)[0..4)`（两端独立可算）。
 
-> 校验顺序：先 HMAC 验 `sign` → 再验 `sig` → 最后解密 `data`。
-> 该签名与离线宽限票据签名共用一对密钥（`config/grace_keys.php`），客户端需在
-> `nebula/client/config.hpp` 的 `kRespSignPubKey` 填入对应公钥（**必填**）。
+会话有效期 6 小时（无请求即作废）；同一 `mhash` 只保留最新会话。会话失效（`5002`）后客户端应清空会话并重新握手。
+
+### 1.1 请求格式（业务接口）
+
+所有业务接口（init/login/heartbeat/…）请求体为 JSON，统一 3.1 信封：
+
+```json
+{
+  "proto": 31,
+  "sid":   "<握手返回的会话ID>",
+  "seq":   1,
+  "t":     1726000000,
+  "data":  "<base64(iv[12] + AES-256-GCM密文 + tag[16])>",
+  "mac":   "<HMAC-SHA256 hex>",
+  "app_key": "SWxxxx"
+}
+```
+
+| 字段      | 说明                                                                 |
+| ------ | ------------------------------------------------------------------ |
+| `seq`  | **严格单调递增**的会话内序号（从 1 开始）；服务端原子 UPDATE 校验，重复/乱序 → `5004` 防重放        |
+| `iv`   | 12 字节 = `iv_prefix(4) ‖ seq 大端(8)` —— seq 单调保证 IV 永不重复（GCM 硬性要求）    |
+| `data` | 业务参数 JSON 的 AES-256-GCM 密文：`base64(iv[12] + 密文 + tag[16])`          |
+| `mac`  | `HMAC-SHA256(sk_mac, sid + "\|" + seq + "\|" + t + "\|" + sha256(data))` |
+| `t`    | 秒级时间戳（用握手返回的 `ts_s` 校准），与服务端时差 ≤ 60 秒                              |
+| `app_key` | **软件标识（必填）**，服务端用它选定软件并隔离数据。无效 → `1004`                        |
+
+### 1.2 加密参数
+
+| 项目   | 值                                        |
+| ---- | ---------------------------------------- |
+| 算法   | **AES-256-GCM**（AEAD 认证加密，无填充预言机问题）      |
+| 密钥   | `sk_enc`（ECDH + HKDF 派生，会话级临时密钥）         |
+| IV   | `iv_prefix(4) ‖ seq 大端(8)`，共 12 字节       |
+| 完整性  | GCM tag + 外层 `mac`（绑定 sid/seq/t，防字段换序重放） |
+
+### 1.3 响应格式
+
+会话活跃时（业务请求的响应）返回 3.1 GCM 信封：
+
+```json
+{
+  "proto": 31,
+  "sid":   "<会话ID>",
+  "data":  "<base64(iv[12] + AES-256-GCM密文 + tag[16])>",
+  "code":  0,
+  "sig":      "<base64(ES256签名)>",
+  "sig_kid":  "<密钥标识>",
+  "sig_algo": "ES256"
+}
+```
+
+- 响应 IV 与请求对称（`iv_prefix ‖ 请求seq`），客户端用同一把 `sk_enc` 解密；
+- `sig` 为**响应防伪签名**：签名对象 = `data|sid`，服务端长期私钥签名（与握手响应同一对密钥），客户端内置公钥验签。私钥仅存服务端，逆向出客户端全部数据也无法伪造响应；
+- `sig_algo` 为 `ES256`（ECDSA P-256，默认）或 `RS256`（运行环境不支持 EC 时自动回落）。
+
+**无会话时的错误响应**（握手前出错，如频控 `5001`、app_key 无效 `1004`）为明文 JSON `{code, msg, time}`，客户端据此提示即可。
 
 解密 `data` 后得到业务响应：
 
@@ -134,28 +147,21 @@ POST http://<域名>/api/index.php?action=<接口名>
 
 ### 1.3.1 明文白名单接口
 
-以下接口**无需登录、无敏感数据**，支持明文直接调用（不带 `data/sign/t/n` 信封）：
+以下接口**无需登录、无敏感数据**，支持明文直接调用（不带 3.1 信封）：
 
 | 接口        | 说明                 |
 | --------- | ------------------ |
-| `init`    | 客户端初始化（拉取配置/公告/版本） |
+| `handshake` | 3.1 会话握手（见 1.0 节） |
 | `notice`  | 获取公告列表             |
 | `version` | 版本校验               |
 | `online`  | 在线人数               |
 
-这一组接口同时还满足：允许 GET 请求、不要求会话密钥 `k`、不受最低版本强制更新拦截、  
-不计入每日调用配额、维护模式下照常放行。
+> **`init` 自 3.1 起不再明文放行**——必须先握手、走 3.1 信封调用。
 
-**响应一律加密**（不论请求是明文还是加密信封）：
+这一组接口同时还满足：允许 GET 请求、不受最低版本强制更新拦截、不计入每日调用配额。
 
-- 所有接口（含白名单接口、错误响应）都返回加密信封 `{data, sign, t, n, code}`
-- 白名单接口只是允许**请求**侧不带信封，响应侧始终加密，防止响应被中间人直接读取
-
-客户端解析响应时无需区分请求方式，统一按 1.3 节的信封流程验签 + 解密即可。
-
-> 白名单在 `config/config.php` 的 `security.plain_whitelist` 中配置。  
-> 其余接口在 `enforce_crypto = true`（默认）时**必须**携带完整加密信封，  
-> 否则返回 `1001 缺少必要字段 data/sign/t/n`。
+> 白名单在 `config/config.php` 的 `security.plain_whitelist` 中配置。
+> 其余接口**必须**携带完整 3.1 信封（`sid/seq/t/data/mac`），否则返回 `1001 不支持的信封格式`。
 
 ### 1.4 业务状态码
 
@@ -238,29 +244,7 @@ POST http://<域名>/api/index.php?action=<接口名>
       "need_update": true,
       "force_update": false,
       "update_url": "https://example.com/app.exe",
-      "update_note": "修复若干问题",
-      "versions": [
-        {
-          "version": "1.1.0",
-          "channel": "stable",
-          "changelog": "修复若干问题",
-          "force_update": false,
-          "download_url": "https://example.com/app.exe",
-          "file_hash": "",
-          "file_size": 0,
-          "created_at": 1759219200
-        },
-        {
-          "version": "1.0.0",
-          "channel": "stable",
-          "changelog": "首个公开版本",
-          "force_update": false,
-          "download_url": "",
-          "file_hash": "",
-          "file_size": 0,
-          "created_at": 1756540800
-        }
-      ]
+      "update_note": "修复若干问题"
     },
     "notices": [
       { "id": 1, "title": "欢迎使用", "content": "系统已上线", "type": 4 }
@@ -270,12 +254,6 @@ POST http://<域名>/api/index.php?action=<接口名>
 ```
 
 > `notices` 仅下发 **列表公告**（type=4，公告栏展示用，按归属软件过滤）；弹窗公告（type=2）与立即公告（type=3）由客户端经 `notice` 接口配合 SDK `popupNotices()` / `flashNotices()` 处理。
-
-> `data.version.versions` 为**历史版本列表**：该软件该渠道已发布（`status = 1`）且填写了更新说明的记录，
-> 按版本号倒序最多 10 条，每条含 `version` / `channel` / `changelog` / `force_update` / `download_url` /
-> `file_hash` / `file_size` / `created_at`，供客户端「更新日志」逐条展开查看。服务端无历史记录时下发空数组
-> （老客户端忽略该字段即可，向后兼容）。「当前最新版本」仍以 `data.version.latest` 与 `data.version.changelog`
-> 为准，两者互不影响。
 
 | `data.grace` 字段           | 说明                             |
 | ------------------------- | ------------------------------ |

@@ -55,29 +55,8 @@ $notices = Database::all(
     [(int) $sw['id'], $now, $now]
 );
 
-// ------------------------------------------------------------------
-// 会话级签名密钥：每次 init 下发新密钥（本响应体本身用主密钥加密传输）
-// 之后客户端所有业务请求的信封必须带 k，验签/响应签名均改用会话盐。
-// 同一机器码仅保留最新一把；7 天未续（未再 init）自动过期。
-// ------------------------------------------------------------------
-$kid  = '';
-$skey = '';
-if ($machineId !== '') {
-    $nowSk = time();
-    $kid   = bin2hex(random_bytes(8));
-    $skey  = bin2hex(random_bytes(24));
-
-    Database::exec('DELETE FROM ' . Database::t('sign_keys') . ' WHERE expire_at > 0 AND expire_at < ?', [$nowSk]);
-    Database::exec(
-        'DELETE FROM ' . Database::t('sign_keys') . ' WHERE machine_id = ? AND software_id = ?',
-        [$machineId, (int) $sw['id']]
-    );
-    Database::exec(
-        'INSERT INTO ' . Database::t('sign_keys') . ' (kid, skey, software_id, machine_id, created_at, expire_at, last_used_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [$kid, $skey, (int) $sw['id'], $machineId, $nowSk, $nowSk + 86400 * 7, $nowSk]
-    );
-}
+// 3.0 的会话级签名密钥（sign_keys 表 + 信封 k）已随 3.0 协议移除；
+// 3.1 由 handshake 端点建立 ECDH 会话（nb_hsessions 表），init 不再下发任何密钥。
 
 Response::ok([
     'server_time'    => time(),
@@ -85,8 +64,7 @@ Response::ok([
     'software'       => ['id' => (int) $sw['id'], 'name' => (string) $sw['name']],
     'site_name'      => Setting::get('site_name', 'Nebula 网络验证'),
     'heartbeat_interval' => Policy::heartbeatInterval(),
-    'session_ttl'    => (int) Config::get('policy.session_ttl', 3600),
-    // 注册 / 维护：分软件策略覆盖优先（软件未单独配置时跟随全局）
+    'session_ttl'    => (int) Config::get('policy.session_ttl', 3600),    // 注册 / 维护：分软件策略覆盖优先（软件未单独配置时跟随全局）
     'register_enable'=> Policy::registerEnableFor($sw),
     'maintain_mode'  => Policy::maintainModeFor($sw),
     // 登录方式：客户端据此决定登录界面渲染哪些输入框、提交哪些字段
@@ -100,15 +78,16 @@ Response::ok([
         'core'       => array_values((array) Config::get('device_fp.core_components', ['board', 'cpu'])),
         'weights'    => DeviceFp::WEIGHTS,
     ],
-    'session'        => ['k' => $kid, 's' => $skey],
     // 离线宽限：客户端在此取公钥并缓存（或直接内置到客户端），
     // 之后 login / heartbeat 会下发签名票据，心跳失败时本地验签即可离线运行。
     // enable=false 表示服务端未开启，客户端跳过该逻辑。
     'grace'          => Grace::info(),
     'crypto'         => [
         'enforce' => (bool) Config::get('security.enforce_crypto', true),
-        'algo'    => 'AES-256-CBC',
-        'sign'    => 'HMAC-SHA256',
+        'proto'   => 31,
+        'algo'    => 'AES-256-GCM',
+        'kex'     => 'ECDH-P256',
+        'sign'    => 'ES256',
     ],
     'version'        => [
         'client_ver'   => $clientVer,

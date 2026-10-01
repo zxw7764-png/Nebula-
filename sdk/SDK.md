@@ -1,10 +1,11 @@
 # Nebula C++ SDK 接入文档
 
 > 📚 本文属 Nebula 文档中心，主索引见 [../README.md](../README.md)；
-> 相关文档：[架构设计](../docs/ARCHITECTURE.md) · [SDK 加固指南](SDK_PROTECTION.md) · [API 接口](../docs/API.md) · [报文示例](../docs/API_RAW_EXAMPLES.md)
+> 相关文档：[SDK 加固指南](SDK_PROTECTION.md) · [API 接口](../docs/API.md) · [报文示例](../docs/API_RAW_EXAMPLES.md)
 
-> 适用对象：`sdk/nebula_sdk.hpp`（header-only 伞头，内部按职责拆分为 `sdk/nebula/` 下 21 个子头）  
-> 协议版本：与 `docs/API.md` 严格对齐（NB_VERSION ≥ 2.63.34）
+> 适用对象：`sdk/nebula_sdk.hpp`（header-only 伞头，内部按职责拆分为 `sdk/nebula/` 下 19 个子头）  
+> 协议版本：**Nebula 3.1（ECDH 会话 + AES-256-GCM，唯一协议）**，与 `docs/API.md` 严格对齐；
+> 3.0 静态密钥信封已移除，旧版服务端无法连接（握手阶段即失败提示）。
 
 ---
 
@@ -12,8 +13,8 @@
 
 Nebula C++ SDK 是 Nebula 网络验证系统的 Windows 客户端接入库，**header-only、零第三方依赖**（仅 Windows 系统库）。内置：
 
-- **通信协议**：AES-256-CBC 加密 + HMAC-SHA256 签名的加密信封，自动管理会话密钥（init 下发、业务接口自动换盐）
-- **响应防伪造**：服务端用私钥对每条响应额外签名（**ES256**，环境不支持时自动回落 **RS256**），客户端用内置公钥验签——逆向出全部对称密钥也无法伪造响应
+- **通信协议（3.1，唯一协议）**：进程启动即 ECDH P-256 握手临时协商会话密钥，业务请求走 **AES-256-GCM** 信封 + seq 单调防重放；客户端**零静态对称机密**（无需配置 AES_KEY / SIGN_SALT），堆扫描只能拿到当次会话的临时密钥
+- **响应防伪造**：服务端用私钥对每条响应（含握手响应）签名（**ES256**，环境不支持时自动回落 **RS256**），客户端用内置公钥验签——逆向出全部对称密钥也无法伪造响应
 - **完整流程**：init（初始化）→ login（登录，三种方式自动适配）→ heartbeat（心跳保活）→ logout（登出）
 - **业务接口**：激活、设备列表、设备解绑、用户信息、公告、版本检查、在线人数
 - **内置提示（开箱即用）**：版本过期 / 发现新版本 / 服务器维护 / 被踢下线 / 完整性校验失败，全部由 SDK 弹中文提示窗，接入方**零 UI 代码**
@@ -36,21 +37,20 @@ Nebula C++ SDK 是 Nebula 网络验证系统的 Windows 客户端接入库，**h
 
 ### 方式 A：内置配置区一行接入（推荐）
 
-打开 **`sdk/nebula/client/config.hpp`**（SDK 中★唯一需要修改的文件★）的顶部「接入方配置区」，把六项改成你自己软件的值（前四项在后台「软件管理」行点「复制」获取，第 ⑤ 项在「系统设置 → 系统 → 响应签名公钥 → 复制 C++ 代码」）：
+打开 **`sdk/nebula/client/config.hpp`**（SDK 中★唯一需要修改的文件★）的顶部「接入方配置区」，把以下项改成你自己软件的值（①②在后台「软件管理」行点「复制」获取，③在「系统设置 → 系统 → 响应签名公钥 → 复制 C++ 代码」）：
 
 ```cpp
 namespace nebula { namespace cfg {
 inline const std::string kApiUrl   = NEBULA_STR("http://your-domain.com/api/index.php"); // ① API 入口
 inline const SecureString kAppKey  { NEBULA_STR("SWXXXXXXXX") };                          // ② 软件标识
-inline const std::string kAesKey   = NEBULA_STR("AES_KEY_32位hex");                       // ③ 通信密钥
-inline const std::string kSignSalt = NEBULA_STR("SIGN_SALT_48位hex");                     // ④ 签名盐
-inline const std::string kRespSignPubKey = NEBULA_STR("-----BEGIN PUBLIC KEY-----\n...");  // ⑤ 响应验签公钥（必填）
-inline const std::string kTlsCertSha256  = NEBULA_STR("");                                 // ⑥ 证书指纹（可选）
+inline const std::string kRespSignPubKey = NEBULA_STR("-----BEGIN PUBLIC KEY-----\n...");  // ③ 响应验签公钥（必填）
+inline const std::string kTlsCertSha256  = NEBULA_STR("");                                 // ④ 证书指纹（可选）
 } }
 ```
 
-> **⑤ 是必填项**：留空则所有请求直接失败（故意设计，不给"不校验"留口子）。
-> **⑥ 只在 `https://` 生效**：填了它 SDK 会同时拒绝 `http://` 地址。
+> **3.1 起不再需要 AES_KEY / SIGN_SALT**：通信密钥由 ECDH 握手临时协商，客户端零静态对称机密。config.hpp 里的 `kAesKey` / `kSignSalt` 是兼容占位，可不管。
+> **③ 是必填项**：留空则所有请求直接失败（故意设计，不给"不校验"留口子）。
+> **④ 只在 `https://` 生效**：填了它 SDK 会同时拒绝 `http://` 地址。
 > 所有值一律写在 `NEBULA_STR("...")` 里，开启混淆后编译期即被加密。
 
 之后入口处一行工厂调用即可：
@@ -63,21 +63,22 @@ auto c = nebula::createDefaultClient(/*machine_id*/ "", /*os_info*/ "Windows", /
 
 > 子头分布在 `sdk/nebula/` 下，请**连同整个 `nebula/` 目录一起拷进工程**，不要只拷伞头。
 
-### 方式 B：构造时手动传参
+### 方式 B：Options 结构体构造
 
 ```cpp
 #include "nebula_sdk.hpp"
 
 int main()
 {
-    // 1. 创建客户端（参数见第 4 节）
-    nebula::Client c("http://api.example.com/api/index.php",
-                     "AES_KEY_32位hex",       // 软件的 AES_KEY
-                     "SIGN_SALT_48位hex",     // 软件的 SIGN_SALT
-                     "SWXXXXXXXX",            // 软件的 app_key（必填，标识所属软件）
-                     "",                      // machine_id，留空自动生成稳定机器码
-                     "Windows",               // 操作系统标识，随登录上报
-                     "1.0.1");                // 客户端版本号，随 init/login/heartbeat 上报
+    // 1. 创建客户端
+    nebula::Client::Options o;
+    o.api_url    = "http://api.example.com/api/index.php";
+    o.app_key    = "SWXXXXXXXX";   // 软件的 app_key（必填，标识所属软件）
+    o.machine_id = "";             // 留空自动生成稳定机器码
+    o.os_info    = "Windows";      // 操作系统标识，随登录上报
+    o.client_version = "1.0.1";    // 客户端版本号，随 init/login/heartbeat 上报
+    // o.response_sign_public_key 默认取 cfg::kRespSignPubKey
+    nebula::Client c(o);
 
     // 2. 初始化：拿会话密钥、登录方式、公告、版本策略
     auto ir = c.init();
@@ -108,24 +109,26 @@ int main()
 }
 ```
 
-## 4. Client 构造参数
+## 4. Client 构造参数（Options）
 
 ```cpp
-nebula::Client(api_url, aes_key, sign_salt, app_key,
-               machine_id = "", os_info = "", client_version = "1.0.0");
+nebula::Client::Options o;
+o.api_url = "..."; o.app_key = "...";
+nebula::Client c(o);
 ```
 
-| 参数               | 必填 | 说明                                                               |
-| ---------------- | -- | ---------------------------------------------------------------- |
-| `api_url`        | ✔  | API 入口，如 `http://api.example.com/api/index.php`（`?action=xx` 形式） |
-| `aes_key`        | ✔  | 32 位 hex，后台「软件管理 → 复制」获取                                         |
-| `sign_salt`      | ✔  | 48 位 hex，同上                                                      |
-| `app_key`        | ✔  | 软件标识（如 `SWDEFAULT`）。**必填**：没有默认通用软件，账号/卡密/设备均按软件隔离               |
-| `machine_id`     |    | 稳 报                                                              |
-| `os_info`        |    | 操作系统标识，随登录上报                                                     |
-| `client_version` |    | 客户端版本号。**每次发版必须更新**，服务端据此做版本拦截、更新提示与完整性自校验                       |
+| 字段                       | 必填 | 说明                                                               |
+| ------------------------ | -- | ---------------------------------------------------------------- |
+| `api_url`                | ✔  | API 入口，如 `http://api.example.com/api/index.php`（`?action=xx` 形式） |
+| `app_key`                | ✔  | 软件标识（如 `SWDEFAULT`）。**必填**：没有默认通用软件，账号/卡密/设备均按软件隔离               |
+| `response_sign_public_key` | ✔* | 响应验签公钥，默认取 `cfg::kRespSignPubKey`；强制验签开启时必填                   |
+| `machine_id`             |    | 稳定机器码                                                            |
+| `os_info`                |    | 操作系统标识，随登录上报                                                     |
+| `client_version`         |    | 客户端版本号。**每次发版必须更新**，服务端据此做版本拦截、更新提示与完整性自校验                       |
+| `tls_cert_sha256`        |    | 服务端证书 SHA256 指纹（https 防中间人）                                      |
+| `aes_key` / `sign_salt`  |    | 【已废弃】3.0 遗留字段，3.1 协议不使用                                          |
 
-> `app_key` / `aes_key` / `sign_salt` 三者一一对应，在后台「软件管理」每行点「复制」获取。换软件 = 三个值一起换。
+> 通信密钥由 ECDH 握手临时协商（3.1），客户端不再持有任何跨会话对称机密。
 
 ## 5. 流程 API
 
@@ -135,7 +138,7 @@ nebula::Client(api_url, aes_key, sign_salt, app_key,
 nebula::Client::InitResult ir = c.init();
 ```
 
-请求白名单接口（主盐签名，无需会话密钥）。成功后 `ir.ok = true`，并返回：
+请求前 SDK 自动完成 ECDH 握手建立 3.1 会话（首个业务请求触发，全程自动）。成功后 `ir.ok = true`，并返回：
 
 | 字段                                                                                   | 说明                                                             |
 | ------------------------------------------------------------------------------------ | -------------------------------------------------------------- |

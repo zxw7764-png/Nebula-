@@ -94,13 +94,11 @@ public:
                                                      const std::string& respSignPubKey,
                                                      bool requireSignature,
                                                      std::string& errMsg) {
-        // 旧版服务端（3.0）没有 handshake 端点：返回明文或加密信封的 1001 错误
-        // （信封体也带明文 code 字段）。1001 = 服务端不认识该 action → 上报 Protocol
-        // 让 Client 永久回落 3.0；其他业务码（限流/时间戳等）按普通失败处理，可重试。
+        // 非 0 业务码（限流/时间戳/签名失败等）按普通失败处理，可重试
         const int code = json::findInt(body, "code", -1);
         if (code != 0) {
             errMsg = "握手失败：" + json::findString(body, "msg");
-            return code == 1001 ? Error::Protocol : Error::Envelope;
+            return Error::Envelope;
         }
         if (json::findInt(body, "proto", 0) != 31) {
             errMsg = "服务端握手响应协议版本异常";

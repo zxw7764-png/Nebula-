@@ -7,8 +7,8 @@
 //  工具链：MSVC（C++17 及以上）；建议开启 /utf-8
 //
 // ── 快速开始 ──────────────────────────────────────────────────────────────
-//   1) 打开 nebula/client/config.hpp，填好 API 地址 / app_key / AES_KEY /
-//      SIGN_SALT / 响应签名公钥（6 项，后台「软件管理」复制取得）；
+//   1) 打开 nebula/client/config.hpp，填好 API 地址 / app_key /
+//      响应签名公钥（3 项；3.1 起通信密钥由 ECDH 握手协商，无需填 AES_KEY）；
 //   2) 工程里 #include "nebula_sdk.hpp"（只需这一个入口）；
 //   3) 入口代码：
 //
@@ -37,8 +37,8 @@
 //   nebula/protect/runtime.hpp     运行时防护（反调试 / 反虚拟机沙箱 / 补丁自检）
 //   nebula/client/config.hpp       ★ 接入方配置区（唯一需要改的文件）
 //   nebula/client/types.hpp        结果类型（与接口文档字段一一对应）
-//   nebula/client/envelope.hpp     通信信封（协议唯一实现点）
-//   nebula/client/handshake.hpp    3.1 ECDH 会话握手（零静态机密协议）
+//   nebula/client/envelope.hpp     通信公共件（URL / 白名单 / 拆封类型）
+//   nebula/client/handshake.hpp    3.1 ECDH 会话（唯一协议：握手 + GCM 信封）
 //   nebula/client/secure_store.hpp 本地会话 DPAPI 安全存储（绑机器加密）
 //   nebula/client/device.hpp       机器码 / 设备名 / 硬件指纹
 //   nebula/client/notice_store.hpp 立即公告本地已读记录

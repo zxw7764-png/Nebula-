@@ -1,7 +1,7 @@
 # Nebula SDK 客户端加固指南（壳标记 · 代码混淆 · 反调试 · 反虚拟机）
 
 > 📚 本文属 Nebula 文档中心，主索引见 [../README.md](../README.md)；
-> 配套文档：[C++ SDK 接入文档](SDK.md) · [架构设计](../docs/ARCHITECTURE.md) · [API 接口](../docs/API.md)
+> 配套文档：[C++ SDK 接入文档](SDK.md) · [API 接口](../docs/API.md)
 
 > **一句话结论：全部默认关闭。** 不定义任何宏时，`nebula/protect/` 下的加固代码几乎不编译进目标文件，
 > 行为 / 协议 / 性能与**不加加固的版本完全一致**。想开启，只需在工程预处理器里加一行
@@ -270,9 +270,10 @@ auto note = NEBULA_WSTR(L"Nebula 安全提示");
   （VMProtect 的 `VMProtectDecryptStringA`）。
 
 **接入方配置区已默认接好**：`nebula/client/config.hpp` 顶部 `namespace nebula::cfg` 的
-`kApiUrl / kAppKey / kAesKey / kSignSalt`（以及 `kRespSignPubKey / kTlsCertSha256`）本来就是 `NEBULA_STR("...")` 包着的，
-你只替换引号里的字符串即可 —— **不要把 `NEBULA_STR(...)` 拆掉**，
-拆了 AES_KEY / SIGN_SALT 就会以明文躺在 exe 里。
+`kApiUrl / kAppKey`（以及 `kRespSignPubKey / kTlsCertSha256`）本来就是 `NEBULA_STR("...")` 包着的，
+你只替换引号里的字符串即可 —— **不要把 `NEBULA_STR(...)` 拆掉**。
+3.1 起通信密钥由 ECDH 握手临时协商，exe 里已没有任何对称密钥可搜；
+`kAesKey / kSignSalt` 是 3.0 兼容占位，保持 `0000...` 原样即可。
 
 **发布前自查（值得花 30 秒）**：拿编译好的 exe 搜一下自己的密钥
 

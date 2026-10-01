@@ -55,10 +55,10 @@ register_shutdown_function(static function () use ($action, $startMs): void {
     );
 });
 
-// 公开只读接口：允许 GET、允许明文、不要求会话密钥、不计入每日配额
-// 新增这类接口时只需加到这里，下面各处会自动生效。
+// 公开只读接口：允许 GET、允许明文、不计入每日配额。
+// 注意：init 自 3.1 起不再明文放行 —— 客户端必须先 handshake 再走 3.1 信封调用。
 // handshake = Nebula 3.1 ECDH 会话握手（明文 JSON，完整性靠响应 ES256 签名）
-$publicActions = ['init', 'notice', 'version', 'online', 'handshake'];
+$publicActions = ['notice', 'version', 'online', 'handshake'];
 
 // 只允许 POST（查询类接口除外）
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -75,38 +75,17 @@ $whitelist  = (array) Config::get('security.plain_whitelist', []);
 $allowPlain = !$enforce || in_array($action, $whitelist, true) || $action === 'handshake';
 
 // ------------------------------------------------------------------
-// 多软件识别：外层明文字段 app_key 指认软件。
-// 命中后用该软件独立的 AES_KEY / SIGN_SALT 解密验签；
-// 未携带或无效时回落默认软件（兼容旧客户端）。
+// 多软件识别：外层明文字段 app_key 指认软件（3.1 会话/握手均按 app_key 归属）。
+// 未携带或无效时回落默认软件（兼容旧接入方）。
 // ------------------------------------------------------------------
 $nbSoftware = Software::resolve($input);
 if (!$nbSoftware) {
     Response::error(1004, 'app_key 无效或软件已停用');
 }
 Software::setCurrent($nbSoftware);
-Crypto::useKeys((string) $nbSoftware['aes_key'], (string) $nbSoftware['sign_salt']);
 
 try {
-    try {
-        $parsed      = Crypto::parseRequest($input, $allowPlain);
-    } catch (CryptoException $e) {
-        // 密钥平滑轮换回落：验签/解密失败且存在宽限期内的旧钥时，
-        // 用旧钥重试一次 —— 让「服务端已换钥、客户端未升级」的请求平滑过渡。
-        // 仅覆盖 bad_sign / decrypt_fail（time_expired/replay 与密钥无关；
-        // replay 在重试前需回滚 nonce 占用，避免被误判重放）。
-        $retryable = in_array($e->reason, ['bad_sign', 'decrypt_fail'], true)
-            && isset($input['data'], $input['sign'], $input['t'], $input['n']);
-        $prev = $retryable ? Software::prevKeys($nbSoftware) : null;
-        if ($prev === null) {
-            throw $e;
-        }
-        if ($e->reason === 'decrypt_fail') {
-            Crypto::forgetNonce((string) $input['n']); // 首次尝试已占用 nonce，撤销后重试
-        }
-        Crypto::useKeys((string) $prev['aes_key'], (string) $prev['sign_salt']);
-        $parsed      = Crypto::parseRequest($input, $allowPlain);
-        $requestData = $parsed['data'];
-    }
+    $parsed      = Crypto::parseRequest($input, $allowPlain);
     $requestData = $parsed['data'];
 } catch (CryptoException $e) {
     Logger::log($action ?: 'unknown', 0, 'crypto: ' . $e->getMessage(), ['raw' => $input]);
@@ -125,29 +104,11 @@ try {
 }
 
 // ------------------------------------------------------------------
-// 会话级签名密钥强制（init 下发，信封 k 字段指认）
-// 主盐只保公开接口可用；业务接口必须持会话密钥，
-// 即使主盐被从客户端逆向出来，也无法伪造业务请求（换个会话即作废）。
+// 会话强制：3.1 起所有非公开接口必须持 ECDH 会话（sid 信封）。
+// 静态密钥/kid 会话盐机制已随 3.0 移除。
 // ------------------------------------------------------------------
-if (!empty($parsed['plain'])) {
-    $sessionKid = null;
-} else {
-    $sessionKid = $parsed['kid'] ?? null;
-    $isSession31 = !empty($parsed['session31']);
-    if (Config::get('security.session_key_required', true)
-        && !in_array($action, $publicActions, true)
-        && $sessionKid === null && !$isSession31) {
-        Response::error(5002, '缺少会话密钥(k)，请先调用 init 获取');
-    }
-    // 会话密钥绑定校验：请求体内的 machine_id 必须与会话密钥绑定的 machine_id 一致，
-    // 防止一个会话密钥被多台机器复用（跨设备密钥共享）
-    $sessionMid = (string) ($parsed['session_mid'] ?? '');
-    if ($sessionMid !== '') {
-        $reqMid = Util::str($requestData, 'machine_id', '');
-        if ($reqMid !== '' && $reqMid !== $sessionMid) {
-            Response::error(5002, '会话密钥与设备不匹配，请重新初始化');
-        }
-    }
+if (empty($parsed['plain']) && empty($parsed['session31'])) {
+    Response::error(5002, '缺少 3.1 会话信封，请先调用 handshake');
 }
 
 // ------------------------------------------------------------------

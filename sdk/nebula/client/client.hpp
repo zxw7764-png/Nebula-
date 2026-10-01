@@ -51,13 +51,13 @@ public:
     // 构造参数
     // -----------------------------------------------------------------------
     /**
-     * 客户端配置。前四项必填（后台「软件管理」复制取得）。
-     * 用 Options 而不是一长串位置参数：四个字符串参数紧挨着，位置写错编译器不会报错。
+     * 客户端配置。必填：api_url / app_key / response_sign_public_key。
+     * 3.1 起通信密钥由 ECDH 握手临时协商，AES_KEY / SIGN_SALT 不再使用（保留字段仅为兼容旧代码）。
      */
     struct Options {
         std::string api_url;                        ///< API 入口（必填）
-        std::string aes_key;                        ///< AES_KEY（32 位 hex，必填）
-        std::string sign_salt;                      ///< SIGN_SALT（48 位 hex，必填）
+        std::string aes_key;                        ///< 【已废弃】3.0 遗留字段，可留空
+        std::string sign_salt;                      ///< 【已废弃】3.0 遗留字段，可留空
         std::string app_key;                        ///< 软件标识（必填）
         std::string machine_id;                     ///< 机器码；留空则生成随机临时值（**建议接入方持久化后传入**）
         std::string os_info = "Windows";            ///< 操作系统标识
@@ -70,9 +70,7 @@ public:
         bool use_system_proxy = false;
 
         // ── Nebula 3.1 ECDH 会话握手（见 nebula/client/handshake.hpp）────
-        /// 启用 3.1 协议：进程首次请求前先 handshake（ECDH 临时密钥协商），
-        /// 之后业务请求走 AES-256-GCM + seq 单调防重放；服务端不支持时自动
-        /// 回落 3.0 静态密钥信封。true 时 AES_KEY/SIGN_SALT 可留空（零静态机密）。
+        /// 【已废弃】3.1 是唯一协议，恒定启用；字段仅为兼容旧代码保留。
         bool use_handshake = true;
 
         // ── 自动更新（见 nebula/client/update.hpp）────────────────────────
@@ -113,10 +111,6 @@ public:
 
         if (options_.api_url.empty())    config_error_ = "未配置 API 地址（Options::api_url）";
         else if (options_.app_key.empty())   config_error_ = "未配置软件标识（Options::app_key）";
-        else if (!options_.use_handshake && options_.aes_key.empty())
-            config_error_ = "未配置通信密钥（Options::aes_key）";
-        else if (!options_.use_handshake && options_.sign_salt.empty())
-            config_error_ = "未配置签名盐（Options::sign_salt）";
         else if (options_.require_response_signature && options_.response_sign_public_key.empty()) {
             config_error_ = "未配置响应签名公钥（cfg::kRespSignPubKey），拒绝连接";
         }
@@ -249,13 +243,6 @@ public:
         if (!software.empty()) {
             result.software_id   = json::findInt(software, "id");
             result.software_name = json::findString(software, "name");
-        }
-
-        // 会话密钥 session.{k,s}：业务接口的信封 k 字段与签名盐
-        const std::string session = json::findObject(d, "session");
-        if (!session.empty()) {
-            session_k_ = json::findString(session, "k");
-            session_s_ = json::findString(session, "s");
         }
 
         // 登录方式 login.{method,...}
@@ -933,10 +920,9 @@ private:
     }
 
     /**
-     * Nebula 3.1 ECDH 会话路径（handshake → GCM 信封）。
+     * Nebula 3.1 ECDH 会话路径（handshake → GCM 信封）—— 唯一通信协议。
      * · 懒握手：首个业务请求前自动 handshake，会话全程复用；
-     * · 会话失效（服务端 5002/过期）自动重握手重试一次；
-     * · 服务端不支持 3.1（1001）时返回 Error::Protocol，由 post() 回落 3.0。
+     * · 会话失效（服务端 5002/过期）自动重握手重试一次。
      */
     NEBULA_NOINLINE Response post31(const std::string& action, const std::string& payloadJson) {
         Response result;
@@ -1033,6 +1019,11 @@ private:
      * ★ NEBULA_NOINLINE：本函数带 MUTATE 标记，必须保持独立函数体，
      *   防止被内联进宿主标记区域后加壳报「地址已由函数使用」。
      */
+    /**
+     * 统一请求入口：全部走 3.1 ECDH 会话协议（3.0 静态密钥信封已移除）。
+     * ★ NEBULA_NOINLINE：本函数带 MUTATE 标记，必须保持独立函数体，
+     *   防止被内联进宿主标记区域后加壳报「地址已由函数使用」。
+     */
     NEBULA_NOINLINE Response post(const std::string& action, const std::string& payloadJson) {
         Response result;
         result.local = Error::Config;
@@ -1048,85 +1039,14 @@ private:
             return result;
         }
 
-        // ── 3.1 ECDH 会话路径优先（零静态对称机密）──
-        // 服务端不支持 3.1（握手返回 1001）时返回 Error::Protocol → 本次进程
-        // 永久回落 3.0 静态密钥信封（双轨迁移期间旧行为保持不变）。
-        if (options_.use_handshake && !no31_) {
-            Response r31 = post31(action, payloadJson);
-            if (r31.local != Error::Protocol) {
-                return r31;
-            }
-            no31_ = true;
-        }
-
         // ① 壳标记：加解密与签名是破解者最先想改的地方。post() 每次请求都会走，
         //    所以默认只挂「变异(MUTATE)」（性能影响小）；想更狠换成 NEBULA_MARK_VM_BEGIN。
         NEBULA_MARK_MUTATE_BEGIN();
         // ② 代码混淆：不透明谓词 + 虚假分支，打乱静态分析看到的控制流
         if (obf::opaqueFalse()) { NEBULA_DEAD_BRANCH(); }
-
-        const bool publicAction = isPublicAction(action);
-        RequestKeys keys;
-        keys.aes_key = options_.aes_key;
-        {
-            std::lock_guard<std::mutex> lock(state_mutex_);
-            const std::string sessionSalt = session_s_;
-            keys.salt        = publicAction ? options_.sign_salt
-                                            : (sessionSalt.empty() ? options_.sign_salt : sessionSalt);
-            keys.session_kid = publicAction ? std::string() : session_k_;
-        }
-
-        const std::string nonce = crypto::randomHex(8);      // 16 位 hex，一次性
-        if (nonce.empty()) {
-            result.local = Error::Crypto;
-            result.code  = (int)Error::Crypto;
-            result.msg   = "本地随机源不可用";
-            NEBULA_MARK_MUTATE_END();
-            return result;
-        }
-
-        const std::string envelope = buildRequestEnvelope(payloadJson, keys, nowSeconds(), nonce,
-                                                          options_.app_key);
-        if (envelope.empty()) {
-            result.local = Error::Crypto;
-            result.code  = (int)Error::Crypto;
-            result.msg   = "本地加密失败（请检查 AES_KEY 是否为 32 位 hex）";
-            NEBULA_MARK_MUTATE_END();
-            return result;
-        }
         NEBULA_MARK_MUTATE_END();
 
-        const http::Response transport = http::Http::post(actionUrl(options_.api_url, action),
-                                                          envelope, http_options_);
-        result.http_code = transport.status;
-        if (transport.status == 0) {
-            result.local = Error::Network;
-            result.code  = (int)Error::Network;
-            result.msg   = "网络错误（连接失败、超时或证书校验不通过）";
-            return result;
-        }
-        if (transport.status != 200) {
-            result.local = Error::HttpStatus;
-            result.code  = (int)Error::HttpStatus;
-            result.msg   = "HTTP " + std::to_string(transport.status);
-            return result;
-        }
-
-        const OpenedResponse opened = openResponse(transport.body, options_.aes_key, keys.salt,
-                                                  options_.response_sign_public_key,
-                                                  options_.require_response_signature);
-        if (opened.status != Error::Ok) {
-            result.local = opened.status;
-            result.code  = (int)opened.status;
-            result.msg   = opened.msg;
-            return result;
-        }
-
-        result.local = Error::Ok;
-        result.code  = opened.businessCode;
-        result.msg   = opened.msg;
-        result.raw   = opened.plain;
-        return result;
+        return post31(action, payloadJson);
     }
 
     void runHeartbeatLoop() {
@@ -1178,16 +1098,13 @@ private:
     std::string device_name_;
     http::Options http_options_;
 
-    // init 下发的会话密钥
-    std::string session_k_;      ///< 会话密钥 ID（信封 k 字段）
-    std::string session_s_;      ///< 会话盐（业务接口签名用）
+    // init 下发的业务数据缓存
     std::string login_method_;
     std::string grace_public_key_;
     std::string grace_prefix_ = "G1";
 
-    // Nebula 3.1 ECDH 会话（见 nebula/client/handshake.hpp）
+    // Nebula 3.1 ECDH 会话（见 nebula/client/handshake.hpp）—— 唯一通信协议
     s31::Session31 session31_;
-    bool no31_ = false;          ///< 服务端不支持 3.1 → 本次进程回落 3.0
 
     // 设备指纹（懒采集）
     std::string fingerprint_json_;
@@ -1227,8 +1144,6 @@ NEBULA_MUST_CHECK inline std::unique_ptr<Client> createDefaultClient(
         const std::string& client_version = "1.0.0") {
     Client::Options options;
     options.api_url                    = cfg::kApiUrl;
-    options.aes_key                    = cfg::kAesKey;
-    options.sign_salt                  = cfg::kSignSalt;
     options.app_key                    = cfg::kAppKey.str();
     options.machine_id                 = machine_id;
     options.os_info                    = os_info;

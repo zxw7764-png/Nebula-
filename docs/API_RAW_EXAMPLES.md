@@ -1,10 +1,9 @@
 # 客户端 API 原始请求/响应 JSON（加密信封原样）
 
-> 📚 本文属 Nebula 文档中心，主索引见 [../README.md](../README.md)；
-> 其他文档：[架构设计](ARCHITECTURE.md) · [API 接口](API.md) · [界面模板](TEMPLATE.md) ·
-> [C++ SDK 接入](../sdk/SDK.md) · [Python SDK](../sdk-py/README.md)
-
-> 所有响应一律为加密信封 `{data, sign, t, n}`；`data` 是 base64(IV + AES-256-CBC 密文)，解密后才是业务 JSON。请求同样必须携带信封。
+> ⚠️ **本文所有示例为已废弃的 3.0 信封格式，仅作历史留档。**
+> 3.1 协议（ECDH 握手 + AES-256-GCM 信封）的报文结构见 [API.md](API.md) 第一节；
+> 3.0 请求会被 3.1 服务端拒绝（`1001`）。解密后**业务 JSON 的字段结构不变**，
+> 下文示例中对解密后业务数据的描述仍然有效。
 
 ## action=init
 
@@ -92,8 +91,7 @@
             "file_hash": "",
             "file_size": 0,
             "self_file_hash": "",
-            "self_file_size": 0,
-            "versions": []
+            "self_file_size": 0
         },
         "notices": [
             {
