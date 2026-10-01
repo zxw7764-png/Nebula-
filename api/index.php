@@ -57,7 +57,8 @@ register_shutdown_function(static function () use ($action, $startMs): void {
 
 // 公开只读接口：允许 GET、允许明文、不要求会话密钥、不计入每日配额
 // 新增这类接口时只需加到这里，下面各处会自动生效。
-$publicActions = ['init', 'notice', 'version', 'online'];
+// handshake = Nebula 3.1 ECDH 会话握手（明文 JSON，完整性靠响应 ES256 签名）
+$publicActions = ['init', 'notice', 'version', 'online', 'handshake'];
 
 // 只允许 POST（查询类接口除外）
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -71,7 +72,7 @@ if ($method !== 'POST' && !in_array($action, $publicActions, true)) {
 $input      = Util::input();
 $enforce    = (bool) Config::get('security.enforce_crypto', true);
 $whitelist  = (array) Config::get('security.plain_whitelist', []);
-$allowPlain = !$enforce || in_array($action, $whitelist, true);
+$allowPlain = !$enforce || in_array($action, $whitelist, true) || $action === 'handshake';
 
 // ------------------------------------------------------------------
 // 多软件识别：外层明文字段 app_key 指认软件。
@@ -132,9 +133,10 @@ if (!empty($parsed['plain'])) {
     $sessionKid = null;
 } else {
     $sessionKid = $parsed['kid'] ?? null;
+    $isSession31 = !empty($parsed['session31']);
     if (Config::get('security.session_key_required', true)
         && !in_array($action, $publicActions, true)
-        && $sessionKid === null) {
+        && $sessionKid === null && !$isSession31) {
         Response::error(5002, '缺少会话密钥(k)，请先调用 init 获取');
     }
     // 会话密钥绑定校验：请求体内的 machine_id 必须与会话密钥绑定的 machine_id 一致，
@@ -187,7 +189,7 @@ if ($action !== '' && !RateLimit::byIp($action, $limit)) {
 // 只对「使用型」接口计数；登录、公告、在线人数等豁免，
 // 否则配额用尽后用户连登录、看公告、退出登录都做不了。
 // ------------------------------------------------------------------
-$quotaFreeActions = ['init', 'register', 'login', 'logout', 'notice', 'version', 'online'];
+$quotaFreeActions = ['init', 'register', 'login', 'logout', 'notice', 'version', 'online', 'handshake'];
 if ($action !== '' && !in_array($action, $quotaFreeActions, true)) {
     $qToken = Util::str($requestData, 'token', Util::str($input, 'token', ''));
     if ($qToken !== '') {

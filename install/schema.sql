@@ -438,6 +438,27 @@ CREATE TABLE IF NOT EXISTS `nb_sign_keys` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='会话级签名密钥（init下发）';
 
 -- ------------------------------------------------------------
+-- 18b. Nebula 3.1 ECDH 会话表（handshake 协商，见 lib/Handshake.php）
+--      客户端不再持有跨会话对称机密：握手双方临时 EC 密钥 ECDH 后
+--      HKDF 派生 sk_enc/sk_mac 落库；业务信封带 sid 走本表，
+--      seq 严格单调递增（原子 UPDATE 防重放），会话 6 小时空闲过期。
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `nb_hsessions` (
+  `sid`         CHAR(32)     NOT NULL COMMENT '会话ID（随机16字节hex）',
+  `software_id` INT UNSIGNED NOT NULL DEFAULT 1 COMMENT '所属软件ID',
+  `mhash`       CHAR(64)     NOT NULL DEFAULT '' COMMENT 'sha256(machine_id) hex（同机仅留最新会话）',
+  `sk_enc`      BINARY(32)   NOT NULL COMMENT 'HKDF 派生的 AES-256-GCM 密钥',
+  `sk_mac`      BINARY(32)   NOT NULL COMMENT 'HKDF 派生的请求 HMAC 密钥',
+  `iv_prefix`   BINARY(4)    NOT NULL COMMENT 'GCM IV 前 4 字节随机前缀（后 8 字节 = seq 大端）',
+  `seq`         BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '已使用的最大请求序号',
+  `created_at`  INT UNSIGNED NOT NULL DEFAULT 0,
+  `expire_at`   INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '空闲过期时间戳',
+  PRIMARY KEY (`sid`),
+  KEY `idx_mhash` (`mhash`),
+  KEY `idx_expire` (`expire_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Nebula 3.1 ECDH会话（handshake协商）';
+
+-- ------------------------------------------------------------
 -- 19. 代理商表
 --     分销代理登录独立后台 /agent/ 生成卡密，卡密归属该代理（cards.agent_id）。
 --     控量三选一：1=按张数额度 2=按余额单价计费 3=不限
@@ -851,6 +872,7 @@ VALUES
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`);
 
 INSERT INTO `nb_settings` (`skey`, `svalue`, `remark`, `updated_at`) VALUES
+  ('schema_version', '2.65.16', '数据库结构版本（全新安装基线，等于 NB_VERSION）', UNIX_TIMESTAMP()),
   ('site_name',        'Nebula Menu',    '站点名称', UNIX_TIMESTAMP()),
   ('site_sub',         '次世代游戏增强菜单', '站点副标题', UNIX_TIMESTAMP()),
   ('site_notice',      '',               '全局公告', UNIX_TIMESTAMP()),

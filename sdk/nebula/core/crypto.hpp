@@ -19,6 +19,13 @@
 
 #include "error.hpp"
 #include "text.hpp"
+#include <algorithm>    // std::reverse（ECDH 共享密钥端序转换）
+
+// 老版 Windows SDK 的 bcrypt.h 没有 RAW_SECRET KDF 宏（Win8 起才内置），手动补齐：
+// 值固定为 L"TRUNCATE" —— 表示原样输出 ECDH 共享密钥的 X 坐标（小端序）。
+#ifndef BCRYPT_KDF_RAW_SECRET
+#define BCRYPT_KDF_RAW_SECRET (L"TRUNCATE")
+#endif
 
 namespace nebula {
 namespace crypto {
@@ -601,6 +608,237 @@ NEBULA_MUST_CHECK inline bool verifySignature(const std::string& pem,
         return (key.type == PublicKeyInfo::Type::EcP256 && detail::verifyEcP256(key, message, signature))
             || (key.type == PublicKeyInfo::Type::Rsa    && detail::verifyRsaSha256(key, message, signature));
     }
+}
+
+// ===========================================================================
+// Nebula 3.1：ECDH P-256 / HKDF-SHA256 / AES-256-GCM（会话握手协议，见 client/handshake.hpp）
+// ---------------------------------------------------------------- them ---
+// 注意：BCryptDeriveKey(BCRYPT_KDF_RAW_SECRET) 输出的是【小端序】共享密钥，
+// 与 OpenSSL（PHP 服务端）的大端序 X 坐标相反 —— sharedSecret() 内部已做翻转，
+// 对接服务端 openssl_pkey_derive 时无需再处理。需要 Windows 10+（旧系统会协商失败）。
+// ===========================================================================
+
+/** ECDH P-256 临时密钥对；privateBlob 供 sharedSecret 使用（自持字节串） */
+struct EcKeyPair {
+    std::string point;        ///< 65 字节非压缩公钥 0x04||X||Y（上报服务端）
+    std::string privateBlob;  ///< BCRYPT_ECCPRIVATE_BLOB 原始字节（内部自持）
+    bool valid() const { return point.size() == 65 && privateBlob.size() == sizeof(BCRYPT_ECCKEY_BLOB) + 96; }
+};
+
+/** 生成 ECDH P-256 临时密钥对 */
+NEBULA_MUST_CHECK inline EcKeyPair ecdhGenerateKeyPair() {
+    EcKeyPair out;
+    detail::AlgHandle alg;
+    if (!alg.open(BCRYPT_ECDH_P256_ALGORITHM)) return out;
+
+    detail::BcryptKeyHandle key;
+    if (!isOk(::BCryptGenerateKeyPair(alg, &key.h, 256, 0))) return out;
+    if (!isOk(::BCryptFinalizeKeyPair(key.h, 0))) return out;
+
+    DWORD pubLen = 0, cb = 0;
+    if (!isOk(::BCryptExportKey(key.h, nullptr, BCRYPT_ECCPUBLIC_BLOB,
+                                nullptr, 0, &pubLen, 0)) || pubLen == 0) return out;
+    std::string pubBlob(pubLen, '\0');
+    if (!isOk(::BCryptExportKey(key.h, nullptr, BCRYPT_ECCPUBLIC_BLOB,
+                                reinterpret_cast<PUCHAR>(&pubBlob[0]), pubLen, &cb, 0))) return out;
+
+    DWORD privLen = 0;
+    if (!isOk(::BCryptExportKey(key.h, nullptr, BCRYPT_ECCPRIVATE_BLOB,
+                                nullptr, 0, &privLen, 0)) || privLen == 0) return out;
+    std::string privBlob(privLen, '\0');
+    if (!isOk(::BCryptExportKey(key.h, nullptr, BCRYPT_ECCPRIVATE_BLOB,
+                                reinterpret_cast<PUCHAR>(&privBlob[0]), privLen, &cb, 0))) return out;
+
+    // BCRYPT_ECCPUBLIC_BLOB = magic(4) + cbKey(4) + X(32) + Y(32) → 0x04||X||Y
+    if (pubBlob.size() != 4 + 4 + 64) return out;
+    out.point = "\x04" + pubBlob.substr(8, 64);
+    out.privateBlob = privBlob;
+    return out;
+}
+
+/**
+ * ECDH 共享密钥（X 坐标 32 字节，已转为大端序，与 OpenSSL 一致）。
+ * peerPoint 为 65 字节非压缩公钥。
+ */
+NEBULA_MUST_CHECK inline std::string ecdhSharedSecret(const std::string& privateBlob,
+                                                      const std::string& peerPoint) {
+    if (privateBlob.empty() || peerPoint.size() != 65 || peerPoint[0] != '\x04') return {};
+
+    detail::AlgHandle alg;
+    if (!alg.open(BCRYPT_ECDH_P256_ALGORITHM)) return {};
+
+    detail::BcryptKeyHandle priv;
+    if (!isOk(::BCryptImportKeyPair(alg, nullptr, BCRYPT_ECCPRIVATE_BLOB, &priv.h,
+                                    reinterpret_cast<PUCHAR>(const_cast<char*>(privateBlob.data())),
+                                    (ULONG)privateBlob.size(), 0))) {
+        return {};
+    }
+
+    // 对端公钥 → BCRYPT_ECDH_PUBLIC_BLOB（magic 换成 ECDH_PUBLIC_P256）
+    std::vector<BYTE> peerBlob(sizeof(BCRYPT_ECCKEY_BLOB) + 64);
+    auto* hdr = reinterpret_cast<BCRYPT_ECCKEY_BLOB*>(peerBlob.data());
+    hdr->dwMagic = BCRYPT_ECDH_PUBLIC_P256_MAGIC;
+    hdr->cbKey   = 32;
+    ::memcpy(peerBlob.data() + sizeof(BCRYPT_ECCKEY_BLOB), peerPoint.data() + 1, 64);
+
+    detail::BcryptKeyHandle peer;
+    if (!isOk(::BCryptImportKeyPair(alg, nullptr, BCRYPT_ECCPUBLIC_BLOB, &peer.h,
+                                    peerBlob.data(), (ULONG)peerBlob.size(), 0))) {
+        return {};
+    }
+
+    BCRYPT_SECRET_HANDLE secret = nullptr;
+    if (!isOk(::BCryptSecretAgreement(priv.h, peer.h, &secret, 0))) return {};
+    struct SecretGuard {
+        BCRYPT_SECRET_HANDLE h;
+        ~SecretGuard() { if (h) ::BCryptDestroySecret(h); }
+    } guard{ secret };
+
+    // RAW_SECRET 输出为小端序 → 取到后翻转为大端（OpenSSL 兼容）。
+    // 注意 BCryptDeriveKey 形参：hSecret, kdf, pParamList, pbDerivedKey,
+    // cbDerivedKey, pcbResult, dwFlags —— 先传 pbDerivedKey=nullptr 查长度。
+    DWORD len = 0;
+    if (!isOk(::BCryptDeriveKey(secret, BCRYPT_KDF_RAW_SECRET, nullptr,
+                                nullptr, 0, &len, 0)) || len == 0) {
+        return {};
+    }
+    std::string raw(len, '\0');
+    if (!isOk(::BCryptDeriveKey(secret, BCRYPT_KDF_RAW_SECRET, nullptr,
+                                reinterpret_cast<PUCHAR>(&raw[0]), len, &len, 0))) {
+        return {};
+    }
+    std::reverse(raw.begin(), raw.end());
+    return raw;
+}
+
+/**
+ * HKDF-SHA256（RFC 5869）：extract-then-expand。
+ * salt 可为空（此时按全 0 哈希长度补足）；info 为域分离标签。
+ */
+NEBULA_MUST_CHECK inline std::string hkdfSha256(const std::string& ikm,
+                                                const std::string& salt,
+                                                const std::string& info,
+                                                size_t outLen) {
+    if (outLen == 0 || outLen > 255 * 32) return {};
+    // extract
+    std::string fixedSalt = salt.empty() ? std::string(32, '\0') : salt;
+    const std::string prk = hmacSha256(fixedSalt, ikm);
+    if (prk.empty()) return {};
+    // expand
+    std::string okm, block;
+    unsigned char counter = 1;
+    while (okm.size() < outLen) {
+        block = hmacSha256(prk, block + info + std::string(1, (char)counter));
+        if (block.empty()) return {};
+        okm += block;
+        ++counter;
+    }
+    okm.resize(outLen);
+    return okm;
+}
+
+/** AES-256-GCM 加密，返回 `iv 不含` → 密文；tag 单独输出（16 字节）。iv 必须 12 字节。 */
+NEBULA_MUST_CHECK inline bool aes256GcmEncrypt(const std::string& key32,
+                                               const std::string& iv12,
+                                               const std::string& plain,
+                                               std::string& cipherOut,
+                                               std::string& tagOut) {
+    cipherOut.clear(); tagOut.clear();
+    if (key32.size() != 32 || iv12.size() != 12) return false;
+
+    detail::AlgHandle alg;
+    if (!alg.open(BCRYPT_AES_ALGORITHM)) return false;
+    if (!isOk(::BCryptSetProperty(alg, BCRYPT_CHAINING_MODE,
+                                  reinterpret_cast<PUCHAR>(const_cast<wchar_t*>(L"ChainingModeGCM")),
+                                  (ULONG)sizeof(L"ChainingModeGCM"), 0))) {
+        return false;
+    }
+    DWORD objLen = 0, cb = 0;
+    if (!isOk(::BCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH,
+                                  reinterpret_cast<PUCHAR>(&objLen), sizeof(objLen), &cb, 0))) {
+        objLen = 0;
+    }
+    std::vector<BYTE> obj(objLen ? objLen : 1);
+
+    detail::BcryptKeyHandle key;
+    if (!isOk(::BCryptGenerateSymmetricKey(alg, &key.h, obj.data(), objLen,
+                                           reinterpret_cast<PUCHAR>(const_cast<char*>(key32.data())),
+                                           32, 0))) {
+        return false;
+    }
+
+    BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO info;
+    ::BCRYPT_INIT_AUTH_MODE_INFO(info);
+    info.pbNonce = reinterpret_cast<PUCHAR>(const_cast<char*>(iv12.data()));
+    info.cbNonce = 12;
+    std::string tag(16, '\0');
+    info.pbTag = reinterpret_cast<PUCHAR>(&tag[0]);
+    info.cbTag = 16;
+
+    std::string out(plain.size(), '\0');
+    ULONG acted = 0;
+    if (!isOk(::BCryptEncrypt(key.h,
+                              reinterpret_cast<PUCHAR>(const_cast<char*>(plain.data())),
+                              (ULONG)plain.size(), &info, nullptr, 0,
+                              reinterpret_cast<PUCHAR>(plain.empty() ? nullptr : &out[0]),
+                              (ULONG)out.size(), &acted, 0))) {
+        return false;
+    }
+    out.resize(acted);
+    cipherOut = out;
+    tagOut    = tag;
+    return true;
+}
+
+/** AES-256-GCM 解密（认证失败返回 false）。iv 必须 12 字节，tag 必须 16 字节。 */
+NEBULA_MUST_CHECK inline bool aes256GcmDecrypt(const std::string& key32,
+                                               const std::string& iv12,
+                                               const std::string& cipher,
+                                               const std::string& tag16,
+                                               std::string& plainOut) {
+    plainOut.clear();
+    if (key32.size() != 32 || iv12.size() != 12 || tag16.size() != 16) return false;
+
+    detail::AlgHandle alg;
+    if (!alg.open(BCRYPT_AES_ALGORITHM)) return false;
+    if (!isOk(::BCryptSetProperty(alg, BCRYPT_CHAINING_MODE,
+                                  reinterpret_cast<PUCHAR>(const_cast<wchar_t*>(L"ChainingModeGCM")),
+                                  (ULONG)sizeof(L"ChainingModeGCM"), 0))) {
+        return false;
+    }
+    DWORD objLen = 0, cb = 0;
+    if (!isOk(::BCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH,
+                                  reinterpret_cast<PUCHAR>(&objLen), sizeof(objLen), &cb, 0))) {
+        objLen = 0;
+    }
+    std::vector<BYTE> obj(objLen ? objLen : 1);
+
+    detail::BcryptKeyHandle key;
+    if (!isOk(::BCryptGenerateSymmetricKey(alg, &key.h, obj.data(), objLen,
+                                           reinterpret_cast<PUCHAR>(const_cast<char*>(key32.data())),
+                                           32, 0))) {
+        return false;
+    }
+
+    BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO info;
+    ::BCRYPT_INIT_AUTH_MODE_INFO(info);
+    info.pbNonce = reinterpret_cast<PUCHAR>(const_cast<char*>(iv12.data()));
+    info.cbNonce = 12;
+    info.pbTag   = reinterpret_cast<PUCHAR>(const_cast<char*>(tag16.data()));
+    info.cbTag   = 16;
+
+    std::string out(cipher.size(), '\0');
+    ULONG acted = 0;
+    if (!isOk(::BCryptDecrypt(key.h,
+                              reinterpret_cast<PUCHAR>(const_cast<char*>(cipher.data())),
+                              (ULONG)cipher.size(), &info, nullptr, 0,
+                              reinterpret_cast<PUCHAR>(cipher.empty() ? nullptr : &out[0]),
+                              (ULONG)out.size(), &acted, 0))) {
+        return false;   // GCM 认证失败 / 密钥不匹配
+    }
+    out.resize(acted);
+    plainOut = out;
+    return true;
 }
 
 // ===========================================================================

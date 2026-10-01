@@ -266,6 +266,13 @@ class Crypto
      */
     public static function parseRequest(array $input, bool $allowPlain = false): array
     {
+        // Nebula 3.1 会话信封（handshake 协商，见 lib/Handshake.php）：
+        // 请求带 sid 字段即走 ECDH 会话路径（GCM + seq 单调防重放），
+        // 优先级最高 —— 必须在明文/3.0 判断之前。
+        if (isset($input['sid']) && class_exists('Handshake')) {
+            return Handshake::openRequest($input);
+        }
+
         $hasEnvelope = isset($input['data'], $input['sign'], $input['t'], $input['n']);
 
         // 明文模式
@@ -353,6 +360,11 @@ class Crypto
      */
     public static function buildResponse(array $payload): array
     {
+        // 3.1 会话活跃时走 GCM 响应（ECDH 会话密钥 + ES256 长期签名）
+        if (class_exists('Handshake') && Handshake::active()) {
+            return Handshake::buildResponse($payload);
+        }
+
         $json  = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $data  = self::encrypt($json);
         $t     = time();

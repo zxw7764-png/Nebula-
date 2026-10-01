@@ -33,6 +33,7 @@
 #include "config.hpp"
 #include "device.hpp"
 #include "envelope.hpp"
+#include "handshake.hpp"
 #include "integrity.hpp"
 #include "notice_store.hpp"
 #include "offline.hpp"
@@ -67,6 +68,12 @@ public:
         int  connect_timeout_ms = 8000;
         int  receive_timeout_ms = 15000;
         bool use_system_proxy = false;
+
+        // ── Nebula 3.1 ECDH 会话握手（见 nebula/client/handshake.hpp）────
+        /// 启用 3.1 协议：进程首次请求前先 handshake（ECDH 临时密钥协商），
+        /// 之后业务请求走 AES-256-GCM + seq 单调防重放；服务端不支持时自动
+        /// 回落 3.0 静态密钥信封。true 时 AES_KEY/SIGN_SALT 可留空（零静态机密）。
+        bool use_handshake = true;
 
         // ── 自动更新（见 nebula/client/update.hpp）────────────────────────
         /// 是否允许下载更新包（false = 只检测并提示，不下载）
@@ -106,8 +113,10 @@ public:
 
         if (options_.api_url.empty())    config_error_ = "未配置 API 地址（Options::api_url）";
         else if (options_.app_key.empty())   config_error_ = "未配置软件标识（Options::app_key）";
-        else if (options_.aes_key.empty())   config_error_ = "未配置通信密钥（Options::aes_key）";
-        else if (options_.sign_salt.empty()) config_error_ = "未配置签名盐（Options::sign_salt）";
+        else if (!options_.use_handshake && options_.aes_key.empty())
+            config_error_ = "未配置通信密钥（Options::aes_key）";
+        else if (!options_.use_handshake && options_.sign_salt.empty())
+            config_error_ = "未配置签名盐（Options::sign_salt）";
         else if (options_.require_response_signature && options_.response_sign_public_key.empty()) {
             config_error_ = "未配置响应签名公钥（cfg::kRespSignPubKey），拒绝连接";
         }
@@ -924,6 +933,101 @@ private:
     }
 
     /**
+     * Nebula 3.1 ECDH 会话路径（handshake → GCM 信封）。
+     * · 懒握手：首个业务请求前自动 handshake，会话全程复用；
+     * · 会话失效（服务端 5002/过期）自动重握手重试一次；
+     * · 服务端不支持 3.1（1001）时返回 Error::Protocol，由 post() 回落 3.0。
+     */
+    NEBULA_NOINLINE Response post31(const std::string& action, const std::string& payloadJson) {
+        Response result;
+        result.local = Error::Crypto;
+        result.code  = (int)Error::Crypto;
+        result.msg   = "3.1 会话错误";
+
+        for (int attempt = 0; attempt < 2; ++attempt) {
+            // ① 懒握手
+            if (!session31_.active()) {
+                const std::string hsBody = session31_.buildHandshakeRequest(options_.app_key,
+                                                                            options_.machine_id);
+                if (hsBody.empty()) {
+                    result.msg = "3.1 握手请求构造失败（随机源不可用？）";
+                    return result;
+                }
+                const http::Response hs = http::Http::post(actionUrl(options_.api_url, "handshake"),
+                                                           hsBody, http_options_);
+                result.http_code = hs.status;
+                if (hs.status == 0) {
+                    result.local = Error::Network;
+                    result.code  = (int)Error::Network;
+                    result.msg   = "网络错误（握手阶段：连接失败或超时）";
+                    return result;
+                }
+                if (hs.status != 200) {
+                    result.local = Error::HttpStatus;
+                    result.code  = (int)Error::HttpStatus;
+                    result.msg   = "HTTP " + std::to_string(hs.status) + "（握手阶段）";
+                    return result;
+                }
+                std::string err;
+                const Error e = session31_.consumeHandshakeResponse(hs.body, options_.app_key,
+                                                                    options_.response_sign_public_key,
+                                                                    options_.require_response_signature,
+                                                                    err);
+                if (e != Error::Ok) {
+                    result.local = e;
+                    result.code  = (int)e;
+                    result.msg   = err;
+                    return result;
+                }
+            }
+
+            // ② 3.1 信封请求（时间戳用握手校准过的服务器时钟）
+            const int64_t ts = s31::nowSeconds() + session31_.clockOffsetMs() / 1000;
+            const std::string envelope = session31_.buildRequestEnvelope(payloadJson, ts, options_.app_key);
+            if (envelope.empty()) {
+                result.msg = "3.1 请求加密失败";
+                return result;
+            }
+
+            const http::Response transport = http::Http::post(actionUrl(options_.api_url, action),
+                                                              envelope, http_options_);
+            result.http_code = transport.status;
+            if (transport.status == 0) {
+                result.local = Error::Network;
+                result.code  = (int)Error::Network;
+                result.msg   = "网络错误（连接失败、超时或证书校验不通过）";
+                return result;
+            }
+            if (transport.status != 200) {
+                result.local = Error::HttpStatus;
+                result.code  = (int)Error::HttpStatus;
+                result.msg   = "HTTP " + std::to_string(transport.status);
+                return result;
+            }
+
+            // ③ 拆响应；会话失效/被服务器拒绝 → 清会话重握手，再试一次
+            const OpenedResponse opened = session31_.openResponse(transport.body,
+                                                                  options_.response_sign_public_key,
+                                                                  options_.require_response_signature);
+            if (opened.status != Error::Ok) {
+                session31_.clear();
+                if (attempt == 0) continue;
+                result.local = opened.status;
+                result.code  = (int)opened.status;
+                result.msg   = opened.msg;
+                return result;
+            }
+
+            result.local = Error::Ok;
+            result.code  = opened.businessCode;
+            result.msg   = opened.msg;
+            result.raw   = opened.plain;
+            return result;
+        }
+        return result;
+    }
+
+    /**
      * 加密信封请求：本地加密 → 签名 → HTTP → 验签（HMAC + 服务端非对称签名）→ 解密。
      * 协议实现全部在 envelope.hpp，这里只负责选盐、拼 URL 与错误映射。
      * ★ NEBULA_NOINLINE：本函数带 MUTATE 标记，必须保持独立函数体，
@@ -942,6 +1046,17 @@ private:
         if (!config_error_.empty()) {
             result.msg = config_error_;
             return result;
+        }
+
+        // ── 3.1 ECDH 会话路径优先（零静态对称机密）──
+        // 服务端不支持 3.1（握手返回 1001）时返回 Error::Protocol → 本次进程
+        // 永久回落 3.0 静态密钥信封（双轨迁移期间旧行为保持不变）。
+        if (options_.use_handshake && !no31_) {
+            Response r31 = post31(action, payloadJson);
+            if (r31.local != Error::Protocol) {
+                return r31;
+            }
+            no31_ = true;
         }
 
         // ① 壳标记：加解密与签名是破解者最先想改的地方。post() 每次请求都会走，
@@ -1069,6 +1184,10 @@ private:
     std::string login_method_;
     std::string grace_public_key_;
     std::string grace_prefix_ = "G1";
+
+    // Nebula 3.1 ECDH 会话（见 nebula/client/handshake.hpp）
+    s31::Session31 session31_;
+    bool no31_ = false;          ///< 服务端不支持 3.1 → 本次进程回落 3.0
 
     // 设备指纹（懒采集）
     std::string fingerprint_json_;

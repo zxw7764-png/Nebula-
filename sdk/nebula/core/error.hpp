@@ -21,6 +21,7 @@ enum class Error : int {
     HttpStatus = -3,   ///< HTTP 状态码非 200
     Config     = -4,   ///< 配置缺失：app_key 为空、未配置响应签名公钥、加密参数非法
     Crypto     = -5,   ///< 本地密码学操作失败（密钥派生 / 加解密 / 随机数不可用）
+    Protocol   = -6,   ///< 协议不兼容（服务端不支持 3.1 / 协议版本异常）
 };
 
 /** 本地错误对应的中文说明（可直接展示给用户） */
@@ -32,6 +33,7 @@ NEBULA_MUST_CHECK inline const char* errorText(Error e) {
     case Error::HttpStatus: return "服务器返回异常状态码";
     case Error::Config:     return "客户端配置不完整（请检查 app_key / 响应签名公钥）";
     case Error::Crypto:     return "本地加密组件异常";
+    case Error::Protocol:   return "协议不兼容（服务端不支持当前协议版本）";
     }
     return "未知错误";
 }

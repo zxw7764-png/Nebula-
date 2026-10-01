@@ -20,7 +20,7 @@ define('NB_START', microtime(true));
 
 // 后台前端静态资源版本号（用于缓存刷新，改前端后递增即可）
 if (!defined('NB_VERSION')) {
-    define('NB_VERSION', '2.65.22');
+    define('NB_VERSION', '2.65.20');
 }
 
 // ------------------------------------------------------------------
@@ -155,6 +155,7 @@ require_once NB_ROOT . '/lib/Heartbeat.php';
 require_once NB_ROOT . '/lib/Auth.php';
 require_once NB_ROOT . '/lib/Grace.php';
 require_once NB_ROOT . '/lib/RespSign.php';
+require_once NB_ROOT . '/lib/Handshake.php';
 require_once NB_ROOT . '/lib/LoginMethod.php';
 require_once NB_ROOT . '/lib/Card.php';
 require_once NB_ROOT . '/lib/Agent.php';

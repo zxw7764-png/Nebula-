@@ -38,6 +38,8 @@
 //   nebula/client/config.hpp       ★ 接入方配置区（唯一需要改的文件）
 //   nebula/client/types.hpp        结果类型（与接口文档字段一一对应）
 //   nebula/client/envelope.hpp     通信信封（协议唯一实现点）
+//   nebula/client/handshake.hpp    3.1 ECDH 会话握手（零静态机密协议）
+//   nebula/client/secure_store.hpp 本地会话 DPAPI 安全存储（绑机器加密）
 //   nebula/client/device.hpp       机器码 / 设备名 / 硬件指纹
 //   nebula/client/notice_store.hpp 立即公告本地已读记录
 //   nebula/client/integrity.hpp    自身完整性自校验
@@ -73,6 +75,8 @@
 #include "nebula/client/config.hpp"
 #include "nebula/client/types.hpp"
 #include "nebula/client/envelope.hpp"
+#include "nebula/client/handshake.hpp"
+#include "nebula/client/secure_store.hpp"
 #include "nebula/client/device.hpp"
 #include "nebula/client/notice_store.hpp"
 #include "nebula/client/integrity.hpp"
