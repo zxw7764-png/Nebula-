@@ -177,7 +177,9 @@ public:
         std::string cipher, tag;
         if (!crypto::aes256GcmEncrypt(sk_enc_, iv, payloadJson, cipher, tag)) return {};
 
-        const std::string data = b64Encode(cipher + tag);
+        // 协议：data = b64( iv[12] + 密文 + tag[16] )，IV 必须前置（服务端按前
+        // 12 字节取 IV；漏发 IV 会导致服务端 GCM 认证失败）
+        const std::string data = b64Encode(iv + cipher + tag);
         if (data.empty()) return {};
         const std::string mac = crypto::hmacSha256Hex(
             sk_mac_, sid_ + "|" + std::to_string(seq_) + "|" + std::to_string(timestamp) + "|" + crypto::sha256Hex(data));
