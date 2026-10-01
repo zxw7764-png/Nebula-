@@ -65,5 +65,13 @@ Response::ok([
             // 密钥由服务端自动生成落盘 config/grace_keys.php，后台只读展示，改密钥走「轮换密钥」按钮
             'public_key'  => class_exists('Grace') ? (string) (Grace::publicKey() ?? '') : '',
         ],
+        // 响应签名（3.1 协议）：公钥 PEM 由 lib/RespSign 管理，落盘 config/resp_sign_keys.php；
+        // 首次请求自动生成，删除文件下次请求重新生成一套新密钥。
+        // 与离线宽限密钥独立管理（轮换不影响离线票据）；后台只读展示，改密钥走「轮换密钥」按钮
+        'resp_sign' => [
+            'algo'       => class_exists('RespSign') ? RespSign::algorithm() : '',
+            'kid'        => class_exists('RespSign') ? RespSign::keyId() : '',
+            'public_key' => class_exists('RespSign') ? (string) (RespSign::publicKey() ?? '') : '',
+        ],
     ],
 ]);
