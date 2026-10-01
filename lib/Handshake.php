@@ -53,12 +53,14 @@ class Handshake
     // ------------------------------------------------------------------
     private static function opensslConfig(): ?string
     {
+        // 注意：is_file 可能触发 open_basedir 限制（serv00 等受限主机把 warning 转
+        // 异常会导致握手 9999），因此全部用 @ 抑制，找不到就当没有配置文件。
         foreach ([
             (getenv('OPENSSL_CONF') ?: ''),
             'C:/phpstudy_pro/Extensions/php/php8.0.2nts/extras/ssl/openssl.cnf',
             PHP_BINARY !== '' ? dirname(PHP_BINARY) . '/extras/ssl/openssl.cnf' : '',
         ] as $c) {
-            if ($c !== '' && is_file($c)) {
+            if ($c !== '' && @is_file($c)) {
                 return $c;
             }
         }
