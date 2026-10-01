@@ -29,6 +29,19 @@ class Logger
         $userId   = (int) ($ctx['user_id'] ?? 0);
         $adminId  = (int) ($ctx['admin_id'] ?? 0);
         $username = $ctx['username']  ?? null;
+
+        // 管理端上下文兜底：模型层调用（如 Software::update 的「修改软件 #N」）不传 ctx，
+        // 导致操作日志 admin_id=0 / username=NULL，后台日志页显示「-」无法追溯操作人。
+        // 调度器（nbXXXXXX/index.php）在管理员鉴权后会把当前管理员注册到 $GLOBALS['nb_admin']，
+        // 这里补齐；客户端接口请求该全局变量不存在，行为不变。
+        if ($adminId === 0 && $username === null) {
+            $ctxAdmin = $GLOBALS['nb_admin'] ?? null;
+            if (is_array($ctxAdmin) && !empty($ctxAdmin['id'])) {
+                $adminId  = (int) $ctxAdmin['id'];
+                $username = (string) ($ctxAdmin['username'] ?? '');
+            }
+        }
+
         $machine  = $ctx['machine_id'] ?? null;
         $raw      = (!empty(self::$cfg['record_raw']) && isset($ctx['raw']))
             ? (is_string($ctx['raw']) ? $ctx['raw'] : json_encode($ctx['raw'], JSON_UNESCAPED_UNICODE))
