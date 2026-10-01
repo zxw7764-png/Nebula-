@@ -13,6 +13,7 @@ namespace Nebula.Sdk
         HttpStatus = -3,  // HTTP 状态码非 200
         Config = -4,      // 配置缺失
         Crypto = -5,      // 本地密码学操作失败
+        Protocol = -6,    // 协议不兼容（服务端不支持 3.1 / 协议版本异常）
     }
 
     public static class ErrorText
@@ -25,6 +26,7 @@ namespace Nebula.Sdk
             Error.HttpStatus => "服务器返回异常状态码",
             Error.Config => "客户端配置不完整（请检查 app_key / 响应签名公钥）",
             Error.Crypto => "本地加密组件异常",
+            Error.Protocol => "协议不兼容（服务端不支持当前协议版本）",
             _ => "未知错误",
         };
     }

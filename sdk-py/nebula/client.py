@@ -438,6 +438,7 @@ class Client:
         self.os_info = os_info or platform.platform()
         self.client_ver = client_ver or config.kClientVersion
         self._env = Envelope(config.kAesKey, config.kSignSalt)
+        self._env.machine_id = self.machine_id   # 3.1 握手 mhash 用
         self._login_method = "password"
         self.last_init: Optional[InitResult] = None
         self.last_login: Optional[LoginResult] = None
@@ -512,8 +513,7 @@ class Client:
         r.grace_enable = bool(grace.get("enable", False))
         r.grace_public_key = str(grace.get("public_key", ""))
 
-        session = data.get("session") or {}
-        self._env.set_session(str(session.get("k", "")), str(session.get("s", "")))
+        # 3.1：会话由 ECDH 握手建立（Envelope 懒握手），init 不再下发会话密钥
         self._login_method = r.login_spec.method
         self._hb_interval = r.heartbeat_interval
         self.last_init = r

@@ -34,7 +34,7 @@ Nebula SDK 是一套面向 .NET / WinForms 应用的软件授权验证客户端 
 
 | 能力 | 说明 |
 |------|------|
-| 加密通信 | AES-256-CBC + HMAC-SHA256 + 服务端非对称验签（ES256/RS256）三重保护 |
+| 加密通信 | Nebula 3.1：ECDH P-256 会话握手 + AES-256-GCM + seq 防重放 + ES256 响应验签（客户端零静态对称机密） |
 | 多种登录方式 | 账密、卡密直登、用户名+激活码（服务端下发 `login.method`） |
 | 心跳保活 | 后台线程自动心跳，支持踢下线、强制下线、闪现公告 |
 | 设备绑定 | 机器码 + 设备指纹（board/cpu/disk/bios/mac/gpu）多维识别 |
@@ -90,8 +90,8 @@ if (login.Ok) {
 |------|------|------|------|
 | `ApiUrl` | `const string` | ✅ | API 入口地址，必须以 `/api/index.php` 结尾 |
 | `AppKey` | `const string` | ✅ | 软件标识（字母数字组合），每个软件独立 |
-| `AesKey` | `const string` | ✅ | 通信密钥（32 位十六进制），用于 AES 加解密 |
-| `SignSalt` | `const string` | ✅ | 签名盐值（48 位十六进制），用于 HMAC |
+| `AesKey` | `const string` | ❌ 3.1 已废弃 | 协议 3.1 改用 ECDH 会话，填占位值即可 |
+| `SignSalt` | `const string` | ❌ 3.1 已废弃 | 协议 3.1 改用 ECDH 会话，填占位值即可 |
 | `RespSignPubKey` | `const string` | ✅ | 响应签名公钥（PEM 格式），验签服务端响应 |
 | `TlsCertSha256` | `const string` | ❌ | TLS 证书指纹（64 位 hex），仅 HTTPS 生效，防中间人 |
 | `DebugLog` | `const bool` | ❌ | 调试日志开关（发布时置 `false`） |
@@ -120,8 +120,8 @@ public sealed class Client : IDisposable
 ```csharp
 var client = new Client(new ClientOptions {
     ApiUrl = "https://example.com/api/index.php",
-    AesKey = "eb32f8087805a06cf8e45e306e7a8d5f",
-    SignSalt = "147ea3cc63530253a1617df4da45d7b0cc1a345f67fe2db3",
+    AesKey = "YOUR_AES_KEY_32HEX",   // 3.1 已废弃，占位即可
+    SignSalt = "YOUR_SIGN_SALT_48HEX", // 3.1 已废弃，占位即可
     AppKey = "SWBFE6879E94DD",
     MachineId = "",              // 留空自动生成随机值
     OsInfo = "Windows",
@@ -143,8 +143,8 @@ var client = new Client(new ClientOptions {
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `ApiUrl` | `string` | `""` | API 入口地址 |
-| `AesKey` | `string` | `""` | 32 位 hex 通信密钥 |
-| `SignSalt` | `string` | `""` | 48 位 hex 签名盐 |
+| `AesKey` | `string` | `""` | 【3.1 废弃】仅为兼容保留 |
+| `SignSalt` | `string` | `""` | 【3.1 废弃】仅为兼容保留 |
 | `AppKey` | `string` | `""` | 软件标识 |
 | `MachineId` | `string` | `""` | 机器码，留空自动生成 |
 | `OsInfo` | `string` | `"Windows"` | 操作系统信息 |

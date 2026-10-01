@@ -12,8 +12,8 @@ namespace Nebula.Sdk
     public sealed class ClientOptions
     {
         public string ApiUrl = "";                 // 必填
-        public string AesKey = "";                 // 必填（32 位 hex）
-        public string SignSalt = "";               // 必填（48 位 hex）
+        public string AesKey = "";                 // 【3.1 起废弃】仅为兼容保留，可不填
+        public string SignSalt = "";               // 【3.1 起废弃】仅为兼容保留，可不填
         public string AppKey = "";                 // 必填
         public string MachineId = "";              // 留空生成随机临时值（建议持久化后传入）
         public string OsInfo = "Windows";
@@ -47,8 +47,7 @@ namespace Nebula.Sdk
         private enum State { New, Ready, LoggedIn, Expired }
         private State _state = State.New;
         private string _token = "";
-        private string _sessionK = "";
-        private string _sessionS = "";
+        private readonly Session31 _s31 = new();   // 3.1 ECDH 会话（懒握手 + 自动重握手）
         private string _loginMethod = "";
         private string _gracePublicKey = "";
         private string _gracePrefix = "G1";
@@ -85,8 +84,6 @@ namespace Nebula.Sdk
 
             if (string.IsNullOrEmpty(options.ApiUrl)) _configError = "未配置 API 地址（ClientOptions.ApiUrl）";
             else if (string.IsNullOrEmpty(options.AppKey)) _configError = "未配置软件标识（ClientOptions.AppKey）";
-            else if (string.IsNullOrEmpty(options.AesKey)) _configError = "未配置通信密钥（ClientOptions.AesKey）";
-            else if (string.IsNullOrEmpty(options.SignSalt)) _configError = "未配置签名盐（ClientOptions.SignSalt）";
             else if (options.RequireResponseSignature && string.IsNullOrEmpty(options.ResponseSignPublicKey))
                 _configError = "未配置响应签名公钥（SdkConfig.RespSignPubKey），拒绝连接";
         }
@@ -144,12 +141,7 @@ namespace Nebula.Sdk
                 result.SoftwareName = Json.FindString(software, "name");
             }
 
-            var session = Json.FindObject(d, "session");
-            if (session != null)
-            {
-                _sessionK = Json.FindString(session, "k");
-                _sessionS = Json.FindString(session, "s");
-            }
+            // 3.1：会话由 ECDH 握手建立（Session31 懒握手），init 不再下发会话密钥
 
             var loginSpec = Json.FindObject(d, "login");
             if (loginSpec != null)
@@ -588,73 +580,98 @@ namespace Nebula.Sdk
                  + "," + Json.Pair("password", Json.Quote(secret)) + tail + "}";
         }
 
-        /// <summary>加密信封请求：加密 → 签名 → HTTP → 验签 → 解密</summary>
+        /// <summary>
+        /// 统一请求入口：全部走 3.1 ECDH 会话协议（3.0 静态密钥信封已移除）。
+        /// 懒握手：首个业务请求前自动 handshake；会话失效自动重握手重试一次。
+        /// </summary>
         private Response Post(string action, string payloadJson)
         {
-            var result = new Response { Local = Error.Config, Code = (int)Error.Config };
+            var result = new Response { Local = Error.Crypto, Code = (int)Error.Crypto,
+                                        Msg = "3.1 会话错误" };
 
             if (string.IsNullOrEmpty(_options.AppKey))
             { result.Msg = "缺少 app_key：构造 Client 时必须传入软件标识"; return result; }
             if (_configError.Length > 0) { result.Msg = _configError; return result; }
 
-            bool publicAction = Envelope.IsPublicAction(action);
-            var keys = new Envelope.RequestKeys { AesKey = _options.AesKey };
-            lock (_stateMutex)
+            for (int attempt = 0; attempt < 2; attempt++)
             {
-                keys.Salt = publicAction || _sessionS.Length == 0 ? _options.SignSalt : _sessionS;
-                keys.SessionKid = publicAction ? "" : _sessionK;
-            }
+                // ① 懒握手
+                if (!_s31.Active)
+                {
+                    string hsBody = _s31.BuildHandshakeRequest(_options.AppKey, _options.MachineId);
+                    if (hsBody.Length == 0)
+                    {
+                        result.Msg = "3.1 握手请求构造失败（随机源不可用？）";
+                        return result;
+                    }
+                    var hs = Http.Post(Envelope.ActionUrl(_options.ApiUrl, "handshake"), hsBody, _httpOptions);
+                    result.HttpCode = hs.Status;
+                    if (hs.Status == 0)
+                    {
+                        result.Local = Error.Network; result.Code = (int)Error.Network;
+                        result.Msg = "网络错误（握手阶段：连接失败或超时）";
+                        return result;
+                    }
+                    if (hs.Status != 200)
+                    {
+                        result.Local = Error.HttpStatus; result.Code = (int)Error.HttpStatus;
+                        result.Msg = "HTTP " + hs.Status + "（握手阶段）";
+                        return result;
+                    }
+                    string hsErr = "";
+                    var e = _s31.ConsumeHandshakeResponse(hs.Body, _options.ResponseSignPublicKey,
+                                                          _options.RequireResponseSignature, ref hsErr);
+                    if (e != Error.Ok)
+                    {
+                        _s31.Clear();
+                        result.Local = e; result.Code = (int)e; result.Msg = hsErr;
+                        return result;
+                    }
+                }
 
-            string nonce = Crypto.RandomHex(8);
-            if (nonce.Length == 0)
-            {
-                result.Local = Error.Crypto; result.Code = (int)Error.Crypto;
-                result.Msg = "本地随机源不可用";
-                return result;
-            }
+                // ② 3.1 信封请求（时间戳用握手校准过的服务器时钟）
+                long ts = Now.UnixSeconds() + _s31.ClockOffsetMs / 1000;
+                string envelope = _s31.BuildRequestEnvelope(payloadJson, ts, _options.AppKey);
+                if (envelope.Length == 0)
+                {
+                    result.Msg = "3.1 请求加密失败";
+                    return result;
+                }
 
-            string envelope = Envelope.BuildRequestEnvelope(payloadJson, keys, Now.UnixSeconds(),
-                                                            nonce, _options.AppKey);
-            if (envelope.Length == 0)
-            {
-                result.Local = Error.Crypto; result.Code = (int)Error.Crypto;
-                result.Msg = "本地加密失败（请检查 AES_KEY 是否为 32 位 hex）";
-                return result;
-            }
+                var transport = Http.Post(Envelope.ActionUrl(_options.ApiUrl, action), envelope, _httpOptions);
+                result.HttpCode = transport.Status;
+                if (transport.Status == 0)
+                {
+                    result.Local = Error.Network; result.Code = (int)Error.Network;
+                    result.Msg = "网络错误（连接失败、超时或证书校验不通过）";
+                    return result;
+                }
+                if (transport.Status != 200)
+                {
+                    result.Local = Error.HttpStatus; result.Code = (int)Error.HttpStatus;
+                    result.Msg = "HTTP " + transport.Status;
+                    return result;
+                }
 
-            var transport = Http.Post(Envelope.ActionUrl(_options.ApiUrl, action), envelope, _httpOptions);
-            NebulaLog.Write("post", $"action={action} url={_options.ApiUrl} http={transport.Status} " +
-                                    $"saltLen={keys.Salt.Length} kidLen={keys.SessionKid.Length} " +
-                                    $"respHead={(transport.Body.Length > 0 ? transport.Body[..Math.Min(80, transport.Body.Length)] : "(empty)")}");
-            result.HttpCode = transport.Status;
-            if (transport.Status == 0)
-            {
-                result.Local = Error.Network; result.Code = (int)Error.Network;
-                result.Msg = "网络错误（连接失败、超时或证书校验不通过）";
-                return result;
-            }
-            if (transport.Status != 200)
-            {
-                result.Local = Error.HttpStatus; result.Code = (int)Error.HttpStatus;
-                result.Msg = "HTTP " + transport.Status;
-                return result;
-            }
-
-            var opened = Envelope.OpenResponse(transport.Body, _options.AesKey, keys.Salt,
-                                               _options.ResponseSignPublicKey,
+                // ③ 拆响应；非 3.1 信封（会话失效/明文错误）→ 清会话重握手再试一次
+                var opened = _s31.OpenResponse(transport.Body, _options.ResponseSignPublicKey,
                                                _options.RequireResponseSignature);
-            if (opened.Status != Error.Ok)
-            {
-                result.Local = opened.Status;
-                result.Code = (int)opened.Status;
+                if (opened.Status != Error.Ok)
+                {
+                    _s31.Clear();
+                    if (attempt == 0) continue;
+                    result.Local = opened.Status;
+                    result.Code = (int)opened.Status;
+                    result.Msg = opened.Msg;
+                    return result;
+                }
+
+                result.Local = Error.Ok;
+                result.Code = opened.BusinessCode;
                 result.Msg = opened.Msg;
+                result.Raw = opened.Plain;
                 return result;
             }
-
-            result.Local = Error.Ok;
-            result.Code = opened.BusinessCode;
-            result.Msg = opened.Msg;
-            result.Raw = opened.Plain;
             return result;
         }
 
