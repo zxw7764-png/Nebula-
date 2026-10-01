@@ -117,13 +117,9 @@ def _verify_es256(sig_raw: bytes, message: bytes, pub_pem: str) -> None:
 # ---------------------------------------------------------------------------
 
 class Envelope:
-    """3.1 ECDH 会话状态：懒握手、seq 单调、会话失效自动重握手。
+    """3.1 ECDH 会话状态：懒握手、seq 单调、会话失效自动重握手。"""
 
-    兼容旧构造签名 Envelope(aes_key, sign_salt) —— 3.0 静态密钥已随协议移除，
-    参数仅为不破坏调用方而保留（不再使用）。
-    """
-
-    def __init__(self, aes_key: str = "", sign_salt: str = ""):
+    def __init__(self):
         self.machine_id = ""        # 握手 mhash 用（由 Client 注入）
         # 会话状态
         self._sid = ""
@@ -132,9 +128,6 @@ class Envelope:
         self._iv_prefix = b""
         self._seq = 0
         self._clock_offset = 0      # 服务端时钟 - 本地时钟（秒）
-        # 3.0 遗留（不再使用，仅为兼容保留）
-        self.session_kid = ""
-        self.session_salt = ""
 
     # -- 状态 ----------------------------------------------------------------
 

@@ -48,7 +48,7 @@ inline const std::string kTlsCertSha256  = NEBULA_STR("");                      
 } }
 ```
 
-> **3.1 起不再需要 AES_KEY / SIGN_SALT**：通信密钥由 ECDH 握手临时协商，客户端零静态对称机密。config.hpp 里的 `kAesKey` / `kSignSalt` 是兼容占位，可不管。
+> **3.1 起不再需要 AES_KEY / SIGN_SALT**：通信密钥由 ECDH 握手临时协商，客户端零静态对称机密。config.hpp 已不再包含任何对称密钥字段。
 > **③ 是必填项**：留空则所有请求直接失败（故意设计，不给"不校验"留口子）。
 > **④ 只在 `https://` 生效**：填了它 SDK 会同时拒绝 `http://` 地址。
 > 所有值一律写在 `NEBULA_STR("...")` 里，开启混淆后编译期即被加密。

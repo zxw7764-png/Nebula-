@@ -437,7 +437,7 @@ class Client:
         self.machine_id = machine_id or get_stable_machine_id()
         self.os_info = os_info or platform.platform()
         self.client_ver = client_ver or config.kClientVersion
-        self._env = Envelope(config.kAesKey, config.kSignSalt)
+        self._env = Envelope()
         self._env.machine_id = self.machine_id   # 3.1 握手 mhash 用
         self._login_method = "password"
         self.last_init: Optional[InitResult] = None

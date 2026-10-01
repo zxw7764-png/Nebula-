@@ -273,7 +273,7 @@ auto note = NEBULA_WSTR(L"Nebula 安全提示");
 `kApiUrl / kAppKey`（以及 `kRespSignPubKey / kTlsCertSha256`）本来就是 `NEBULA_STR("...")` 包着的，
 你只替换引号里的字符串即可 —— **不要把 `NEBULA_STR(...)` 拆掉**。
 3.1 起通信密钥由 ECDH 握手临时协商，exe 里已没有任何对称密钥可搜；
-`kAesKey / kSignSalt` 是 3.0 兼容占位，保持 `0000...` 原样即可。
+`kAesKey / kSignSalt` 已随 3.1 移除，无需任何占位。
 
 **发布前自查（值得花 30 秒）**：拿编译好的 exe 搜一下自己的密钥
 

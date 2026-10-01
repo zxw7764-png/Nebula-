@@ -52,12 +52,10 @@ public:
     // -----------------------------------------------------------------------
     /**
      * 客户端配置。必填：api_url / app_key / response_sign_public_key。
-     * 3.1 起通信密钥由 ECDH 握手临时协商，AES_KEY / SIGN_SALT 不再使用（保留字段仅为兼容旧代码）。
+     * 3.1 起通信密钥由 ECDH 握手临时协商，AES_KEY / SIGN_SALT 已彻底移除。
      */
     struct Options {
         std::string api_url;                        ///< API 入口（必填）
-        std::string aes_key;                        ///< 【已废弃】3.0 遗留字段，可留空
-        std::string sign_salt;                      ///< 【已废弃】3.0 遗留字段，可留空
         std::string app_key;                        ///< 软件标识（必填）
         std::string machine_id;                     ///< 机器码；留空则生成随机临时值（**建议接入方持久化后传入**）
         std::string os_info = "Windows";            ///< 操作系统标识

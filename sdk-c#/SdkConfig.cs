@@ -12,11 +12,8 @@
 //                      例：SWBFE6879E94DD
 //                      每个软件拥有独立 AppKey，不可混用
 //
-//   ③ AesKey / ④ SignSalt  【3.1 起已废弃】
-//                      协议 3.1 使用 ECDH 会话握手，客户端不再持有任何静态对称机密。
-//                      以下两项仅为兼容保留，填任意占位值即可（服务端不再校验）。
-//
-//   ⑤ RespSignPubKey  响应签名公钥（PEM 格式，必填！）
+//   ③ RespSignPubKey  响应签名公钥（PEM 格式，必填！）
+//                      协议 3.1 通信密钥由 ECDH 握手临时协商，客户端零静态对称机密。
 //
 //      格式说明：
 //      ┌────────────────────────────────────────────────────────┐
@@ -61,7 +58,7 @@
 //
 // ── 安全建议 ───────────────────────────────────────────────────────────────
 //   · 生产环境务必配置 RespSignPubKey，防止伪造响应劫持会话
-//   · 定期更换 AesKey / SignSalt，避免密钥泄露后被批量破解
+//   · 定期在后台重新生成响应签名密钥并同步本文件
 //   · 不要将包含真实密钥的代码提交到公开仓库
 //   · 如发生密钥泄露，请立即在后台重新生成密钥并更新本文件
 //
@@ -101,11 +98,9 @@
 //     false → 关闭日志（生产环境推荐）
 //
 // ── 常见坑点 ───────────────────────────────────────────────────────────────
-//   1. AesKey 必须是 32 位十六进制（16 字节），长度不对会导致加解密失败
-//   2. RespSignPubKey 若为空，所有请求会返回"未配置响应签名公钥"错误
-//   3. 服务器密钥更新后，RespSignPubKey 和 AesKey/SignSalt 可能同时变化，
-//      需一并同步
-//   4. TlsCertSha256 仅在 HTTPS 时生效；HTTP 请求完全不受约束
+//   1. RespSignPubKey 若为空，所有请求会返回"未配置响应签名公钥"错误
+//   2. 服务器密钥更新后，RespSignPubKey 必须一并同步
+//   3. TlsCertSha256 仅在 HTTPS 时生效；HTTP 请求完全不受约束
 // ============================================================================
 namespace Nebula.Sdk
 {
@@ -120,14 +115,10 @@ namespace Nebula.Sdk
         /// <summary>② 软件标识（app_key）</summary>
         public const string AppKey = "YOUR_APP_KEY";
 
-        /// <summary>③④ 【3.1 起已废弃】仅为兼容保留，占位即可</summary>
-        public const string AesKey = "YOUR_AES_KEY_32HEX";
-        public const string SignSalt = "YOUR_SIGN_SALT_48HEX";
-
-        /// <summary>⑤ 响应签名公钥（PEM，必填；服务端「重新生成密钥」后须同步）</summary>
+        /// <summary>③ 响应签名公钥（PEM，必填；服务端「重新生成密钥」后须同步）</summary>
         public const string RespSignPubKey = "";
 
-        /// <summary>⑥ TLS 证书指纹锁定（可选，只对 https:// 生效）</summary>
+        /// <summary>④ TLS 证书指纹锁定（可选，只对 https:// 生效）</summary>
         public const string TlsCertSha256 = "";
 
         // ====== 加固功能开关 ======

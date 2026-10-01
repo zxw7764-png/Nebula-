@@ -14,8 +14,7 @@
 //
 // ── 3.1 协议（唯一协议）──────────────────────────────────────────────────
 //   通信密钥全部由 ECDH 握手临时协商：客户端零静态对称机密。
-//   3.0 的 AES_KEY / SIGN_SALT 已废弃（kAesKey/kSignSalt 仅保留占位兼容旧代码，
-//   填不填都不影响通信）；服务端若仍是旧版，握手会直接失败提示升级。
+//   3.0 的 AES_KEY / SIGN_SALT 已彻底移除；服务端若仍是旧版，握手会直接失败提示升级。
 //
 // ── 字符串写法 ────────────────────────────────────────────────────────────
 //   一律写在 NEBULA_STR("...") 里（不要写裸字面量）：
@@ -38,23 +37,17 @@ namespace nebula {
 namespace cfg {
 
 /** ① API 入口地址 */
-inline const std::string kApiUrl = NEBULA_STR("http://your-domain.com/api/index.php");
+inline const std::string kApiUrl = NEBULA_STR("https://yz.baige.fun/api/index.php");
 
 /**
  * ② 软件标识（app_key）。
  * 用 SecureString 存储：长度 <= 15 的字符串会被 std::string 的 SSO 内联进 .data 静态区，
  * 内存 dump 一眼可见；SecureString 只保存混淆字节，str() 时才临时解码。
  */
-inline const SecureString kAppKey{ NEBULA_STR("SWXXXXXXXX") };
-
-/** ③【已废弃】3.0 通信密钥占位，3.1 协议不使用，保留仅为兼容旧代码 */
-inline const std::string kAesKey = NEBULA_STR("00000000000000000000000000000000");
-
-/** ④【已废弃】3.0 签名盐占位，3.1 协议不使用，保留仅为兼容旧代码 */
-inline const std::string kSignSalt = NEBULA_STR("000000000000000000000000000000000000000000000000");
+inline const SecureString kAppKey{ NEBULA_STR("SWBFE6879E94DD") };
 
 /**
- * ⑤ 响应防伪造公钥（必填）。
+ * ③ 响应防伪造公钥（必填）。
  *
  * 服务端除 HMAC 外，还会用**自己的私钥**对每条响应签名（ES256 / RS256），
  * 客户端用这里内置的公钥验签 —— 私钥永不出服务端，攻击者即使把客户端里的
@@ -78,10 +71,14 @@ inline const std::string kSignSalt = NEBULA_STR("0000000000000000000000000000000
  *   · 服务端「重新生成密钥」后必须同步更新这里，否则所有客户端会拒绝响应；
  *   · 编译期同时支持 EC P-256 与 RSA-2048 公钥（服务端自动选，客户端无需关心）。
  */
-inline const std::string kRespSignPubKey = NEBULA_STR("");
+inline const std::string kRespSignPubKey = NEBULA_STR(
+    "-----BEGIN PUBLIC KEY-----\n"
+    "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEd1szKwalY3FzHQcO0XnxjVRPg4jU\n"
+    "KhMvrOuplbemFj1NHWbgr2J7J3zjw0wbdVJs3YX205itkq4e2/2cUkHtaw==\n"
+    "-----END PUBLIC KEY-----\n");
 
 /**
- * ⑥ TLS 证书指纹锁定（可选但强烈建议，防透明代理 / 中间人抓包）。
+ * ④ TLS 证书指纹锁定（可选但强烈建议，防透明代理 / 中间人抓包）。
  *
  * 填服务端 HTTPS **证书**的 SHA256 指纹（64 位 hex，大小写均可、可带冒号）。
  *
@@ -100,7 +97,7 @@ inline const std::string kRespSignPubKey = NEBULA_STR("");
  *   · 服务器换证书（续期 / 换 CA）后必须同步更新，否则所有客户端连不上；
  *   · 留空 = 不锁定（仍走系统标准 TLS 校验）。
  */
-inline const std::string kTlsCertSha256 = NEBULA_STR("");
+inline const std::string kTlsCertSha256 = NEBULA_STR("f31dc7cd4dbed7b9b6034bae7577452a6e50102ff3121775e64698b76f08b80d");
 
 /**
  * 疑似环境处置策略（false = 宽松[默认]，true = 严格）。

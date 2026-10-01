@@ -12,8 +12,6 @@ namespace Nebula.Sdk
     public sealed class ClientOptions
     {
         public string ApiUrl = "";                 // 必填
-        public string AesKey = "";                 // 【3.1 起废弃】仅为兼容保留，可不填
-        public string SignSalt = "";               // 【3.1 起废弃】仅为兼容保留，可不填
         public string AppKey = "";                 // 必填
         public string MachineId = "";              // 留空生成随机临时值（建议持久化后传入）
         public string OsInfo = "Windows";
@@ -733,8 +731,6 @@ namespace Nebula.Sdk
             return new Client(new ClientOptions
             {
                 ApiUrl = SdkConfig.ApiUrl,
-                AesKey = SdkConfig.AesKey,
-                SignSalt = SdkConfig.SignSalt,
                 AppKey = SdkConfig.AppKey,
                 MachineId = machineId,
                 OsInfo = osInfo,
