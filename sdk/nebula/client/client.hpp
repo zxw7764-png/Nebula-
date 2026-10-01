@@ -267,6 +267,7 @@ public:
             result.file_size      = json::findInt64(version, "file_size");
             result.self_file_hash = json::findString(version, "self_file_hash");
             result.self_file_size = json::findInt64(version, "self_file_size");
+            result.versions       = parseVersionList(version);
         }
 
         // 设备指纹采集说明 device_fp.{...}
@@ -413,6 +414,25 @@ public:
     }
 
     /** 从心跳响应解析便捷结构（runHeartbeatLoop 内部使用，也可自行调用） */
+    /** 解析 init 响应里的 version.versions 历史版本列表 */
+    NEBULA_MUST_CHECK static std::vector<VersionInfo> parseVersionList(const std::string& versionObject) {
+        std::vector<VersionInfo> list;
+        for (const std::string& object : json::findObjects(versionObject, "versions")) {
+            VersionInfo info;
+            info.version      = json::findString(object, "version");
+            info.channel      = json::findString(object, "channel");
+            info.changelog    = json::findString(object, "changelog");
+            info.force_update = json::findBool(object, "force_update");
+            info.download_url = json::findString(object, "download_url");
+            info.file_hash    = json::findString(object, "file_hash");
+            info.file_size    = json::findInt64(object, "file_size");
+            info.created_at   = json::findInt64(object, "created_at");
+            if (info.version.empty()) continue;
+            list.push_back(std::move(info));
+        }
+        return list;
+    }
+
     NEBULA_MUST_CHECK static HeartbeatInfo parseHeartbeat(const Response& response) {
         HeartbeatInfo info;
         if (response.ok()) {

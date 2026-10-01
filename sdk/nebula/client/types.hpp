@@ -65,6 +65,18 @@ struct HeartbeatInfo {
 };
 
 /** init 初始化结果 */
+/** 历史版本条目（init 的 version.versions 下发，供「更新日志」展示） */
+struct VersionInfo {
+    std::string version;
+    std::string channel;
+    std::string changelog;
+    bool        force_update = false;
+    std::string download_url;
+    std::string file_hash;
+    long long   file_size = 0;
+    int64_t     created_at = 0;            ///< 发布时间（Unix 秒）
+};
+
 struct InitResult {
     bool ok = false;
     std::string msg;
@@ -87,6 +99,8 @@ struct InitResult {
     std::string self_file_hash;
     /// 客户端**自身版本**登记的字节数（0 = 未登记）
     long long   self_file_size = 0;
+    /// 历史版本列表（version.versions，倒序；服务端未下发时为空）
+    std::vector<VersionInfo> versions;
 
     bool    grace_enable = false;
     int     grace_seconds = 0;
