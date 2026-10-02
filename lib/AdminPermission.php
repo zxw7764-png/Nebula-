@@ -193,10 +193,9 @@ final class AdminPermission
         'grace_rotate_keys'     => self::SETTINGS_SECURITY,
         'resp_sign_rotate_keys' => self::SETTINGS_SECURITY,
 
-        // ---- 软件管理（多软件网络验证）：查看含通信密钥，仅超管档 ----
+        // ---- 软件管理（多软件网络验证），仅超管档 ----
         'software_list'         => self::SETTINGS_BUSINESS,
         'software_save'         => self::SETTINGS_BUSINESS,
-        'software_reset_keys'   => self::SETTINGS_BUSINESS,
         'software_delete'       => self::SETTINGS_BUSINESS,
         'software_batch'        => self::SETTINGS_BUSINESS,
         // 软件官网内容读写（编辑入口在「内容运营 → 官网内容」）：属站点展示档
@@ -315,7 +314,7 @@ final class AdminPermission
      * 管理员放行（数据展示层），写操作仍按超管勾选的权限清单拦截。
      *
      * 刻意不放行的敏感查看接口（即使它们语义上也是「查看」）：
-     *   · software_list        —— 下发 aes_key / sign_salt（SDK 通信密钥）
+     *   · software_list        —— 软件清单与 app_key（业务识别标识）
      *   · setting_get          —— 含支付参数 / 安全配置 / 缓存连接信息
      *   · admin_list           —— 管理员清单与权限配置（admin.manage 硬权限）
      *   · user_export / card_export —— 数据导出（外带），导出权限单独控制

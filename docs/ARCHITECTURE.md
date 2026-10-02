@@ -214,7 +214,7 @@ sequenceDiagram
     Note over AP: ACTION_PERM 逐 action 白名单，未登记即拒绝
     AP-->>IDX: 通过
     IDX->>IDX: CSRF 校验（写操作）→ 限流 → Guard 风控
-    IDX->>IDX: 敏感动作二次密码确认（software_reset_keys / software_delete）
+    IDX->>IDX: 敏感动作二次密码确认（software_delete）
     IDX->>H: require handlers/{action}.php
 ```
 

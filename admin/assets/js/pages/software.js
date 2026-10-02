@@ -40,14 +40,11 @@ async function render() {
             <td>${s.id}</td>
             <td><b>${esc(s.name)}</b></td>
             <td style="max-width:170px">${keyCell(s.app_key)}</td>
-            <td style="max-width:190px">${keyCell(s.aes_key)}</td>
-            <td style="max-width:190px">${keyCell(s.sign_salt)}</td>
             <td>${esc(s.min_version)}</td>
             <td>${s.status === 1 ? tag('启用', 'green') : tag('停用', 'gray')}</td>
             <td style="white-space:nowrap">
                 <button class="btn ghost sm" data-act="edit" data-id="${s.id}">编辑</button>
                 <button class="btn ghost sm" data-act="copyapi" data-id="${s.id}">复制接口</button>
-                <button class="btn warn sm" data-act="reset" data-id="${s.id}">重置密钥</button>
                 ${list.length > 1 ? `<button class="btn danger sm" data-act="del" data-id="${s.id}">删除</button>` : ''}
             </td>
         </tr>`).join('');
@@ -69,19 +66,17 @@ async function render() {
             </div>
         </div>
         <p class="muted" style="margin:4px 0 16px;padding:10px 14px;background:var(--bg);border:1px solid var(--border-soft);border-radius:10px;font-size:12.5px;line-height:1.8">
-            客户端请求外层携带 <code>app_key</code> 识别软件；每个软件使用独立的通信密钥与版本策略。
-            卡密 / 代理商 / 版本发布 / 账号均按软件隔离 —— 1 软件的激活码与账号无法在 2 软件使用。<br>
-            <b>重置密钥</b>后该软件所有旧客户端立即失联，同时清空该软件全部登录会话（用户需重新登录），
-            需把新密钥写入客户端重新发布（用于密钥泄露后止损）。
+            客户端请求外层携带 <code>app_key</code> 识别软件；通信采用 3.1 协议（ECDH 握手 + AES-256-GCM 会话信封），客户端不持有静态通信密钥。
+            卡密 / 代理商 / 版本发布 / 账号均按软件隔离 —— 1 软件的激活码与账号无法在 2 软件使用。
         </p>
         <div class="table-wrap">
             <table>
                 <thead><tr>
                     ${checkAllBox()}
-                    <th>ID</th><th>软件名</th><th>app_key</th><th>AES_KEY</th><th>SIGN_SALT</th>
+                    <th>ID</th><th>软件名</th><th>app_key</th>
                     <th>最低/最新版本</th><th>状态</th><th>操作</th>
                 </tr></thead>
-                <tbody>${rows || `<tr><td colspan="9">${empty('<i class="bi bi-window-stack"></i>', '暂无软件')}</td></tr>`}</tbody>
+                <tbody>${rows || `<tr><td colspan="7">${empty('<i class="bi bi-window-stack"></i>', '暂无软件')}</td></tr>`}</tbody>
             </table>
         </div>
     </div>`;
@@ -122,7 +117,6 @@ async function render() {
         b.addEventListener('click', () => {
             if (b.dataset.act === 'edit') swEdit(item);
             else if (b.dataset.act === 'copyapi') copyText(location.origin + '/api/index.php');
-            else if (b.dataset.act === 'reset') swReset(item);
             else if (b.dataset.act === 'del') swDel(item);
         });
     });
@@ -137,12 +131,6 @@ function swEdit(s) {
         <div class="field"><label>app_key（客户端标识）</label><input id="swAppKey" value="${esc(s.app_key || '')}" placeholder="留空自动生成，如 SW1A2B3C4D5E6F">
             <small class="muted">${s.id ? '修改后需同步更新客户端' : '创建后客户端请求外层携带此字段'}</small></div>
     </div>
-    ${s.id ? '' : `
-    <details style="margin-bottom:10px"><summary class="muted" style="cursor:pointer;font-size:12.5px">自定义密钥（默认自动生成，一般不用改）</summary>
-    <div class="row2" style="margin-top:8px">
-        <div class="field"><label>AES_KEY（32位hex）</label><input id="swAes" placeholder="留空自动生成"></div>
-        <div class="field"><label>SIGN_SALT（48位hex）</label><input id="swSalt" placeholder="留空自动生成"></div>
-    </div></details>`}
     <div class="row2">
         <div class="field"><label>最低可用版本</label><input id="swMin" value="${esc(s.min_version || '1.0.0')}" placeholder="低于此版本强制更新"></div>
         <div class="field"><label>登录方式（客户端与官网通用）</label>
@@ -260,54 +248,11 @@ function swEdit(s) {
                 status: parseInt(document.getElementById('swStatus').value, 10) || 0,
                 remark: document.getElementById('swRemark').value.trim(),
             };
-            const aesEl = document.getElementById('swAes');
-            if (aesEl) payload.aes_key = aesEl.value.trim();
-            const saltEl = document.getElementById('swSalt');
-            if (saltEl) payload.sign_salt = saltEl.value.trim();
             const res = await api('software_save', payload);
             if (res.code === 0) { toast('保存成功'); closeModal(); render(); }
             else toast(res.msg || '保存失败', 'err');
         }},
     ]);
-}
-
-function swReset(s) {
-    const body = `
-    <p style="font-size:13px;line-height:1.8">
-        即将为软件 <b>${esc(s.name)}</b> 重新生成 AES_KEY 与 SIGN_SALT。<br>
-        <b style="color:var(--danger,#e5484d)">该软件所有旧客户端会立即失联</b>，
-        需要把新密钥写入客户端并重新发布。<br>
-        同时该软件<b>全部登录会话会被清空</b>（含心跳中的在线用户），用户需重新登录一次。确定继续？
-    </p>
-    <div class="field"><label>留空 = 自动生成新密钥</label></div>
-    <div class="row2">
-        <div class="field"><label>AES_KEY（32位hex）</label><input id="rAes" placeholder="自动生成"></div>
-        <div class="field"><label>SIGN_SALT（48位hex）</label><input id="rSalt" placeholder="自动生成"></div>
-    </div>
-    <div class="field"><label>当前登录密码（敏感操作二次确认）</label>
-        <input id="rPwd" type="password" autocomplete="current-password" placeholder="请输入你的后台登录密码"></div>`;
-
-    openModal('重置通信密钥', body, [
-        { text: '取消', cls: 'ghost', act: closeModal },
-        { text: '确认重置', cls: 'danger', act: async () => {
-            const pwd = document.getElementById('rPwd').value;
-            if (!pwd) { toast('请输入当前登录密码', 'warn'); return; }
-            const res = await api('software_reset_keys', {
-                id: s.id,
-                aes_key: document.getElementById('rAes').value.trim() || 'auto',
-                sign_salt: document.getElementById('rSalt').value.trim() || 'auto',
-                confirm_pwd: pwd,
-            });
-            if (res.code === 0) {
-                closeModal();
-                openModal('新密钥（请立即复制）', `
-                    <div class="field"><label>AES_KEY</label><input value="${esc(res.data.aes_key)}"></div>
-                    <div class="field"><label>SIGN_SALT</label><input value="${esc(res.data.sign_salt)}"></div>
-                    <p class="muted" style="font-size:12.5px">请把新密钥写入客户端后重新打包发布。</p>`,
-                    [{ text: '我已保存', cls: 'success', act: () => { closeModal(); render(); } }]);
-            } else toast(res.msg || '重置失败', 'err');
-        }},
-    ], true);
 }
 
 function swDel(s) {

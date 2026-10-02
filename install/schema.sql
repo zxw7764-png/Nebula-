@@ -14,11 +14,6 @@ CREATE TABLE IF NOT EXISTS `nb_softwares` (
   `id`             INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `name`           VARCHAR(64)  NOT NULL COMMENT '软件名称',
   `app_key`        VARCHAR(32)  NOT NULL COMMENT '客户端标识（请求外层携带 app_key）',
-  `aes_key`        VARCHAR(64)  NOT NULL COMMENT '该软件通信 AES 密钥（32位hex）',
-  `sign_salt`      VARCHAR(96)  NOT NULL COMMENT '该软件签名盐（48位hex）',
-  `aes_key_prev`   VARCHAR(64)  DEFAULT NULL COMMENT '轮换前的旧 AES 密钥（平滑轮换宽限期内兼容老客户端）',
-  `sign_salt_prev` VARCHAR(96)  DEFAULT NULL COMMENT '轮换前的旧签名盐（同上）',
-  `keys_rotated_at` INT UNSIGNED DEFAULT NULL COMMENT '最近一次密钥轮换时间（宽限期从此起算）',
   `min_version`    VARCHAR(32)  NOT NULL DEFAULT '1.0.0' COMMENT '最低可用版本',
   `latest_version` VARCHAR(32)  NOT NULL DEFAULT '1.0.0' COMMENT '最新版本（无发布记录时使用）',
   `force_update`   TINYINT      NOT NULL DEFAULT 0,
@@ -36,8 +31,8 @@ CREATE TABLE IF NOT EXISTS `nb_softwares` (
   UNIQUE KEY `uk_app_key` (`app_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='软件（多应用）';
 
-INSERT INTO `nb_softwares` (`id`, `name`, `app_key`, `aes_key`, `sign_salt`, `status`, `created_at`)
-VALUES (1, '默认软件', 'SWDEFAULT', '', '', 1, UNIX_TIMESTAMP())
+INSERT INTO `nb_softwares` (`id`, `name`, `app_key`, `status`, `created_at`)
+VALUES (1, '默认软件', 'SWDEFAULT', 1, UNIX_TIMESTAMP())
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`);
 
 -- 多软件归属字段：老站升级请运行 install/migrate_software.php

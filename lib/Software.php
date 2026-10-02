@@ -4,7 +4,6 @@
  * ------------------------------------------------------------------
  * 一套验证系统同时服务多个客户端软件：
  *   · 每个软件有独立的 app_key（客户端请求携带，用于识别软件）
- *   · 每个软件有独立的 aes_key / sign_salt（通信密钥，可重置）
  *   · 每个软件有独立的版本策略（最低版本 / 最新版本 / 强更 / 下载地址）
  *   · 用户 / 卡密 / 批次 / 代理商 / 代理激活码 / 版本发布 / 会话均挂 software_id
  */
@@ -101,18 +100,6 @@ class Software
         return $out;
     }
 
-    /** 生成 32 位 hex AES 密钥 */
-    public static function genAesKey(): string
-    {
-        return bin2hex(random_bytes(16));
-    }
-
-    /** 生成 48 位 hex 签名盐 */
-    public static function genSignSalt(): string
-    {
-        return bin2hex(random_bytes(24));
-    }
-
     /** 生成 app_key（客户端标识，如 SW-XXXXXXXX） */
     public static function genAppKey(): string
     {
@@ -197,7 +184,7 @@ class Software
     }
 
     /**
-     * 创建软件（密钥不传则自动生成）
+     * 创建软件（app_key 不传则自动生成）
      */
     public static function create(array $in): array
     {
@@ -214,26 +201,9 @@ class Software
             return ['ok' => false, 'msg' => 'app_key 已存在'];
         }
 
-        $aesKey  = preg_replace('/[^a-fA-F0-9]/', '', (string) ($in['aes_key'] ?? ''));
-        $signSalt = preg_replace('/[^a-fA-F0-9]/', '', (string) ($in['sign_salt'] ?? ''));
-        if ($aesKey === '') {
-            $aesKey = self::genAesKey();
-        }
-        if (strlen($aesKey) !== 32) {
-            return ['ok' => false, 'msg' => 'AES_KEY 必须是 32 位 hex'];
-        }
-        if ($signSalt === '') {
-            $signSalt = self::genSignSalt();
-        }
-        if (strlen($signSalt) !== 48) {
-            return ['ok' => false, 'msg' => 'SIGN_SALT 必须是 48 位 hex'];
-        }
-
         $row = [
             'name'           => $name,
             'app_key'        => $appKey,
-            'aes_key'        => $aesKey,
-            'sign_salt'      => $signSalt,
             'min_version'    => trim((string) ($in['min_version'] ?? '')) ?: '1.0.0',
             'latest_version' => trim((string) ($in['latest_version'] ?? '')) ?: '1.0.0',
             'force_update'   => (int) (bool) ($in['force_update'] ?? 0),
@@ -265,7 +235,6 @@ class Software
 
     /**
      * 更新软件（app_key / 名称 / 版本策略 / 状态）
-     * 密钥不在此修改 —— 必须走 resetKeys（防止误改导致客户端全体失联）
      */
     public static function update(int $id, array $in): array
     {
@@ -325,139 +294,6 @@ class Software
         Database::update('softwares', $data, 'id = :id', ['id' => $id]);
         Logger::log('software', 1, '修改软件 #' . $id);
         return ['ok' => true, 'msg' => '已保存'];
-    }
-
-    /**
-     * 重置通信密钥（被破解后一键换钥，旧客户端立即失联）
-     * aes_key / sign_salt 至少提供一个；传 'auto' 则自动生成
-     */
-    public static function resetKeys(int $id, string $aesKey = 'auto', string $signSalt = 'auto'): array
-    {
-        $sw = self::find($id);
-        if (!$sw) {
-            return ['ok' => false, 'msg' => '软件不存在'];
-        }
-
-        $data = ['updated_at' => time()];
-
-        if ($aesKey !== '') {
-            if ($aesKey === 'auto') {
-                $aesKey = self::genAesKey();
-            } else {
-                $aesKey = preg_replace('/[^a-fA-F0-9]/', '', $aesKey);
-                if (strlen($aesKey) !== 32) {
-                    return ['ok' => false, 'msg' => 'AES_KEY 必须是 32 位 hex'];
-                }
-            }
-            $data['aes_key'] = $aesKey;
-        }
-        if ($signSalt !== '') {
-            if ($signSalt === 'auto') {
-                $signSalt = self::genSignSalt();
-            } else {
-                $signSalt = preg_replace('/[^a-fA-F0-9]/', '', $signSalt);
-                if (strlen($signSalt) !== 48) {
-                    return ['ok' => false, 'msg' => 'SIGN_SALT 必须是 48 位 hex'];
-                }
-            }
-            $data['sign_salt'] = $signSalt;
-        }
-
-        if (isset($data['aes_key']) || isset($data['sign_salt'])) {
-            Database::update('softwares', $data, 'id = :id', ['id' => $id]);
-            // 密钥已换：该软件所有会话级签名密钥作废，客户端需重新 init
-            Database::exec('DELETE FROM ' . Database::t('sign_keys') . ' WHERE software_id = ?', [$id]);
-
-            // 一并作废该软件的全部登录会话。
-            // 换钥场景通常是客户端被逆向：只换钥而不清 token 的话，攻击者先前
-            // 窃取的 token 在过期前仍可照常调用业务接口（换钥挡不住存量令牌）。
-            // 老库 sessions.software_id 可能为 0（软件维度上线前登录的），这些
-            // 历史数据归属首个软件，故重置首个软件时把它们一起清掉。
-            $swIds = [$id];
-            if ((int) Database::value('SELECT MIN(id) FROM ' . self::table()) === $id) {
-                $swIds[] = 0;
-            }
-            Database::exec(
-                'DELETE FROM ' . Database::t('sessions')
-                . ' WHERE software_id IN (' . implode(',', array_fill(0, count($swIds), '?')) . ')',
-                $swIds
-            );
-
-            Logger::log('software', 1, '重置软件密钥 #' . $id . ' ' . $sw['name'] . '（同时清空该软件会话）');
-        }
-
-        $fresh = self::find($id);
-        return [
-            'ok'        => true,
-            'msg'       => '密钥已重置，该软件所有会话已失效，请更新客户端内置密钥后重新发布',
-            'aes_key'   => $fresh['aes_key'],
-            'sign_salt' => $fresh['sign_salt'],
-        ];
-    }
-
-    /**
-     * 平滑轮换通信密钥（宽限期双钥并行）
-     * ------------------------------------------------------------------
-     * 与 resetKeys（硬重置，旧客户端立即失联）不同：
-     *   1. 旧钥存入 aes_key_prev / sign_salt_prev，新客户端用新钥、
-     *      未升级的老客户端在宽限期内仍可正常通信（服务端自动回落旧钥验签）；
-     *   2. 不删除会话 / 会话签名密钥 —— 在线用户无感知；
-     *   3. 宽限期（security.key_grace_days，默认 7 天）过后旧钥自动失效，
-     *      到期未升级的客户端需重新 init。
-     *
-     * 适用：例行密钥轮换、怀疑密钥泄露但希望平滑过渡。
-     * 被确认破解需立刻掐断时仍应使用 resetKeys。
-     */
-    public static function rotateKeysGraceful(int $id): array
-    {
-        $sw = self::find($id);
-        if (!$sw) {
-            return ['ok' => false, 'msg' => '软件不存在'];
-        }
-        if ((string) $sw['aes_key'] === '') {
-            return ['ok' => false, 'msg' => '该软件尚未配置通信密钥，请先在编辑中设置'];
-        }
-
-        Database::update('softwares', [
-            'aes_key_prev'    => (string) $sw['aes_key'],
-            'sign_salt_prev'  => (string) $sw['sign_salt'],
-            'keys_rotated_at' => time(),
-            'aes_key'         => self::genAesKey(),
-            'sign_salt'       => self::genSignSalt(),
-            'updated_at'      => time(),
-        ], 'id = :id', ['id' => $id]);
-
-        Logger::log('software', 1, '平滑轮换软件密钥 #' . $id . ' ' . $sw['name']
-            . '（宽限期 ' . (int) Config::get('security.key_grace_days', 7) . ' 天，老客户端无感知）');
-
-        $fresh = self::find($id);
-        return [
-            'ok'             => true,
-            'msg'            => '密钥已平滑轮换：新客户端请内置新钥发布；老客户端宽限期内不受影响',
-            'aes_key'        => $fresh['aes_key'],
-            'sign_salt'      => $fresh['sign_salt'],
-            'grace_days'     => (int) Config::get('security.key_grace_days', 7),
-            'rotated_at'     => (int) $fresh['keys_rotated_at'],
-        ];
-    }
-
-    /**
-     * 取该软件的轮换旧钥（宽限期内有效，过期返回 null）
-     * @return array|null {aes_key, sign_salt}
-     */
-    public static function prevKeys(array $sw): ?array
-    {
-        $aes = (string) ($sw['aes_key_prev'] ?? '');
-        $salt = (string) ($sw['sign_salt_prev'] ?? '');
-        if ($aes === '' && $salt === '') {
-            return null;
-        }
-        $rotatedAt = (int) ($sw['keys_rotated_at'] ?? 0);
-        $graceDays = max(0, (int) Config::get('security.key_grace_days', 7));
-        if ($graceDays === 0 || $rotatedAt <= 0 || (time() - $rotatedAt) > $graceDays * 86400) {
-            return null; // 宽限期已过（或配置为 0 = 不启用宽限）
-        }
-        return ['aes_key' => $aes, 'sign_salt' => $salt];
     }
 
     public static function delete(int $id): array

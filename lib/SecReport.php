@@ -51,17 +51,7 @@ class SecReport
             $findings[] = ['level' => 'warn', 'name' => '撞库嫌疑（同账号登录失败 ≥ ' . $thU . '）', 'items' => $rows];
         }
 
-        // 3. 密钥重置追踪（管理端应急动作）
-        $rows = self::q(
-            'SELECT admin_name, action_text, target, ip, created_at FROM ' . Database::t('audit_logs')
-            . " WHERE action = 'software_reset_keys' AND created_at >= ? ORDER BY created_at DESC LIMIT 10",
-            [$since]
-        );
-        if ($rows) {
-            $findings[] = ['level' => 'info', 'name' => '通信密钥重置（24h 内）', 'items' => $rows];
-        }
-
-        // 4. 代理商生成卡密突增
+        // 3. 代理商生成卡密突增
         $thA = max(50, (int) Config::get('security.agent_bulk_threshold', 500));
         try {
             $rows = Database::all(

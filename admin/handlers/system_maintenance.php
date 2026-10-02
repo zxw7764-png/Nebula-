@@ -82,7 +82,7 @@ if ($op === 'backup_save') {
 // 所以任何 echo 都要在 header() 之后（否则 SAPI 会报 headers already sent）。
 //
 // 备份是整库转储（含全部卡密、密码摘要、通信密钥），属最高敏感产物，
-// 因此额外要求二次输入登录密码 —— 与 software_reset_keys / software_delete
+// 因此额外要求二次输入登录密码 —— 与 software_delete
 // 同一套路（前端 confirmPassword 弹窗把密码放进 confirm_pwd）。
 if ($op === 'backup_download') {
     $confirmPwd = $_SERVER['HTTP_X_CONFIRM_PWD'] ?? ($input['confirm_pwd'] ?? '');

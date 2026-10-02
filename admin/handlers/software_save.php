@@ -1,7 +1,7 @@
 <?php
 /**
  * admin action: software_save
- * 新增 / 编辑软件（密钥不在此修改，必须走 software_reset_keys）
+ * 新增 / 编辑软件
  */
 
 $id = Util::int($input, 'id', 0);

@@ -198,7 +198,6 @@ if ($action !== '' && $action !== 'ping' && !in_array($action, $csrfExempt, true
 // 前端对应弹窗把密码放进 confirm_pwd 字段即可。
 // ------------------------------------------------------------------
 $sensitiveActions = [
-    'software_reset_keys',   // 重置通信密钥：旧客户端全体失联
     'software_delete',       // 删除软件：卡密/账号数据一并失效
 ];
 if (!empty($admin) && in_array($action, $sensitiveActions, true)) {

@@ -200,26 +200,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare("UPDATE `{$prefix}settings` SET svalue = ? WHERE skey = 'site_name'")
                     ->execute([$siteName]);
 
-                // 生成新的加密密钥（多软件：作为「默认软件」的独立密钥写入 nb_softwares，
-                // config.php 仅保留一份同值兜底；后续新增软件在后台「软件管理」创建，密钥自动生成）
-                // keep 模式：沿用库中已有密钥，绝不覆盖
-                $aesKey  = bin2hex(random_bytes(16));
-                $signSalt = bin2hex(random_bytes(24));
-                if ($mode === 'keep') {
-                    $pdo->prepare("INSERT IGNORE INTO `{$prefix}softwares` (id, name, app_key, aes_key, sign_salt, min_version, latest_version, status, remark, created_at, updated_at)
-                                   VALUES (1, '默认软件', 'SWDEFAULT', ?, ?, '1.0.0', '1.0.0', 1, '安装向导自动创建', ?, ?)")
-                        ->execute([$aesKey, $signSalt, time(), time()]);
-                    $sw = $pdo->query("SELECT aes_key, sign_salt FROM `{$prefix}softwares` WHERE id = 1")->fetch(PDO::FETCH_ASSOC);
-                    if ($sw) {
-                        if (!empty($sw['aes_key']))  { $aesKey   = (string) $sw['aes_key']; }
-                        if (!empty($sw['sign_salt'])) { $signSalt = (string) $sw['sign_salt']; }
-                    }
-                } else {
-                    $pdo->prepare("INSERT INTO `{$prefix}softwares` (id, name, app_key, aes_key, sign_salt, min_version, latest_version, status, remark, created_at, updated_at)
-                                   VALUES (1, '默认软件', 'SWDEFAULT', ?, ?, '1.0.0', '1.0.0', 1, '安装向导自动创建', ?, ?)
-                                   ON DUPLICATE KEY UPDATE aes_key = VALUES(aes_key), sign_salt = VALUES(sign_salt), updated_at = VALUES(updated_at)")
-                        ->execute([$aesKey, $signSalt, time(), time()]);
-                }
+                // 创建默认软件（3.1 协议无静态通信密钥，app_key 唯一标识即可）
+                $swStmt = "INSERT INTO `{$prefix}softwares` (id, name, app_key, min_version, latest_version, status, remark, created_at, updated_at)
+                           VALUES (1, '默认软件', 'SWDEFAULT', '1.0.0', '1.0.0', 1, '安装向导自动创建', ?, ?)
+                           ON DUPLICATE KEY UPDATE updated_at = VALUES(updated_at)";
+                $pdo->prepare($swStmt)->execute([time(), time()]);
 
                 // 自动生成后台入口 token（访问 /admin/ 必须带 ?k=token）
                 // keep 模式：沿用库中已有 token，缺失才生成
@@ -304,8 +289,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $config = preg_replace_callback("/'name'\s*=>\s*'[^']*'/",     function ($m) use ($nbQ, $db) { return "'name'    => '" . $nbQ($db['name']) . "'"; }, $config);
                 $config = preg_replace_callback("/'user'\s*=>\s*'[^']*'/",     function ($m) use ($nbQ, $db) { return "'user'    => '" . $nbQ($db['user']) . "'"; }, $config);
                 $config = preg_replace_callback("/'pass'\s*=>\s*'[^']*'/",     function ($m) use ($nbQ, $db) { return "'pass'    => '" . $nbQ($db['pass']) . "'"; }, $config);
-                $config = preg_replace_callback("/'aes_key'\s*=>\s*'[^']*'/",  function ($m) use ($nbQ, $aesKey) { return "'aes_key'  => '" . $nbQ($aesKey) . "'"; }, $config);
-                $config = preg_replace_callback("/'sign_salt'\s*=>\s*'[^']*'/", function ($m) use ($nbQ, $signSalt) { return "'sign_salt' => '" . $nbQ($signSalt) . "'"; }, $config);
                 $config = preg_replace_callback("/'entry_key'\s*=>\s*'[^']*'/", function ($m) use ($nbQ, $entryToken) { return "'entry_key' => '" . $nbQ($entryToken) . "'"; }, $config);
                 $config = preg_replace_callback("/'path'\s*=>\s*'admin'/",      function ($m) use ($nbQ, $adminPath) { return "'path'     => '" . $nbQ($adminPath) . "'"; }, $config);
 
@@ -314,8 +297,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 file_put_contents($root . '/install/install.lock', date('Y-m-d H:i:s'));
 
                 $_SESSION['install_result'] = [
-                    'aes_key'     => $aesKey,
-                    'sign_salt'   => $signSalt,
                     'admin'       => $adminUser,
                     'pass'        => $adminPass,
                     'entry_token' => $entryToken,

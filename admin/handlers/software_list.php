@@ -15,8 +15,6 @@ foreach (Software::all() as $sw) {
         'id'             => (int) $sw['id'],
         'name'           => (string) $sw['name'],
         'app_key'        => (string) $sw['app_key'],
-        'aes_key'        => (string) $sw['aes_key'],
-        'sign_salt'      => (string) $sw['sign_salt'],
         'min_version'    => (string) $sw['min_version'],
         'latest_version' => (string) $sw['latest_version'],
         'force_update'   => (int) $sw['force_update'],
