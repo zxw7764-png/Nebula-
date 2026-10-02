@@ -319,6 +319,30 @@ if ($installed && $step !== '3') {
 }
 
 $result = $_SESSION['install_result'] ?? null;
+
+// 安装成功后自动删除 install 目录：先删资源文件，install.lock 与本脚本最后删
+// （若本脚本删除失败——个别 SAPI 会锁句柄——lock 仍可能保留，"已安装保护"继续生效，不会出现可重装漏洞）
+$nbDelFail = 0;
+$nbSelfGone = false;
+if ($step === '3' && $result) {
+    $nbSelf = __FILE__;
+    $nbLock = __DIR__ . '/install.lock';
+    try {
+        $nbIt = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator(__DIR__, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($nbIt as $nbF) {
+            if ($nbF->getPathname() === $nbSelf || $nbF->getPathname() === $nbLock) continue;
+            if ($nbF->isDir()) { @rmdir($nbF->getPathname()) || $nbDelFail++; }
+            else { @unlink($nbF->getPathname()) || $nbDelFail++; }
+        }
+    } catch (Throwable $e) { $nbDelFail++; }
+    @unlink($nbLock);
+    @unlink($nbSelf);
+    @rmdir(__DIR__);
+    $nbSelfGone = !is_file($nbSelf);
+}
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -438,14 +462,6 @@ h3 { font-size: 15px; margin-bottom: 12px; color: #f1f5f9; }
         <?php if ($step === '1'): ?>
             <h3>环境检测</h3>
             <?php
-            // 2026-09-30 修复：logs 目录缺失时自动创建。
-            // 分发包曾漏带 logs/（打包排除规则 + 仓库未跟踪占位文件），
-            // is_writable 对不存在的目录恒为 false，直接卡死安装。
-            foreach (['logs', 'logs/cache', 'logs/nonce'] as $nbDir) {
-                if (!is_dir($root . '/' . $nbDir)) {
-                    @mkdir($root . '/' . $nbDir, 0775, true);
-                }
-            }
             $checks = [
                 'PHP 版本 >= 8.0'   => version_compare(PHP_VERSION, '8.0.0', '>='),
                 'PDO MySQL 扩展'    => extension_loaded('pdo_mysql'),
@@ -656,10 +672,16 @@ h3 { font-size: 15px; margin-bottom: 12px; color: #f1f5f9; }
                 代理商后台：<code><?= htmlspecialchars($base) ?>/agent/</code>（默认关闭，需在后台「系统设置 → 代理商设置」开启）
             </div>
 
+            <?php if ($nbSelfGone): ?>
+            <div class="alert ok" style="margin-top:20px">
+                ✅ <code>install</code> 目录已自动删除，无需手动操作。本页为最后一次显示，请立即复制保存上方账号信息。
+            </div>
+            <?php else: ?>
             <div class="alert err" style="margin-top:20px">
-                ⚠ 请立即删除 <code>install</code> 目录，否则存在被重装风险！<br>
+                ⚠ install 目录自动删除未完全成功（残留 <?= $nbDelFail ?> 项），请立即手动删除整个 <code>install</code> 目录，否则存在被重装风险！<br>
                 ⚠ 若 nginx 独立配置（vhost）中引用了 <code>/admin/</code> 路由规则，请手动同步改为 <code>/<?= htmlspecialchars($result['admin_path']) ?>/</code> 后重载 nginx。
             </div>
+            <?php endif; ?>
 
         <?php else: ?>
             <div class="alert warn">
