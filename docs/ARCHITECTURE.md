@@ -7,7 +7,7 @@
 本文档描述 Nebula 网络验证系统的整体架构、请求生命周期、关键链路时序与安全设计，
 面向二次开发、安全审计与私有化部署运维人员。
 
-- **代码版本**：以 `lib/bootstrap.php` 的 `NB_VERSION` 为准（本文撰写时为 `2.65.18`）
+- **代码版本**：以 `lib/bootstrap.php` 的 `NB_VERSION` 为唯一真源，本文不写具体版本号（避免漂移）
 - **运行环境**：PHP ≥ 8.0（`str_contains` / `str_starts_with` 要求 8.0）、MySQL 5.7+ / MariaDB 10.3+
 - **协议真源**：服务端 [`lib/Handshake.php`](../lib/Handshake.php) + [`lib/Crypto.php`](../lib/Crypto.php) 与客户端 `sdk/nebula/client/handshake.hpp`（随官网 `sdk.zip` 分发），二者与 [`docs/API.md`](API.md) 严格对齐
 
