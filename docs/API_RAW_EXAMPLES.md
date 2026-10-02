@@ -75,8 +75,9 @@
         },
         "crypto": {
             "enforce": true,
-            "algo": "AES-256-CBC",
-            "sign": "HMAC-SHA256"
+            "algo": "ECDH P-256 + AES-256-GCM",
+            "sign": "ES256",
+            "time_window": 300
         },
         "version": {
             "client_ver": "1.0.0",
