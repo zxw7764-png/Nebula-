@@ -9,10 +9,14 @@
  *   · 之后业务请求改走 3.1 信封：
  *       请求  { sid, seq, t, data, mac, app_key }
  *         data = base64( iv[12] + AES-256-GCM(业务JSON) + tag[16] )
- *         iv   = iv_prefix(4) || seq 大端8字节   —— seq 严格递增，IV 永不重复
+ *         iv   = iv_prefix(4) || seq 大端8字节   —— seq 严格递增，同方向内 IV 永不重复
  *         mac  = hex(HMAC-SHA256(sk_mac, sid|seq|t|sha256(data)))
  *       响应  { data(GCM), sid, sig(ES256), sig_kid, sig_algo, code }
  *         sig  = 服务端长期 ES256 私钥对 data|sid 签名（防伪造服务器，复用 RespSign）
+ *
+ * 方向密钥分离（2026-10-03 审计修复）：
+ *   请求加密用 sk_enc；响应加密用 sk_enc_rsp = HKDF-SHA256(sk_enc, info="nebula31-enc-rsp")。
+ *   同一 seq 下请求/响应的 (key, iv) 组合不再相同，消除 GCM nonce 跨方向重用。
  *
  * 协议安全性质：
  *   · 堆扫描只能拿到当次会话临时密钥（会话结束/过期即废）；
@@ -20,7 +24,7 @@
  *   · seq 单调递增 + 服务端原子 UPDATE 防重放；
  *   · GCM 认证加密（ AEAD），请求响应均无填充预言机问题。
  *
- * 与 lib/Crypto.php（3.0 双轨）共存：请求带 sid 字段即走本类，否则走 3.0。
+ * 3.0 静态密钥体系已于 2026-10-02 全面下线：请求带 sid 字段即走本类（3.1）。
  */
 
 class Handshake
@@ -410,10 +414,10 @@ class Handshake
             throw new CryptoException('bad_sign', '请求 MAC 校验失败');
         }
 
-        // seq 单调递增（原子 UPDATE，唯一写入口，天然防重放）
+        // seq 单调递增（原子 UPDATE，唯一写入口，天然防重放）；顺带滑动续期空闲过期
         $updated = Database::exec(
-            'UPDATE ' . Database::t('hsessions') . ' SET seq = ? WHERE sid = ? AND seq < ?',
-            [$seq, $sid, $seq]
+            'UPDATE ' . Database::t('hsessions') . ' SET seq = ?, expire_at = ? WHERE sid = ? AND seq < ?',
+            [$seq, time() + self::SESSION_TTL, $sid, $seq]
         );
         if ($updated === false || $updated === 0) {
             throw new CryptoException('replay', '请求序号重复或乱序');
@@ -437,12 +441,13 @@ class Handshake
             throw new CryptoException('bad_json', '数据格式错误');
         }
 
-        // 登记当前会话供响应加密使用（seq 用本次请求的 seq —— 响应 IV 与请求对称）
+        // 登记当前会话供响应加密使用（响应方向独立密钥，见类注释「方向密钥分离」）
         self::$current = [
-            'sid'       => $sid,
-            'sk_enc'    => (string) $row['sk_enc'],
-            'iv_prefix' => (string) $row['iv_prefix'],
-            'seq'       => $seq,
+            'sid'        => $sid,
+            'sk_enc'     => (string) $row['sk_enc'],
+            'sk_enc_rsp' => hash_hkdf('sha256', (string) $row['sk_enc'], 32, 'nebula31-enc-rsp'),
+            'iv_prefix'  => (string) $row['iv_prefix'],
+            'seq'        => $seq,
         ];
 
         return ['data' => $dataArr, 'raw' => $input, 'plain' => false, 'session31' => true, 'kid' => null, 'session_mid' => ''];
@@ -459,7 +464,7 @@ class Handshake
         $iv   = substr(self::$current['iv_prefix'], 0, 4) . pack('J', $seq);
 
         $tag  = '';
-        $ct   = openssl_encrypt($json, 'aes-256-gcm', self::$current['sk_enc'], OPENSSL_RAW_DATA, $iv, $tag);
+        $ct   = openssl_encrypt($json, 'aes-256-gcm', self::$current['sk_enc_rsp'], OPENSSL_RAW_DATA, $iv, $tag);
         if ($ct === false) {
             // 理论上不可能（密钥/IV 都来自合法会话）；兜底返回明文结构让客户端报协议错误
             return ['proto' => 31, 'err' => 'gcm_encrypt_failed'];

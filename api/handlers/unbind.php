@@ -11,7 +11,7 @@ $machineId = Util::str($requestData, 'machine_id', '');
 $password  = (string) Util::get($requestData, 'password', '');
 $unbindAll = (bool) Util::get($requestData, 'all', false);
 
-$v = Session::validate($token, $machineId !== '' ? $machineId : null);
+$v = Session::validate($token, $machineId !== '' ? $machineId : null, true);
 if (!$v['ok']) {
     Response::send($v['code'], $v['msg'], ['need_relogin' => true]);
 }
@@ -22,7 +22,13 @@ if (!$user) {
     Response::error(1002, '账号不存在');
 }
 
-// 解绑需要密码二次确认（安全考虑）
+// 解绑需要密码二次确认（安全考虑）：
+//  · 解绑全部设备（all=1）必须提供密码 —— 令牌泄露也不至于被一键清空设备
+//  · 解绑单台设备密码可选（令牌本就代表当前会话）
+//  · 提供了密码就必须正确，空密码不再绕过校验（2026-10-03 审计修复）
+if ($unbindAll && $password === '') {
+    Response::error(1001, '解绑全部设备需要输入密码二次确认');
+}
 if ($password !== '' && !Util::verifyPassword($password, (string) $user['password'])) {
     Logger::log('unbind', 0, '密码校验失败', ['user_id' => $userId]);
     Response::error(2001, '密码错误');

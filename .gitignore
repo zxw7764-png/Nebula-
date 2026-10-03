@@ -62,3 +62,6 @@ sdk/build/out/
 /sdk-py/
 /sdk-c#/
 /sdk-c++/
+
+# 响应签名私钥（2026-10-03 审计：绝不入库）
+config/resp_sign_keys.php

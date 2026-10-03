@@ -50,7 +50,7 @@ if ($cardLimit > 0 && !RateLimit::byCard($code, 'activate', $cardLimit, $cardWin
 // 获取用户
 $user = null;
 if ($token !== '') {
-    $v = Session::validate($token, $machineId ?: null);
+    $v = Session::validate($token, $machineId ?: null, true);
     if (!$v['ok']) {
         Response::send($v['code'], $v['msg'], ['need_relogin' => true]);
     }

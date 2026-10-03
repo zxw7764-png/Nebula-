@@ -57,6 +57,13 @@ class FileGuard
             }
         }
         $rel = ltrim($rel, '/');
+        // 敏感目录一律拒绝读取/删除（2026-10-03 审计修复）：
+        // config/ 含数据库凭据与签名私钥，install/ 含安装器，lib/ 为运行核心
+        foreach (['config', 'lib', 'install'] as $denied) {
+            if ($rel === $denied || strpos($rel, $denied . '/') === 0) {
+                return '';
+            }
+        }
         $abs = NB_ROOT . '/' . $rel;
         $rp  = realpath($abs);
         if ($rp === false || !is_file($rp)) {

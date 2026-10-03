@@ -1,0 +1,11 @@
+# data/ 目录整体拒绝 Web 访问（2026-10-03 审计加固）
+# 包含数据库备份 sql.gz、file_baseline.json 等运行时数据
+# Apache 2.4
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+# Apache 2.2 兼容
+<IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+</IfModule>

@@ -376,6 +376,14 @@ class AdminAuth
     {
         $secret = (string) ($admin['totp_secret'] ?? '');
         if ($secret !== '' && Totp::verify($secret, $code)) {
+            // 防重放（2026-10-03 审计）：Totp::verify 允许 ±1 时间片（约 90 秒），
+            // 同一枚动态码在有效窗口内只允许消费一次；缓存不可用时降级放行
+            if (Cache::available()) {
+                $key = 'totp_used_' . (int) ($admin['id'] ?? 0) . '_' . hash('sha256', (string) $code);
+                if (!Cache::add($key, 1, 120)) {
+                    return false;
+                }
+            }
             return true;
         }
         return self::consumeRecovery((int) ($admin['id'] ?? 0), $code);

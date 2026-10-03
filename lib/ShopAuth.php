@@ -252,6 +252,16 @@ class ShopAuth
         } catch (Throwable $e) {
             return ['ok' => false, 'code' => 5000, 'msg' => '保存失败，请稍后再试'];
         }
+        // 重置密码后踢掉该账号全部在线会话（2026-10-03 审计修复）：
+        // 攻击者此前窃取的令牌在密码重置后必须失效
+        try {
+            Database::exec(
+                'UPDATE ' . Database::t('sessions') . ' SET status = 2 WHERE user_id = ? AND status = 1',
+                [(int) $user['id']]
+            );
+        } catch (Throwable $e) {
+            // 踢会话失败不阻断找回流程（会话本身有 TTL 兜底）
+        }
         return ['ok' => true];
     }
 }

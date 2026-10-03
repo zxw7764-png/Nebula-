@@ -39,9 +39,12 @@ class Session
 
     /**
      * 校验令牌
+     * @param bool $requireMachine true 时强制设备绑定校验：客户端未带 machine_id 或会话
+     *                             未绑定设备都直接拒绝（防止令牌被复制到其他机器后
+     *                             通过省略 machine_id 绕过比对，2026-10-03 审计修复）
      * @return array{ok:bool, code:int, msg:string, session:?array}
      */
-    public static function validate(string $token, ?string $machineId = null): array
+    public static function validate(string $token, ?string $machineId = null, bool $requireMachine = false): array
     {
         if ($token === '') {
             return ['ok' => false, 'code' => 1002, 'msg' => '缺少令牌', 'session' => null];
@@ -69,6 +72,9 @@ class Session
         }
 
         // 设备一致性校验：防止令牌被复制到其他机器
+        if ($requireMachine && ($machineId === null || $machineId === '' || $s['machine_id'] === null)) {
+            return ['ok' => false, 'code' => 4002, 'msg' => '缺少设备标识，请携带 machine_id 调用', 'session' => $s];
+        }
         if ($machineId !== null && $machineId !== '' && $s['machine_id'] !== null
             && !hash_equals((string) $s['machine_id'], $machineId)) {
             return ['ok' => false, 'code' => 4002, 'msg' => '令牌与设备不匹配', 'session' => $s];

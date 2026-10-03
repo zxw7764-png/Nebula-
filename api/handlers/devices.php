@@ -2,11 +2,11 @@
 /**
  * action: devices
  * 查询当前账号已绑定的设备列表
- * 参数: token
+ * 参数: token, machine_id（强制设备绑定校验，2026-10-03 审计）
  */
 
 $token = Util::str($requestData, 'token', '');
-$v = Session::validate($token);
+$v = Session::validate($token, Util::str($requestData, 'machine_id', '') ?: null, true);
 if (!$v['ok']) {
     Response::send($v['code'], $v['msg'], ['need_relogin' => true]);
 }
